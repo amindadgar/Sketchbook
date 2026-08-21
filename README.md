@@ -129,6 +129,18 @@ service on its own domain, so its address goes in the menu's **Party server**
 field as a `wss://` URL with no port: Railway terminates TLS and proxies to the
 container.
 
+Currently deployed at:
+
+| | |
+| --- | --- |
+| Game | https://game-production-2fba.up.railway.app |
+| Party server | `wss://relay-production-d528.up.railway.app` |
+
+Pushing to master does **not** redeploy. Railway can only watch a repo that has
+its [GitHub App](https://github.com/apps/railway) installed, and this one
+doesn't, so deploys have to be triggered by hand from the dashboard. Installing
+the app on the repo is what makes pushes deploy themselves.
+
 ## Party mode
 
 Start the game, pick a name and a colour, then either **Create party** for a four
