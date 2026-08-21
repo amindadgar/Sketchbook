@@ -14,6 +14,8 @@ export declare class CombatSystem implements IUpdatable {
     updateOrder: number;
     private static readonly RESPAWN_DELAY;
     private static readonly EYE_HEIGHT;
+    /** Aiming is worth something beyond the view: shots land tighter. */
+    private static readonly AIM_SPREAD_FACTOR;
     private world;
     pickups: WeaponPickup[];
     private effects;
@@ -21,6 +23,7 @@ export declare class CombatSystem implements IUpdatable {
     private reloadTimer;
     private triggerWasDown;
     private deathTimer;
+    private aiming;
     private respawnPoints;
     private gunBuffers;
     private audioPool;
@@ -37,6 +40,8 @@ export declare class CombatSystem implements IUpdatable {
     /** One weapon per anchor, cycling the types so no corner is all shotguns. */
     placePickups(anchors: THREE.Vector3[]): void;
     update(timeStep: number, unscaledTimeStep: number): void;
+    /** Held right button, but only with a gun in hand and out of a vehicle. */
+    private setAiming;
     private updateTrigger;
     private fire;
     /**

@@ -853,6 +853,19 @@ export class World
 				<div class="left-panel">
 					<div id="controls" class="panel-segment flex-bottom"></div>
 				</div>
+				<div id="reticle">
+					<svg viewBox="0 0 100 100">
+						<g stroke="#ff2f3f" stroke-width="4" fill="none" stroke-linecap="round">
+							<circle cx="50" cy="50" r="24"></circle>
+							<line x1="50" y1="8" x2="50" y2="20"></line>
+							<line x1="50" y1="80" x2="50" y2="92"></line>
+							<line x1="8" y1="50" x2="20" y2="50"></line>
+							<line x1="80" y1="50" x2="92" y2="50"></line>
+							<line x1="44" y1="44" x2="56" y2="56"></line>
+							<line x1="56" y1="44" x2="44" y2="56"></line>
+						</g>
+					</svg>
+				</div>
 				<div id="settings-gear" title="Settings">&#9881;</div>
 				<div id="scoreboard">
 					<div class="scoreboard-title">Players</div>

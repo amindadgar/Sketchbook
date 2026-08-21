@@ -140,7 +140,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			'enter_passenger': new KeyBinding('KeyG'),
 			'seat_switch': new KeyBinding('KeyX'),
 			'primary': new KeyBinding('Mouse0'),
-			'secondary': new KeyBinding('Mouse1'),
+			// DOM button 1 is the middle button; the right one is 2
+			'secondary': new KeyBinding('Mouse2'),
 		};
 
 		// Physics

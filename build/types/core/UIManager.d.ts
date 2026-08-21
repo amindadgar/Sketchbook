@@ -6,6 +6,7 @@ export declare class UIManager {
     static setCombatHud(health: number, weapon: string, ammo: number, reserve: number): void;
     /** Names come off the network, so they're written as text, never as HTML. */
     static setScoreboard(names: string[], colors: string[], scores: number[]): void;
+    static setReticleVisible(value: boolean): void;
     static toggleSettings(): void;
     static setPartyVisible(value: boolean): void;
     /** Names come off the network, so they're written as text nodes, never as HTML. */

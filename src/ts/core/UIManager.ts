@@ -63,6 +63,11 @@ export class UIManager
 		}
 	}
 
+	public static setReticleVisible(value: boolean): void
+	{
+		document.getElementById('reticle').style.display = value ? 'block' : 'none';
+	}
+
 	public static toggleSettings(): void
 	{
 		let panel = document.getElementById('dat-gui-container');

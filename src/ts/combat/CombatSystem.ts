@@ -29,6 +29,8 @@ export class CombatSystem implements IUpdatable
 
 	private static readonly RESPAWN_DELAY: number = 3;
 	private static readonly EYE_HEIGHT: number = 0.6;
+	/** Aiming is worth something beyond the view: shots land tighter. */
+	private static readonly AIM_SPREAD_FACTOR: number = 0.35;
 
 	private world: World;
 	public pickups: WeaponPickup[] = [];
@@ -38,6 +40,7 @@ export class CombatSystem implements IUpdatable
 	private reloadTimer: number = 0;
 	private triggerWasDown: boolean = false;
 	private deathTimer: number = 0;
+	private aiming: boolean = false;
 	private respawnPoints: THREE.Vector3[] = [];
 	private gunBuffers: { [id: string]: AudioBuffer } = {};
 	private audioPool: THREE.PositionalAudio[] = [];
@@ -129,10 +132,14 @@ export class CombatSystem implements IUpdatable
 			this.deathTimer -= unscaledTimeStep;
 			if (this.deathTimer <= 0) this.respawn(character);
 			UIManager.setCombatHud(0, undefined, 0, 0);
+			this.setAiming(false);
 			return;
 		}
 
 		this.collectPickups(character);
+		this.setAiming(character.actions.secondary.isPressed === true
+			&& character.weapon !== undefined
+			&& character.occupyingSeat === null);
 		this.updateTrigger(character, unscaledTimeStep);
 
 		UIManager.setCombatHud(
@@ -144,6 +151,16 @@ export class CombatSystem implements IUpdatable
 	}
 
 	// ---------------------------------------------------------------- shooting
+
+	/** Held right button, but only with a gun in hand and out of a vehicle. */
+	private setAiming(value: boolean): void
+	{
+		if (this.aiming === value) return;
+
+		this.aiming = value;
+		this.world.cameraOperator.aiming = value;
+		UIManager.setReticleVisible(value);
+	}
 
 	private updateTrigger(character: Character, timeStep: number): void
 	{
@@ -182,9 +199,11 @@ export class CombatSystem implements IUpdatable
 		let eye = new THREE.Vector3().copy(character.position).setY(character.position.y + CombatSystem.EYE_HEIGHT);
 		let muzzle = character.getMuzzlePosition();
 
+		let cone = weapon.spread * (this.aiming ? CombatSystem.AIM_SPREAD_FACTOR : 1);
+
 		for (let i = 0; i < weapon.pellets; i++)
 		{
-			let direction = CombatSystem.spread(aim, weapon.spread);
+			let direction = CombatSystem.spread(aim, cone);
 			// Started ahead of the shooter so the ray can't open on their own capsule
 			let origin = new THREE.Vector3().copy(eye).addScaledVector(direction, 0.7);
 			let hit = this.trace(origin, direction, weapon.range, character);

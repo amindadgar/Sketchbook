@@ -112,7 +112,11 @@ stowed while driving.
 
 Ammunition is finite. Reloads draw on what you're carrying, and once that and
 the magazine are both empty the gun is dropped and you're looking for another
-column. Fire with the left mouse button.
+column.
+
+Left mouse fires. Hold right mouse to aim: the view narrows, the camera slides
+over your shoulder so you aren't standing where the crosshair is, and shots land
+noticeably tighter.
 
 Everyone starts on 100 health and respawns three seconds after dying. A kill
 scores a point on the scoreboard at the top right.

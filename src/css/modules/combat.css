@@ -120,3 +120,24 @@
 	font-weight: 700;
 	color: #FFB900;
 }
+
+/* Aim reticle: a ring with a cross in it, ticks poking out at the compass points */
+#reticle {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	width: 84px;
+	height: 84px;
+	margin: -42px 0 0 -42px;
+	display: none;
+	pointer-events: none;
+	user-select: none;
+	/* The world is mostly bright sand, so the red needs an outline to sit on */
+	filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.9));
+}
+
+#reticle svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
