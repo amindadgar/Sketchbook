@@ -1,22 +1,20 @@
 <p align="center">
-	<a href="https://jblaha.art/sketchbook/latest"><img src="./src/img/thumbnail.png"></a>
-	<br>
-	<a href="https://jblaha.art/sketchbook/latest">Live demo</a>
-	<br>
+	<img src="./src/img/thumbnail.png">
 </p>
-
-# Final update (20. Feb 2023)
-
-As I have no more interest in developing this project, it comes to a conclusion. In order to remain honest about the true state of the project, I am archiving this repository.
-
-- If you wish to modify Sketchbook feel free to fork it.
-- To see if someone is currently maintaining a fork, check out the [Network Graph](https://github.com/swift502/Sketchbook/network).
 
 # 📒 Sketchbook
 
 Simple web based game engine built on [three.js](https://github.com/mrdoob/three.js) and [cannon.js](https://github.com/schteppe/cannon.js) focused on third-person character controls and related gameplay mechanics.
 
-Mostly a playground for exploring how conventional third person gameplay mechanics found in modern games work and recreating them in a general way.
+This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook), which its author archived in February 2023. The engine underneath is theirs; what this fork adds is sound, multiplayer and a deathmatch layer on top of it.
+
+## What this fork adds
+
+* **Audio** — positional engine sound pitched by revs, and a music track
+* **Party mode** — room codes over a small WebSocket relay, up to 8 players
+* **Combat** — four weapons, health, kills and a scoreboard
+* **A minimap**, a speedometer, and settings folded behind a gear
+* **Free roam (everything)** — a scenario with a car, a helicopter and an aeroplane all in reach
 
 ## Features
 
@@ -32,9 +30,7 @@ Mostly a playground for exploring how conventional third person gameplay mechani
 	* General state system
 	* Character AI
 * Vehicles
-	* Cars
-	* Airplanes
-	* Helicopters
+	* Cars, airplanes and helicopters
 	* All three within reach in the Free roam (everything) scenario
 * Audio
 	* Positional engine sound, pitched by revs
@@ -42,29 +38,67 @@ Mostly a playground for exploring how conventional third person gameplay mechani
 * Party mode
 	* Room codes, up to 8 players
 	* Per player name tags and colours
+	* Shared scenarios
 * Combat
 	* Handgun, automatic, rifle and shotgun, each with its own feel
 	* Weapon pickups floating in a halo, GTA style
-	* Health, kills and a scoreboard
+	* Aim down sights, health, kills and a scoreboard
 * HUD
-	* Speedometer
 	* Round minimap with party markers
+	* Speedometer
 	* Settings folded behind a gear
 
-All planned features can be found in the [GitHub Projects](https://github.com/swift502/Sketchbook/projects).
+## Controls
+
+| On foot | |
+| --- | --- |
+| `W` `A` `S` `D` | Move |
+| `Shift` | Sprint |
+| `Space` | Jump |
+| `F` / `G` | Enter vehicle as driver / passenger |
+| Left mouse | Fire |
+| Right mouse, held | Aim |
+
+| Driving | |
+| --- | --- |
+| `W` / `S` | Accelerate, brake and reverse |
+| `A` / `D` | Steer |
+| `Space` | Handbrake |
+| `V` | Switch to first person |
+| `X` | Switch seats |
+| `F` | Leave the vehicle |
+
+| Flying | |
+| --- | --- |
+| `Shift` / `Space` | Throttle, brake. Ascend, descend in a helicopter |
+| `W` / `S` | Pitch |
+| `A` / `D` | Roll |
+| `Q` / `E` | Yaw |
+| `B` | Wheel brake, aeroplane only |
+
+| Anywhere | |
+| --- | --- |
+| `M` | Mute the music |
+| `C` | Centre the camera behind you |
+| `Shift` + `R` | Respawn |
+| `Shift` + `C` | Free camera |
+| Mouse wheel | Slow down or speed up time |
+| Gear icon | Settings |
+
+## Running it
+
+```bash
+pnpm install
+pnpm dev        # game on http://localhost:8080
+pnpm server     # party relay on 9000, only needed for multiplayer
+pnpm build      # production bundle into build/
+```
 
 ## Party mode
 
-Sketchbook can be played with friends over a small WebSocket relay.
-
-```bash
-pnpm server          # listens on 9000
-PORT=8081 pnpm server
-```
-
-Start the game, pick a name and a colour, then either **Create party** to get a
-four character code, or type a friend's code and **Join**. Everyone in a party
-shares a scenario, so whoever launches one takes the rest along.
+Start the game, pick a name and a colour, then either **Create party** for a four
+character code, or type a friend's code and **Join**. Everyone in a party shares
+a scenario, so whoever launches one takes the rest along.
 
 The **Party server** field in the menu is remembered between sessions and
 defaults to `ws://localhost:9000`, which is right when you host and play on the
@@ -79,29 +113,39 @@ pnpm server               # relay
 ```
 
 Find your address with `ipconfig getifaddr en0` on macOS or `hostname -I` on
-Linux. Everyone else opens `http://<your-address>:8080` and sets the party
-server to `ws://<your-address>:9000`.
+Linux. Everyone else opens `http://<your-address>:8080` and sets the party server
+to `ws://<your-address>:9000`.
 
 To play with people further afield, deploy `server/index.js` anywhere that runs
-Node and give them the resulting `wss://` address.
+Node and give them the resulting `wss://` address. `PORT` overrides the port.
 
-The relay only tracks who is in which room. Every client simulates its own
-character and whichever vehicle it drives, and the server forwards those updates
-untouched. A modified client can therefore claim to be anywhere it likes, which
-is fine for playing with friends and not fine for anything competitive.
+**Free roam (everything)** is the scenario to use with friends. It starts
+everyone at the airfield with a car, a helicopter and an aeroplane all within
+about thirty metres, so nobody has to walk across the map to fly. The race and
+stunt scenarios were built for one player and have a single spawn point, so a
+party will share a car in them.
 
-**Free roam (everything)** is the one to use with friends. It starts everyone at
-the airfield with a car, a helicopter and an aeroplane all within about thirty
-metres, so nobody has to walk across the map to fly.
+Players who go quiet are dropped: anything that stops answering a ping, within a
+minute of going silent, and anything whose client has published nothing for five
+minutes.
+Standing still in game doesn't count, since the client keeps publishing whether
+you touch the controls or not.
 
-Note that the race and stunt scenarios were built for one player, so they have a
-single spawn point and a party will share a car.
+### What the relay does and doesn't do
+
+It tracks who is in which room and forwards updates untouched. Every client
+simulates its own character, the vehicle it drives and its own health; a shooter
+reports a hit, and the player who was hit decides what it did to them.
+
+One owner per number beats two clients disagreeing about it, but it does mean a
+modified client can claim to be anywhere it likes and can decline to die. That's
+fine for playing with friends and not fine for anything competitive.
 
 ## Combat
 
-Weapons sit around the map turning inside a glowing column. Walk into one to
-pick it up; the column goes dark and comes back twenty seconds later. Guns are
-stowed while driving.
+Weapons sit around the map turning inside a glowing column. Walk into one to pick
+it up; the column goes dark and comes back twenty seconds later. Guns are stowed
+while driving.
 
 | Weapon | Damage | Rate | Mag | Carried | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -110,78 +154,66 @@ stowed while driving.
 | Rifle | 55 | slow | 8 | 24 | near zero spread, reaches 250m |
 | Shotgun | 12 x 8 | slow | 6 | 18 | a kill up close, useless at range |
 
-Ammunition is finite. Reloads draw on what you're carrying, and once that and
-the magazine are both empty the gun is dropped and you're looking for another
-column.
+Ammunition is finite. Reloads draw on what you're carrying, and once that and the
+magazine are both empty the gun is dropped and you're looking for another column.
 
-Left mouse fires. Hold right mouse to aim: the view narrows, the camera slides
-over your shoulder so you aren't standing where the crosshair is, and shots land
-noticeably tighter.
+Holding right mouse narrows the view, slides the camera over your shoulder so you
+aren't standing where the crosshair is, and cuts spread to a third.
 
 Everyone starts on 100 health and respawns three seconds after dying. A kill
 scores a point on the scoreboard at the top right.
 
-As with position, each client is the authority on its own health: a shooter
-reports a hit, the player who was hit decides what it did to them, and their
-death is what awards the point. One owner per number beats two clients
-disagreeing about it, though it does mean a modified client could decline to
-die. Same trade as the rest of the party layer.
+## Assets
 
-## Usage
+Everything the game loads at runtime lives in `build/assets` and is swapped by
+replacing the file, with no code change:
 
-You can define your own scenes in Blender, and then read them with Sketchbook. Sketchbook needs to run on a local server such as [http-server](https://www.npmjs.com/package/http-server) or [webpack-dev-server](https://github.com/webpack/webpack-dev-server) to be able to load external assets.
+| File | What it is |
+| --- | --- |
+| `world.glb`, `car.glb`, `heli.glb`, `airplane.glb`, `boxman.glb` | Scenes and models, exported from `src/blend` |
+| `car.wav`, `heli.wav`, `airplane.wav` | Engine loops |
+| `music.mp3` | Music, streamed rather than decoded into memory |
+| `gun_*.wav` | Weapon reports |
 
-<!-- #### Script tag -->
+Engine loops want to be **mono** and **wav or ogg**: they're positional, and mp3
+encoder padding leaves an audible gap at the loop point. Music can be mp3, since
+it streams and the seam is far less noticeable.
 
-1. Import:
+The four `gun_*.wav` files are synthesised stand-ins rather than recordings.
+Replacing them with real ones is just a file copy.
 
-```html
-<script src="sketchbook.min.js"></script>
-```
+## Making your own worlds
 
-2. Load a glb scene defined in Blender:
-
-```javascript
-const world = new Sketchbook.World('scene.glb');
-```
-
-<!--
-
-#### NPM
-
-1. Install:
-
-```
-npm i sketchbook
-```
-
-2. Import:
+Scenes are authored in Blender and read from a `.glb`. Sketchbook needs to be
+served over http rather than opened from disk, so it can fetch them.
 
 ```javascript
-import { World } from 'sketchbook';
+const world = new Sketchbook.World('build/assets/world.glb');
 ```
 
-3. Load a glb scene defined in Blender:
+Objects carry their meaning in custom properties: `data=physics` with
+`type=box|trimesh` for collision, `data=spawn` with `type=player|car|heli|airplane`
+for spawn points, `data=path` for the nodes car AI follows, and `data=scenario`
+for the entries in the scenarios panel. A material named `ocean` becomes water.
 
-```javascript
-const world = new World('scene.glb');
-```
-
--->
+One thing to know if you build a new map: `World.worldBounds` holds this world's
+playable area. It decides what counts as out of bounds and worth respawning, and
+it frames the minimap, so a different map needs different numbers.
 
 ## Contributing
 
-1. Get the LTS version of [Node.js](https://nodejs.org/en/) 16
-2. [Fork this repository](https://help.github.com/en/github/getting-started-with-github/fork-a-repo)
-3. Run `npm install`
-4. Run `npm run dev`
-5. Make changes and test them out at http://localhost:8080
-6. Commit and [make a pull request](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request-from-a-fork)!
+1. [Fork this repository](https://help.github.com/en/github/getting-started-with-github/fork-a-repo)
+2. `pnpm install`
+3. `pnpm dev`, then open http://localhost:8080
+4. Make changes and commit
+
+The toolchain is old: webpack 4 and TypeScript 3.9. `@types/lodash` and
+`@types/jquery` are pinned exactly, because newer releases use syntax TypeScript
+3.9 cannot parse and a fresh install would otherwise break the build.
 
 ## Credits
 
-Big thank you to each of the following github users for contributing to Sketchbook:
-
-- [aleqsunder](https://github.com/aleqsunder)
-- [barhatsor](https://github.com/barhatsor)
-- [danshuri](https://github.com/danshuri)
+Sketchbook is by [swift502](https://github.com/swift502), with contributions from
+[aleqsunder](https://github.com/aleqsunder), [barhatsor](https://github.com/barhatsor)
+and [danshuri](https://github.com/danshuri). The [original live demo](https://jblaha.art/sketchbook/latest)
+is still up, without any of the additions listed above.
