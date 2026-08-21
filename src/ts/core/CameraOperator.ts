@@ -32,6 +32,15 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 
 	public followMode: boolean = false;
 	public autoCenter: boolean = false;
+	public aiming: boolean = false;
+
+	/** How close the camera pulls in over the shoulder, and how far it slides across. */
+	private static readonly AIM_RADIUS: number = 1.5;
+	private static readonly AIM_SHOULDER: number = 0.6;
+	private static readonly AIM_FOV: number = 55;
+	private aimBlend: number = 0;
+	private static readonly BASE_FOV: number = 80;
+	private static scratch: THREE.Vector3 = new THREE.Vector3();
 
 	public characterCaller: Character;
 
@@ -101,13 +110,30 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		{
 			if (this.autoCenter === true) this.centerBehindSubject();
 
-			this.radius = THREE.MathUtils.lerp(this.radius, this.targetRadius, 0.1);
-	
-			this.camera.position.x = this.target.x + this.radius * Math.sin(this.theta * Math.PI / 180) * Math.cos(this.phi * Math.PI / 180);
-			this.camera.position.y = this.target.y + this.radius * Math.sin(this.phi * Math.PI / 180);
-			this.camera.position.z = this.target.z + this.radius * Math.cos(this.theta * Math.PI / 180) * Math.cos(this.phi * Math.PI / 180);
+			this.aimBlend = THREE.MathUtils.lerp(this.aimBlend, this.aiming ? 1 : 0, 0.18);
+			this.applyAimFov();
+
+			let wanted = THREE.MathUtils.lerp(this.targetRadius, CameraOperator.AIM_RADIUS, this.aimBlend);
+			this.radius = THREE.MathUtils.lerp(this.radius, wanted, 0.1);
+
+			let theta = this.theta * Math.PI / 180;
+			let phi = this.phi * Math.PI / 180;
+
+			// Aiming slides the view sideways so the character isn't standing where
+			// the crosshair is. Perpendicular to the camera offset, so it moves across
+			// the screen rather than toward or away from the player.
+			let shoulder = CameraOperator.AIM_SHOULDER * this.aimBlend;
+			let aimTarget = CameraOperator.scratch.set(
+				this.target.x + Math.cos(theta) * shoulder,
+				this.target.y,
+				this.target.z - Math.sin(theta) * shoulder
+			);
+
+			this.camera.position.x = aimTarget.x + this.radius * Math.sin(theta) * Math.cos(phi);
+			this.camera.position.y = aimTarget.y + this.radius * Math.sin(phi);
+			this.camera.position.z = aimTarget.z + this.radius * Math.cos(theta) * Math.cos(phi);
 			this.camera.updateMatrix();
-			this.camera.lookAt(this.target);
+			this.camera.lookAt(aimTarget);
 		}
 	}
 
@@ -116,6 +142,19 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 	 * their character on foot or their vehicle while driving. Pitch is left alone,
 	 * so whatever camera height they picked survives being centred.
 	 */
+	/** Narrows the view while aiming, which reads as zoom without moving the camera. */
+	private applyAimFov(): void
+	{
+		let camera = this.camera as THREE.PerspectiveCamera;
+		if (camera.isPerspectiveCamera !== true) return;
+
+		let wanted = THREE.MathUtils.lerp(CameraOperator.BASE_FOV, CameraOperator.AIM_FOV, this.aimBlend);
+		if (Math.abs(camera.fov - wanted) < 0.01) return;
+
+		camera.fov = wanted;
+		camera.updateProjectionMatrix();
+	}
+
 	private centerBehindSubject(): void
 	{
 		// In free camera this operator is the input receiver and the target is the

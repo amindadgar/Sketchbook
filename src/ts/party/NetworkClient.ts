@@ -3,6 +3,7 @@ export interface PlayerInfo
 	id: number;
 	name: string;
 	color: string;
+	score?: number;
 }
 
 /**
@@ -25,6 +26,9 @@ export class NetworkClient
 	public onVehicleState: (message: any) => void;
 	public onIdentity: (info: PlayerInfo) => void;
 	public onScenario: (id: string) => void;
+	public onShot: (message: any) => void;
+	public onHit: (message: any) => void;
+	public onScore: (id: number, score: number) => void;
 	public onError: (message: string) => void;
 	public onDisconnect: () => void;
 
@@ -196,6 +200,18 @@ export class NetworkClient
 
 			case 'scenario':
 				if (this.onScenario !== undefined) this.onScenario(message.id);
+				break;
+
+			case 'shot':
+				if (this.onShot !== undefined) this.onShot(message);
+				break;
+
+			case 'hit':
+				if (this.onHit !== undefined) this.onHit(message);
+				break;
+
+			case 'score':
+				if (this.onScore !== undefined) this.onScore(message.id, message.score);
 				break;
 
 			case 'error':

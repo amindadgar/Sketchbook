@@ -16,6 +16,7 @@ import { Sky } from './Sky';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartySession } from '../party/PartySession';
 import { Minimap } from '../core/Minimap';
+import { CombatSystem } from '../combat/CombatSystem';
 export declare class World {
     renderer: THREE.WebGLRenderer;
     camera: THREE.PerspectiveCamera;
@@ -52,6 +53,7 @@ export declare class World {
     localPlayer: PlayerIdentity;
     localCharacter: Character;
     party: PartySession;
+    combat: CombatSystem;
     minimap: Minimap;
     lastScenarioID: string;
     /**
@@ -126,6 +128,14 @@ export declare class World {
      * car beside them is all it takes to put all three types within seconds of
      * each other, without inventing positions that might land in scenery.
      */
+    /**
+     * Scatters weapon pickups and works out where the dead come back.
+     *
+     * Spawn points are reused as the anchors rather than inventing positions:
+     * they're known good ground, spread across the map, and a gun dropped at an
+     * arbitrary coordinate could end up inside a wall or under the sea.
+     */
+    private prepareCombat;
     private createMergedScenario;
     /** Parks a car on the line from the player to the aircraft, where the apron is clear. */
     private createCarSpawnBetween;

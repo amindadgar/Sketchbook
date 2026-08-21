@@ -15,6 +15,7 @@ import { VehicleEntryInstance } from './VehicleEntryInstance';
 import { GroundImpactData } from './GroundImpactData';
 import { EntityType } from '../enums/EntityType';
 import { NameTag } from '../party/NameTag';
+import { WeaponSpec } from '../combat/Weapons';
 export declare class Character extends THREE.Object3D implements IWorldEntity {
     updateOrder: number;
     entityType: EntityType;
@@ -59,11 +60,19 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     controlledObject: IControllable;
     occupyingSeat: VehicleSeat;
     vehicleEntryInstance: VehicleEntryInstance;
+    static readonly MAX_HEALTH: number;
+    health: number;
+    weapon: WeaponSpec;
+    ammo: number;
+    reserve: number;
+    /** Set for anyone in a party, so hits can be addressed to their client. */
+    networkId: number;
     playerName: string;
     playerColor: string;
     nameTag: NameTag;
     private physicsEnabled;
     private originalColors;
+    private weaponModel;
     constructor(gltf: any);
     setAnimations(animations: []): void;
     setArcadeVelocityInfluence(x: number, y?: number, z?: number): void;
@@ -90,6 +99,17 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * Sitting lifts the character, so the tag comes down to hug the vehicle roof.
      */
     private updateNameTagHeight;
+    /**
+     * Puts a gun in the character's right hand.
+     *
+     * Parented to the visuals rather than to the arm bone: the bone swings with
+     * every animation in the set, and pinning a gun to it convincingly would
+     * mean a hand tuned offset per clip.
+     */
+    equipWeapon(spec: WeaponSpec): void;
+    unequipWeapon(): void;
+    /** Where shots leave the gun, so flashes and tracers start at the barrel. */
+    getMuzzlePosition(): THREE.Vector3;
     setTint(color: string): void;
     readCharacterData(gltf: any): void;
     handleKeyboardEvent(event: KeyboardEvent, code: string, pressed: boolean): void;

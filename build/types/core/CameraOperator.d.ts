@@ -26,6 +26,14 @@ export declare class CameraOperator implements IInputReceiver, IUpdatable {
     rightVelocity: number;
     followMode: boolean;
     autoCenter: boolean;
+    aiming: boolean;
+    /** How close the camera pulls in over the shoulder, and how far it slides across. */
+    private static readonly AIM_RADIUS;
+    private static readonly AIM_SHOULDER;
+    private static readonly AIM_FOV;
+    private aimBlend;
+    private static readonly BASE_FOV;
+    private static scratch;
     characterCaller: Character;
     constructor(world: World, camera: THREE.Camera, sensitivityX?: number, sensitivityY?: number);
     setSensitivity(sensitivityX: number, sensitivityY?: number): void;
@@ -37,6 +45,8 @@ export declare class CameraOperator implements IInputReceiver, IUpdatable {
      * their character on foot or their vehicle while driving. Pitch is left alone,
      * so whatever camera height they picked survives being centred.
      */
+    /** Narrows the view while aiming, which reads as zoom without moving the camera. */
+    private applyAimFov;
     private centerBehindSubject;
     handleKeyboardEvent(event: KeyboardEvent, code: string, pressed: boolean): void;
     handleMouseWheel(event: WheelEvent, value: number): void;

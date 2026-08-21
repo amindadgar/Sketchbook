@@ -42,8 +42,14 @@ Mostly a playground for exploring how conventional third person gameplay mechani
 * Party mode
 	* Room codes, up to 8 players
 	* Per player name tags and colours
+* Combat
+	* Handgun, automatic, rifle and shotgun, each with its own feel
+	* Weapon pickups floating in a halo, GTA style
+	* Health, kills and a scoreboard
 * HUD
 	* Speedometer
+	* Round minimap with party markers
+	* Settings folded behind a gear
 
 All planned features can be found in the [GitHub Projects](https://github.com/swift502/Sketchbook/projects).
 
@@ -90,6 +96,36 @@ metres, so nobody has to walk across the map to fly.
 
 Note that the race and stunt scenarios were built for one player, so they have a
 single spawn point and a party will share a car.
+
+## Combat
+
+Weapons sit around the map turning inside a glowing column. Walk into one to
+pick it up; the column goes dark and comes back twenty seconds later. Guns are
+stowed while driving.
+
+| Weapon | Damage | Rate | Mag | Carried | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Handgun | 25 | semi | 12 | 36 | four shots to a kill |
+| Automatic | 13 | 12/s | 30 | 90 | wide spread, short range |
+| Rifle | 55 | slow | 8 | 24 | near zero spread, reaches 250m |
+| Shotgun | 12 x 8 | slow | 6 | 18 | a kill up close, useless at range |
+
+Ammunition is finite. Reloads draw on what you're carrying, and once that and
+the magazine are both empty the gun is dropped and you're looking for another
+column.
+
+Left mouse fires. Hold right mouse to aim: the view narrows, the camera slides
+over your shoulder so you aren't standing where the crosshair is, and shots land
+noticeably tighter.
+
+Everyone starts on 100 health and respawns three seconds after dying. A kill
+scores a point on the scoreboard at the top right.
+
+As with position, each client is the authority on its own health: a shooter
+reports a hit, the player who was hit decides what it did to them, and their
+death is what awards the point. One owner per number beats two clients
+disagreeing about it, though it does mean a modified client could decline to
+die. Same trade as the rest of the party layer.
 
 ## Usage
 

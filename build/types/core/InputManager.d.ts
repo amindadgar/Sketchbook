@@ -12,6 +12,7 @@ export declare class InputManager implements IUpdatable {
     boundOnMouseMove: (evt: any) => void;
     boundOnMouseUp: (evt: any) => void;
     boundOnMouseWheelMove: (evt: any) => void;
+    boundOnContextMenu: (evt: any) => void;
     boundOnPointerlockChange: (evt: any) => void;
     boundOnPointerlockError: (evt: any) => void;
     boundOnKeyDown: (evt: any) => void;

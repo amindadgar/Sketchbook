@@ -2,6 +2,7 @@ import { World } from '../world/World';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { NetworkClient } from './NetworkClient';
 import { PlayerIdentity } from './PlayerIdentity';
+import * as THREE from 'three';
 /**
  * Holds a party together: keeps the connection, mirrors everyone else into the
  * world as RemotePlayers, and publishes the local player's transform.
@@ -18,6 +19,7 @@ export declare class PartySession implements IUpdatable {
     private pending;
     private pendingTimer;
     private notice;
+    private localScore;
     constructor(world: World);
     host(url: string, identity: PlayerIdentity): Promise<void>;
     join(url: string, code: string, identity: PlayerIdentity): Promise<void>;
@@ -37,6 +39,12 @@ export declare class PartySession implements IUpdatable {
      * launched it locally also tells the rest of the party to follow.
      */
     onScenarioLaunched(scenarioID: string): void;
+    publishShot(from: THREE.Vector3, direction: THREE.Vector3, weaponId: string): void;
+    /** Their client owns their health, so a hit is a request, not a verdict. */
+    publishHit(targetId: number, damage: number): void;
+    publishDeath(killerId: number): void;
+    /** Works out of a party too, where it's just you and your score. */
+    refreshScoreboard(): void;
     update(timeStep: number, unscaledTimeStep: number): void;
     private publishLocalState;
     private applyScenario;

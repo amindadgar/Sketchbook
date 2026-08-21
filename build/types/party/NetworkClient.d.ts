@@ -2,6 +2,7 @@ export interface PlayerInfo {
     id: number;
     name: string;
     color: string;
+    score?: number;
 }
 /**
  * Thin wrapper over the relay's WebSocket protocol. It knows the message
@@ -20,6 +21,9 @@ export declare class NetworkClient {
     onVehicleState: (message: any) => void;
     onIdentity: (info: PlayerInfo) => void;
     onScenario: (id: string) => void;
+    onShot: (message: any) => void;
+    onHit: (message: any) => void;
+    onScore: (id: number, score: number) => void;
     onError: (message: string) => void;
     onDisconnect: () => void;
     private socket;

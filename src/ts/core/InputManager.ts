@@ -17,6 +17,7 @@ export class InputManager implements IUpdatable
 	public boundOnMouseMove: (evt: any) => void;
 	public boundOnMouseUp: (evt: any) => void;
 	public boundOnMouseWheelMove: (evt: any) => void;
+	public boundOnContextMenu: (evt: any) => void;
 	public boundOnPointerlockChange: (evt: any) => void;
 	public boundOnPointerlockError: (evt: any) => void;
 	public boundOnKeyDown: (evt: any) => void;
@@ -35,6 +36,7 @@ export class InputManager implements IUpdatable
 		this.boundOnMouseMove = (evt) => this.onMouseMove(evt);
 		this.boundOnMouseUp = (evt) => this.onMouseUp(evt);
 		this.boundOnMouseWheelMove = (evt) => this.onMouseWheelMove(evt);
+		this.boundOnContextMenu = (evt) => evt.preventDefault();
 
 		// Pointer lock
 		this.boundOnPointerlockChange = (evt) => this.onPointerlockChange(evt);
@@ -47,6 +49,8 @@ export class InputManager implements IUpdatable
 		// Init event listeners
 		// Mouse
 		this.domElement.addEventListener('mousedown', this.boundOnMouseDown, false);
+		// The right button aims, so the browser's menu has to stay out of the way
+		this.domElement.addEventListener('contextmenu', this.boundOnContextMenu, false);
 		document.addEventListener('wheel', this.boundOnMouseWheelMove, false);
 		document.addEventListener('pointerlockchange', this.boundOnPointerlockChange, false);
 		document.addEventListener('pointerlockerror', this.boundOnPointerlockError, false);
@@ -54,6 +58,12 @@ export class InputManager implements IUpdatable
 		// Keys
 		document.addEventListener('keydown', this.boundOnKeyDown, false);
 		document.addEventListener('keyup', this.boundOnKeyUp, false);
+
+		// Releases are also watched on the document. The element level listener only
+		// exists while the pointer is locked, so leaving the lock mid click, or a
+		// click that never locked at all, would leave the button stuck down. With a
+		// held trigger bound to it that means a gun that never stops firing.
+		document.addEventListener('mouseup', this.boundOnMouseUp, false);
 
 		world.registerUpdatable(this);
 	}
@@ -114,7 +124,7 @@ export class InputManager implements IUpdatable
 
 		if (this.inputReceiver !== undefined)
 		{
-			this.inputReceiver.handleMouseButton(event, 'mouse' + event.button, true);
+			this.inputReceiver.handleMouseButton(event, 'Mouse' + event.button, true);
 		}
 	}
 
@@ -136,7 +146,7 @@ export class InputManager implements IUpdatable
 
 		if (this.inputReceiver !== undefined)
 		{
-			this.inputReceiver.handleMouseButton(event, 'mouse' + event.button, false);
+			this.inputReceiver.handleMouseButton(event, 'Mouse' + event.button, false);
 		}
 	}
 

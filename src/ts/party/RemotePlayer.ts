@@ -56,6 +56,7 @@ export class RemotePlayer implements IUpdatable
 			this.character.setPhysicsEnabled(false);
 			this.character.charState = undefined;
 			this.character.setPlayerAppearance(this.info.name, this.info.color);
+			this.character.networkId = this.info.id;
 
 			if (this.hasTarget)
 			{
