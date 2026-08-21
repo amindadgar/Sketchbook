@@ -23,6 +23,8 @@ export class Airplane extends Vehicle implements IControllable, IWorldEntity
 	private elevatorSimulator: SpringSimulator;
 	private rudderSimulator: SpringSimulator;
 
+	protected engineSoundPath: string = 'build/assets/airplane.wav';
+
 	private enginePower: number = 0;
 	private lastDrag: number = 0;
 
@@ -93,6 +95,11 @@ export class Airplane extends Vehicle implements IControllable, IWorldEntity
 			if (this.enginePower < 0) this.enginePower = 0;
 		}
 		this.rotor.rotateX(this.enginePower * timeStep * 60);
+
+		// Engine sound
+		// enginePower already fades in and out with the pilot, so it doubles as the volume
+		const throttling = this.actions.throttle.isPressed && !this.actions.brake.isPressed;
+		this.updateEngineSound(0.8 + this.enginePower * (throttling ? 0.7 : 0.3), this.enginePower);
 
 		// Steering
 		if (this.rayCastVehicle.numWheelsOnGround > 0)

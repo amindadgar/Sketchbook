@@ -24,8 +24,13 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     collision: CANNON.Body;
     materials: THREE.Material[];
     spawnPoint: THREE.Object3D;
+    engineSound: THREE.PositionalAudio;
     private modelContainer;
     private firstPerson;
+    protected engineSoundPath: string;
+    protected engineSoundRefDistance: number;
+    private enginePitch;
+    private engineVolume;
     constructor(gltf: any, handlingSetup?: any);
     noDirectionPressed(): boolean;
     update(timeStep: number): void;
@@ -48,6 +53,18 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     setBrake(brakeForce: number, driveFilter?: string): void;
     addToWorld(world: World): void;
     removeFromWorld(world: World): void;
+    /**
+     * Creates a looping engine sound that travels with the vehicle.
+     * The sound is a child of the vehicle's Object3D, so the 'updateMatrixWorld'
+     * call in 'update' already moves the panner along with it.
+     */
+    protected setupEngineSound(world: World): void;
+    /**
+     * Feeds the engine sound. Pitch is a multiple of the sample's own pitch, both
+     * values are lerped so gear shifts and throttle taps glide instead of clicking.
+     */
+    protected updateEngineSound(pitch: number, volume: number): void;
+    protected disposeEngineSound(): void;
     readVehicleData(gltf: any): void;
     private connectSeats;
 }

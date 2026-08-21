@@ -30,9 +30,17 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	public collision: CANNON.Body;
 	public materials: THREE.Material[] = [];
 	public spawnPoint: THREE.Object3D;
+	public engineSound: THREE.PositionalAudio;
 	private modelContainer: THREE.Group;
 
 	private firstPerson: boolean = false;
+
+	// Engine audio. Subclasses opt in by setting 'engineSoundPath'.
+	// Prefer wav or ogg over mp3, mp3 encoder padding leaves a gap at the loop point.
+	protected engineSoundPath: string;
+	protected engineSoundRefDistance: number = 6;
+	private enginePitch: number = 1;
+	private engineVolume: number = 0;
 
 	constructor(gltf: any, handlingSetup?: any)
 	{
@@ -342,6 +350,8 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 			{
 				world.sky.csm.setupMaterial(mat);
 			});
+
+			this.setupEngineSound(world);
 		}
 	}
 
@@ -363,7 +373,67 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 			{
 				world.graphicsWorld.remove(wheel.wheelObject);
 			});
+
+			this.disposeEngineSound();
 		}
+	}
+
+	/**
+	 * Creates a looping engine sound that travels with the vehicle.
+	 * The sound is a child of the vehicle's Object3D, so the 'updateMatrixWorld'
+	 * call in 'update' already moves the panner along with it.
+	 */
+	protected setupEngineSound(world: World): void
+	{
+		if (this.engineSoundPath === undefined || world.audioListener === undefined) return;
+
+		this.engineSound = new THREE.PositionalAudio(world.audioListener);
+		this.engineSound.setRefDistance(this.engineSoundRefDistance);
+		this.engineSound.setRolloffFactor(1.6);
+		this.engineSound.setLoop(true);
+		this.engineSound.setVolume(0);
+		this.add(this.engineSound);
+
+		new THREE.AudioLoader().load(this.engineSoundPath,
+			(buffer: AudioBuffer) =>
+			{
+				// The vehicle can get removed while the file is still downloading
+				if (this.engineSound === undefined) return;
+
+				this.engineSound.setBuffer(buffer);
+				this.engineSound.play();
+			},
+			undefined,
+			() =>
+			{
+				console.warn('Couldn\'t load engine sound from \'' + this.engineSoundPath + '\'.');
+			});
+	}
+
+	/**
+	 * Feeds the engine sound. Pitch is a multiple of the sample's own pitch, both
+	 * values are lerped so gear shifts and throttle taps glide instead of clicking.
+	 */
+	protected updateEngineSound(pitch: number, volume: number): void
+	{
+		if (this.engineSound === undefined || !this.engineSound.isPlaying) return;
+
+		this.enginePitch = THREE.MathUtils.lerp(this.enginePitch, pitch, 0.15);
+		this.engineVolume = THREE.MathUtils.lerp(this.engineVolume, volume, 0.15);
+
+		// Time scale is baked in, so slow motion sounds like slow motion
+		this.engineSound.setPlaybackRate(this.enginePitch * this.world.params.Time_Scale);
+		this.engineSound.setVolume(this.engineVolume);
+	}
+
+	protected disposeEngineSound(): void
+	{
+		if (this.engineSound === undefined) return;
+
+		// Without this, a looping engine keeps playing after a scenario restart
+		if (this.engineSound.isPlaying) this.engineSound.stop();
+		this.remove(this.engineSound);
+		this.engineSound = undefined;
 	}
 
 	public readVehicleData(gltf: any): void

@@ -43,7 +43,11 @@ export declare class World {
     paths: Path[];
     scenarioGUIFolder: any;
     updatables: IUpdatable[];
+    audioListener: THREE.AudioListener;
+    music: THREE.Audio;
+    musicElement: HTMLAudioElement;
     private lastScenarioID;
+    private boundResumeAudio;
     constructor(worldScenePath?: any);
     update(timeStep: number, unscaledTimeStep: number): void;
     updatePhysics(timeStep: number): void;
@@ -57,6 +61,12 @@ export declare class World {
      */
     render(world: World): void;
     setTimeScale(value: number): void;
+    /**
+     * Starts the audio context and the music track.
+     * Browsers keep audio suspended until the user interacts with the page,
+     * so this runs on the first click or key press, whichever comes first.
+     */
+    resumeAudio(): void;
     add(worldEntity: IWorldEntity): void;
     registerUpdatable(registree: IUpdatable): void;
     remove(worldEntity: IWorldEntity): void;
@@ -67,6 +77,7 @@ export declare class World {
     clearEntities(): void;
     scrollTheTimeScale(scrollAmount: number): void;
     updateControls(controls: any): void;
+    private setupAudio;
     private generateHTML;
     private createParamsGUI;
 }
