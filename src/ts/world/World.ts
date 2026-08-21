@@ -673,13 +673,15 @@ export class World
 
 		let scenario = new Scenario(root, this);
 		scenario.addSpawnPoint(new CharacterSpawnPoint(start));
-		scenario.addSpawnPoint(this.createCarSpawnBetween(start, aircraft));
+		scenario.addSpawnPoint(this.createVehicleSpawnBetween(start, aircraft, 'car', 8));
+		scenario.addSpawnPoint(this.createVehicleSpawnBetween(start, aircraft, 'sportscar', 15));
 
 		this.scenarios.push(scenario);
 	}
 
-	/** Parks a car on the line from the player to the aircraft, where the apron is clear. */
-	private createCarSpawnBetween(start: THREE.Object3D, aircraft: THREE.Object3D): VehicleSpawnPoint
+	/** Parks a vehicle on the line from the player to the aircraft, where the apron is clear. */
+	private createVehicleSpawnBetween(start: THREE.Object3D, aircraft: THREE.Object3D,
+		type: string, distance: number): VehicleSpawnPoint
 	{
 		let startPosition = start.getWorldPosition(new THREE.Vector3());
 		let towardAircraft = aircraft.getWorldPosition(new THREE.Vector3())
@@ -690,12 +692,12 @@ export class World
 		let object = new THREE.Object3D();
 		// Named rather than left blank: the party layer matches vehicles across
 		// clients by their spawn point's name, so it has to be stable
-		object.name = 'merged_car_spawn';
-		object.position.copy(startPosition.add(towardAircraft.multiplyScalar(8)));
+		object.name = 'merged_' + type + '_spawn';
+		object.position.copy(startPosition.add(towardAircraft.multiplyScalar(distance)));
 		start.getWorldQuaternion(object.quaternion);
 
 		let spawnPoint = new VehicleSpawnPoint(object);
-		spawnPoint.type = 'car';
+		spawnPoint.type = type;
 
 		return spawnPoint;
 	}

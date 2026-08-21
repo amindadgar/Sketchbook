@@ -91,6 +91,7 @@ export class VehicleSpawnPoint implements ISpawnPoint
 		switch (type)
 		{
 			case 'car': return new Car(model);
+			case 'sportscar': return new Car(model);
 			case 'heli': return new Helicopter(model);
 			case 'airplane': return new Airplane(model);
 		}

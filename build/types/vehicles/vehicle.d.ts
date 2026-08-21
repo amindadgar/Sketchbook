@@ -30,6 +30,7 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     protected engineSoundPath: string;
     protected engineSoundRefDistance: number;
     private originalColors;
+    private static readonly UNPAINTED;
     private enginePitch;
     private engineVolume;
     constructor(gltf: any, handlingSetup?: any);
@@ -70,6 +71,12 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
      * a bright red tyre reads as a bug rather than a livery.
      */
     setPlayerTint(color: string): void;
+    /**
+     * Bodywork gets the driver's colour; glass, lights, trim and tyres don't.
+     * Matched on the material name, since that's all an imported model carries,
+     * and a red windscreen reads as a bug rather than a paint job.
+     */
+    private static isUnpainted;
     clearPlayerTint(): void;
     protected disposeEngineSound(): void;
     readVehicleData(gltf: any): void;
