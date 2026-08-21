@@ -94,6 +94,26 @@ pnpm server     # party relay on 9000, only needed for multiplayer
 pnpm build      # production bundle into build/
 ```
 
+Or skip all of that and use Docker, below.
+
+## Docker
+
+Both halves come up together, the game on 8080 and the relay on 9000:
+
+```bash
+docker compose up -d      # build on first run, then start
+docker compose logs -f    # follow
+docker compose down       # stop
+```
+
+The bundle is rebuilt inside the image rather than copied from the repo, so
+what ships is always built from the source beside it. Nothing is mounted, so a
+code change needs `docker compose build` again.
+
+Both ports bind every interface, so people on your network can play without any
+extra flags: they open `http://<your-address>:8080` and set the party server to
+`ws://<your-address>:9000`.
+
 ## Party mode
 
 Start the game, pick a name and a colour, then either **Create party** for a four
