@@ -55,6 +55,12 @@ export class InputManager implements IUpdatable
 		document.addEventListener('keydown', this.boundOnKeyDown, false);
 		document.addEventListener('keyup', this.boundOnKeyUp, false);
 
+		// Releases are also watched on the document. The element level listener only
+		// exists while the pointer is locked, so leaving the lock mid click, or a
+		// click that never locked at all, would leave the button stuck down. With a
+		// held trigger bound to it that means a gun that never stops firing.
+		document.addEventListener('mouseup', this.boundOnMouseUp, false);
+
 		world.registerUpdatable(this);
 	}
 
@@ -114,7 +120,7 @@ export class InputManager implements IUpdatable
 
 		if (this.inputReceiver !== undefined)
 		{
-			this.inputReceiver.handleMouseButton(event, 'mouse' + event.button, true);
+			this.inputReceiver.handleMouseButton(event, 'Mouse' + event.button, true);
 		}
 	}
 
@@ -136,7 +142,7 @@ export class InputManager implements IUpdatable
 
 		if (this.inputReceiver !== undefined)
 		{
-			this.inputReceiver.handleMouseButton(event, 'mouse' + event.button, false);
+			this.inputReceiver.handleMouseButton(event, 'Mouse' + event.button, false);
 		}
 	}
 
