@@ -147,9 +147,16 @@ Start the game, pick a name and a colour, then either **Create party** for a fou
 character code, or type a friend's code and **Join**. Everyone in a party shares
 a scenario, so whoever launches one takes the rest along.
 
-The **Party server** field in the menu is remembered between sessions and
-defaults to `ws://localhost:9000`, which is right when you host and play on the
-same machine.
+The **Party server** field in the menu fills itself in from where the page came
+from, so it's usually already right:
+
+| Page served from | Field defaults to |
+| --- | --- |
+| localhost | `ws://localhost:9000` |
+| a LAN address | `ws://<that address>:9000` |
+| anywhere else | the deployed relay |
+
+Whatever you type over it wins, and is remembered between sessions.
 
 To play with people on your network, bind the dev server to every interface
 rather than just localhost:

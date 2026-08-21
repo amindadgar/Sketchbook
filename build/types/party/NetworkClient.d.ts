@@ -9,7 +9,9 @@ export interface PlayerInfo {
  * shapes and nothing about the game, so the world can stay unaware of sockets.
  */
 export declare class NetworkClient {
-    static readonly DEFAULT_URL: string;
+    /** The relay that ships alongside the hosted game. */
+    static readonly DEPLOYED_URL: string;
+    private static readonly LOCAL_URL;
     private static readonly STORAGE_KEY;
     id: number;
     code: string;
@@ -28,6 +30,13 @@ export declare class NetworkClient {
     onDisconnect: () => void;
     private socket;
     static loadUrl(): string;
+    /**
+     * Guesses the relay from where the page itself came from, so the field is
+     * already right however the game is being run and nobody has to be told an
+     * address. Typing over it still wins, and what's typed is remembered.
+     */
+    static defaultUrl(): string;
+    private static isPrivateAddress;
     static saveUrl(url: string): void;
     /** Resolves once the socket is open, rejects with a readable reason. */
     connect(url: string): Promise<void>;

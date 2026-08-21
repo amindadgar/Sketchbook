@@ -12,7 +12,9 @@ export interface PlayerInfo
  */
 export class NetworkClient
 {
-	public static readonly DEFAULT_URL: string = 'ws://localhost:9000';
+	/** The relay that ships alongside the hosted game. */
+	public static readonly DEPLOYED_URL: string = 'wss://relay-production-d528.up.railway.app';
+	private static readonly LOCAL_URL: string = 'ws://localhost:9000';
 	private static readonly STORAGE_KEY: string = 'sketchbook.serverUrl';
 
 	public id: number;
@@ -38,12 +40,42 @@ export class NetworkClient
 	{
 		try
 		{
-			return window.localStorage.getItem(NetworkClient.STORAGE_KEY) || NetworkClient.DEFAULT_URL;
+			return window.localStorage.getItem(NetworkClient.STORAGE_KEY) || NetworkClient.defaultUrl();
 		}
 		catch (error)
 		{
-			return NetworkClient.DEFAULT_URL;
+			return NetworkClient.defaultUrl();
 		}
+	}
+
+	/**
+	 * Guesses the relay from where the page itself came from, so the field is
+	 * already right however the game is being run and nobody has to be told an
+	 * address. Typing over it still wins, and what's typed is remembered.
+	 */
+	public static defaultUrl(): string
+	{
+		let host = window.location.hostname;
+
+		// Served from the same machine, so the relay is expected beside it
+		if (host === '' || host === 'localhost' || host === '127.0.0.1') return NetworkClient.LOCAL_URL;
+
+		// A private address means somebody is hosting on their own network,
+		// where the relay runs on the same box as the game
+		if (NetworkClient.isPrivateAddress(host)) return 'ws://' + host + ':9000';
+
+		// Anything else is the hosted deployment, whose relay is its own service
+		// on its own domain, behind TLS on the standard port
+		return NetworkClient.DEPLOYED_URL;
+	}
+
+	private static isPrivateAddress(host: string): boolean
+	{
+		return /^10\./.test(host)
+			|| /^192\.168\./.test(host)
+			|| /^172\.(1[6-9]|2[0-9]|3[01])\./.test(host)
+			|| host.indexOf('.') === -1
+			|| /\.local$/.test(host);
 	}
 
 	public static saveUrl(url: string): void

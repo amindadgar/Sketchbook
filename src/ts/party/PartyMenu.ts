@@ -135,7 +135,7 @@ export class PartyMenu
 	private static serverUrl(): string
 	{
 		let value = (document.getElementById('party-server') as HTMLInputElement).value.trim();
-		return value.length > 0 ? value : NetworkClient.DEFAULT_URL;
+		return value.length > 0 ? value : NetworkClient.defaultUrl();
 	}
 
 	private static bindSwatches(): void
