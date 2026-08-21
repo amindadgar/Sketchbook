@@ -37,6 +37,7 @@ import { Ocean } from './Ocean';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartyMenu } from '../party/PartyMenu';
 import { PartySession } from '../party/PartySession';
+import { Minimap } from '../core/Minimap';
 
 export class World
 {
@@ -75,7 +76,21 @@ export class World
 	public localPlayer: PlayerIdentity = PlayerIdentity.load();
 	public localCharacter: Character;
 	public party: PartySession;
+	public minimap: Minimap;
 	public lastScenarioID: string;
+
+	/**
+	 * The playable area, used both to respawn anything that leaves it and to
+	 * frame the minimap. Measured from this world file.
+	 */
+	public worldBounds = {
+		minX: -211.882,
+		maxX: 211.882,
+		minZ: -169.098,
+		maxZ: 153.232,
+		seaLevel: 14.989,
+		floor: 0.107
+	};
 
 
 	private speedometerFill: number = 0;
@@ -182,6 +197,10 @@ export class World
 				this.update(1, 1);
 				this.setTimeScale(1);
 	
+				// Snapshot the world from overhead now that everything is in place
+				this.minimap = new Minimap(this);
+				this.minimap.capture();
+	
 				PartyMenu.show({
 					identity: this.localPlayer,
 					onPlay: () =>
@@ -260,10 +279,12 @@ export class World
 
 	public isOutOfBounds(position: CANNON.Vec3): boolean
 	{
-		let inside = position.x > -211.882 && position.x < 211.882 &&
-					position.z > -169.098 && position.z < 153.232 &&
-					position.y > 0.107;
-		let belowSeaLevel = position.y < 14.989;
+		let bounds = this.worldBounds;
+
+		let inside = position.x > bounds.minX && position.x < bounds.maxX &&
+					position.z > bounds.minZ && position.z < bounds.maxZ &&
+					position.y > bounds.floor;
+		let belowSeaLevel = position.y < bounds.seaLevel;
 
 		return !inside && belowSeaLevel;
 	}
@@ -781,6 +802,9 @@ export class World
 				</div>
 				<div class="left-panel">
 					<div id="controls" class="panel-segment flex-bottom"></div>
+				</div>
+				<div id="minimap">
+					<canvas id="minimap-canvas"></canvas>
 				</div>
 				<div id="party-hud">
 					<div id="party-code">PARTY <span id="party-code-value"></span></div>

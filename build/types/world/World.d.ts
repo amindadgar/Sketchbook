@@ -15,6 +15,7 @@ import { Scenario } from './Scenario';
 import { Sky } from './Sky';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartySession } from '../party/PartySession';
+import { Minimap } from '../core/Minimap';
 export declare class World {
     renderer: THREE.WebGLRenderer;
     camera: THREE.PerspectiveCamera;
@@ -51,7 +52,20 @@ export declare class World {
     localPlayer: PlayerIdentity;
     localCharacter: Character;
     party: PartySession;
+    minimap: Minimap;
     lastScenarioID: string;
+    /**
+     * The playable area, used both to respawn anything that leaves it and to
+     * frame the minimap. Measured from this world file.
+     */
+    worldBounds: {
+        minX: number;
+        maxX: number;
+        minZ: number;
+        maxZ: number;
+        seaLevel: number;
+        floor: number;
+    };
     private speedometerFill;
     private boundResumeAudio;
     constructor(worldScenePath?: any);
