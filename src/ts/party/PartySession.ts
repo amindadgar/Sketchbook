@@ -7,6 +7,7 @@ import { NetworkClient, PlayerInfo } from './NetworkClient';
 import { RemotePlayer } from './RemotePlayer';
 import { PlayerIdentity } from './PlayerIdentity';
 import { UIManager } from '../core/UIManager';
+import * as THREE from 'three';
 
 /**
  * Holds a party together: keeps the connection, mirrors everyone else into the
@@ -29,6 +30,7 @@ export class PartySession implements IUpdatable
 	private pending: { resolve: () => void, reject: (error: Error) => void };
 	private pendingTimer: number;
 	private notice: string;
+	private localScore: number = 0;
 
 	constructor(world: World)
 	{
@@ -88,6 +90,30 @@ export class PartySession implements IUpdatable
 		this.client.onScenario = (id) =>
 		{
 			this.applyScenario(id);
+		};
+
+		this.client.onShot = (message) =>
+		{
+			this.world.combat.showRemoteShot(
+				new THREE.Vector3(message.p[0], message.p[1], message.p[2]),
+				new THREE.Vector3(message.d[0], message.d[1], message.d[2]),
+				message.w);
+		};
+
+		this.client.onHit = (message) =>
+		{
+			// Relayed to the whole room, but only the player it names is hit
+			if (message.target !== this.client.id) return;
+
+			this.world.combat.takeRemoteHit(message.damage, message.id);
+		};
+
+		this.client.onScore = (id, score) =>
+		{
+			if (id === this.client.id) this.localScore = score;
+			else if (this.players[id] !== undefined) this.players[id].info.score = score;
+
+			this.refreshScoreboard();
 		};
 
 		this.client.onError = (message) =>
@@ -212,6 +238,53 @@ export class PartySession implements IUpdatable
 		this.rebuildPlayers();
 	}
 
+	public publishShot(from: THREE.Vector3, direction: THREE.Vector3, weaponId: string): void
+	{
+		if (!this.active) return;
+
+		this.client.send({
+			t: 'shot',
+			p: PartySession.round3([from.x, from.y, from.z]),
+			d: PartySession.round3([direction.x, direction.y, direction.z]),
+			w: weaponId
+		});
+	}
+
+	/** Their client owns their health, so a hit is a request, not a verdict. */
+	public publishHit(targetId: number, damage: number): void
+	{
+		if (!this.active) return;
+
+		this.client.send({ t: 'hit', target: targetId, damage: damage });
+	}
+
+	public publishDeath(killerId: number): void
+	{
+		if (!this.active) return;
+
+		this.client.send({ t: 'death', killer: killerId });
+	}
+
+	/** Works out of a party too, where it's just you and your score. */
+	public refreshScoreboard(): void
+	{
+		let names = [this.world.localPlayer.name];
+		let colors = [this.world.localPlayer.color];
+		let scores = [this.localScore];
+
+		for (const id in this.players)
+		{
+			if (!this.players.hasOwnProperty(id)) continue;
+
+			let info = this.players[id].info;
+			names.push(info.name);
+			colors.push(info.color);
+			scores.push(info.score !== undefined ? info.score : 0);
+		}
+
+		UIManager.setScoreboard(names, colors, scores);
+	}
+
 	public update(timeStep: number, unscaledTimeStep: number): void
 	{
 		if (!this.active || !this.client.connected) return;
@@ -227,6 +300,10 @@ export class PartySession implements IUpdatable
 	{
 		let character = this.world.localCharacter;
 		if (character === undefined) return;
+
+		// Kept current here rather than at join: the character is replaced on every
+		// scenario change, and hits are addressed by this
+		character.networkId = this.client.id;
 
 		let seat = character.occupyingSeat;
 		let vehicle = seat !== null ? (seat.vehicle as unknown as Vehicle) : undefined;
@@ -291,6 +368,7 @@ export class PartySession implements IUpdatable
 		if (!this.active)
 		{
 			UIManager.setPartyVisible(false);
+			this.refreshScoreboard();
 			return;
 		}
 
@@ -308,6 +386,8 @@ export class PartySession implements IUpdatable
 
 		UIManager.setPartyVisible(true);
 		UIManager.setPartyDetails(this.client.code, names, colors);
+
+		this.refreshScoreboard();
 	}
 
 	private static round3(values: number[]): number[]

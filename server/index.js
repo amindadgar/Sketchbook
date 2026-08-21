@@ -68,7 +68,7 @@ function broadcast(room, message, exclude)
 
 function publicInfo(player)
 {
-	return { id: player.id, name: player.name, color: player.color };
+	return { id: player.id, name: player.name, color: player.color, score: player.score };
 }
 
 function sanitizeName(name)
@@ -146,6 +146,7 @@ wss.on('connection', (ws) =>
 		room: null,
 		name: 'Player',
 		color: '#cccccc',
+		score: 0,
 		isAlive: true,
 		lastActivity: Date.now()
 	};
@@ -238,12 +239,34 @@ wss.on('connection', (ws) =>
 
 			case 'state':
 			case 'vehicle':
+			case 'shot':
+			case 'hit':
 			{
 				if (player.room !== null)
 				{
 					msg.id = player.id;
 					broadcast(player.room, msg, player);
 				}
+				break;
+			}
+
+			case 'death':
+			{
+				// The player who died reports it, because their client is the one
+				// that owns their health. The point goes to whoever they name.
+				if (player.room === null) break;
+
+				for (const other of player.room.players)
+				{
+					if (other.id === msg.killer && other !== player)
+					{
+						other.score++;
+						broadcast(player.room, { t: 'score', id: other.id, score: other.score });
+						break;
+					}
+				}
+
+				broadcast(player.room, { t: 'death', id: player.id, killer: msg.killer }, player);
 				break;
 			}
 		}

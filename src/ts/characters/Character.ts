@@ -28,6 +28,7 @@ import { ClosestObjectFinder } from '../core/ClosestObjectFinder';
 import { Object3D } from 'three';
 import { EntityType } from '../enums/EntityType';
 import { NameTag } from '../party/NameTag';
+import { WeaponSpec, buildWeaponModel } from '../combat/Weapons';
 
 export class Character extends THREE.Object3D implements IWorldEntity
 {
@@ -83,6 +84,15 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	public occupyingSeat: VehicleSeat = null;
 	public vehicleEntryInstance: VehicleEntryInstance = null;
 	
+	public static readonly MAX_HEALTH: number = 100;
+
+	// Combat
+	public health: number = Character.MAX_HEALTH;
+	public weapon: WeaponSpec;
+	public ammo: number = 0;
+	/** Set for anyone in a party, so hits can be addressed to their client. */
+	public networkId: number;
+
 	// Party
 	public playerName: string;
 	public playerColor: string;
@@ -90,6 +100,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	
 	private physicsEnabled: boolean = true;
 	private originalColors: { [uuid: string]: THREE.Color } = {};
+	private weaponModel: THREE.Object3D;
 
 	constructor(gltf: any)
 	{
@@ -307,6 +318,51 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		if (this.nameTag === undefined) return;
 
 		this.nameTag.position.y = 0.57 + (this.occupyingSeat !== null ? 0.5 : 0.95);
+	}
+
+	/**
+	 * Puts a gun in the character's right hand.
+	 *
+	 * Parented to the visuals rather than to the arm bone: the bone swings with
+	 * every animation in the set, and pinning a gun to it convincingly would
+	 * mean a hand tuned offset per clip.
+	 */
+	public equipWeapon(spec: WeaponSpec): void
+	{
+		this.unequipWeapon();
+
+		this.weapon = spec;
+		this.ammo = spec.magazine;
+
+		this.weaponModel = buildWeaponModel(spec);
+		this.weaponModel.position.set(0.24, 0.1, 0.2);
+		this.tiltContainer.add(this.weaponModel);
+	}
+
+	public unequipWeapon(): void
+	{
+		if (this.weaponModel !== undefined)
+		{
+			this.tiltContainer.remove(this.weaponModel);
+			this.weaponModel = undefined;
+		}
+
+		this.weapon = undefined;
+		this.ammo = 0;
+	}
+
+	/** Where shots leave the gun, so flashes and tracers start at the barrel. */
+	public getMuzzlePosition(): THREE.Vector3
+	{
+		let target = new THREE.Vector3();
+
+		if (this.weaponModel !== undefined)
+		{
+			let muzzle = this.weaponModel.getObjectByName('muzzle');
+			if (muzzle !== undefined) return muzzle.getWorldPosition(target);
+		}
+
+		return this.getWorldPosition(target).setY(this.position.y + 0.6);
 	}
 
 	public setTint(color: string): void

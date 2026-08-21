@@ -38,6 +38,7 @@ import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartyMenu } from '../party/PartyMenu';
 import { PartySession } from '../party/PartySession';
 import { Minimap } from '../core/Minimap';
+import { CombatSystem } from '../combat/CombatSystem';
 
 export class World
 {
@@ -76,6 +77,7 @@ export class World
 	public localPlayer: PlayerIdentity = PlayerIdentity.load();
 	public localCharacter: Character;
 	public party: PartySession;
+	public combat: CombatSystem;
 	public minimap: Minimap;
 	public lastScenarioID: string;
 
@@ -182,6 +184,7 @@ export class World
 
 		// Multiplayer, idle until a party is actually started
 		this.party = new PartySession(this);
+		this.combat = new CombatSystem(this);
 
 		// Initialization
 		this.inputManager = new InputManager(this, this.renderer.domElement);
@@ -400,6 +403,9 @@ export class World
 		{
 			this.localCharacter.setPlayerAppearance(this.localPlayer.name, this.localPlayer.color);
 		}
+
+		// Solo has a scoreboard too, it just has one row on it
+		this.party.refreshScoreboard();
 	}
 
 	public setTimeScale(value: number): void
@@ -541,6 +547,7 @@ export class World
 		this.graphicsWorld.add(gltf.scene);
 
 		this.createMergedScenario(gltf);
+		this.prepareCombat(gltf);
 
 		// Launch default scenario
 		let defaultScenarioID: string;
@@ -566,6 +573,49 @@ export class World
 	 * car beside them is all it takes to put all three types within seconds of
 	 * each other, without inventing positions that might land in scenery.
 	 */
+	/**
+	 * Scatters weapon pickups and works out where the dead come back.
+	 *
+	 * Spawn points are reused as the anchors rather than inventing positions:
+	 * they're known good ground, spread across the map, and a gun dropped at an
+	 * arbitrary coordinate could end up inside a wall or under the sea.
+	 */
+	private prepareCombat(gltf: any): void
+	{
+		gltf.scene.updateMatrixWorld(true);
+
+		let spawns: THREE.Vector3[] = [];
+		let playerSpawns: THREE.Vector3[] = [];
+
+		gltf.scene.traverse((child: THREE.Object3D) =>
+		{
+			if (child.userData === undefined || child.userData.data !== 'spawn') return;
+
+			let position = child.getWorldPosition(new THREE.Vector3());
+			spawns.push(position);
+
+			if (child.userData.type === 'player') playerSpawns.push(position);
+		});
+
+		// Thinned out, so a car park with six starting grids doesn't get six guns
+		let anchors: THREE.Vector3[] = [];
+		for (const candidate of spawns)
+		{
+			if (anchors.length >= 12) break;
+
+			let clear = true;
+			for (const chosen of anchors)
+			{
+				if (chosen.distanceTo(candidate) < 35) { clear = false; break; }
+			}
+
+			if (clear) anchors.push(candidate);
+		}
+
+		this.combat.setRespawnPoints(playerSpawns.length > 0 ? playerSpawns : anchors);
+		this.combat.placePickups(anchors);
+	}
+
 	private createMergedScenario(gltf: any): void
 	{
 		// Spawn points are read in world space, and nothing has rendered yet
@@ -803,6 +853,17 @@ export class World
 				<div class="left-panel">
 					<div id="controls" class="panel-segment flex-bottom"></div>
 				</div>
+				<div id="settings-gear" title="Settings">&#9881;</div>
+				<div id="scoreboard">
+					<div class="scoreboard-title">Players</div>
+					<div id="scoreboard-rows"></div>
+				</div>
+				<div id="combat-hud">
+					<div id="health-bar"><div id="health-fill"></div></div>
+					<div id="weapon-readout">
+						<span id="weapon-name"></span><span id="weapon-ammo"></span>
+					</div>
+				</div>
 				<div id="minimap">
 					<canvas id="minimap-canvas"></canvas>
 				</div>
@@ -819,6 +880,11 @@ export class World
 				</div>
 			</div>
 		`).appendTo('body');
+
+		document.getElementById('settings-gear').addEventListener('click', () =>
+		{
+			UIManager.toggleSettings();
+		}, false);
 
 		// Canvas
 		document.body.appendChild(this.renderer.domElement);
