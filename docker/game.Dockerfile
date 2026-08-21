@@ -22,7 +22,8 @@ FROM nginx:alpine
 # /etc/nginx/templates at startup, which is how the port becomes settable.
 # Hosts like Railway hand the port to the container and expect it to be used.
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
-COPY index.html favicon.ico config.js /usr/share/nginx/html/
+COPY index.html favicon.ico config.js manifest.webmanifest sw.js /usr/share/nginx/html/
+COPY icons /usr/share/nginx/html/icons
 # Rewrites config.js from PARTY_SERVER_URL when the container starts
 COPY --chmod=0755 docker/party-config.sh /docker-entrypoint.d/40-party-config.sh
 COPY build/assets /usr/share/nginx/html/build/assets

@@ -104,6 +104,10 @@ export class Minimap implements IUpdatable
 
 	public update(timeStep: number): void
 	{
+		// Folded away to a button on phones, and drawing a map nobody can see is
+		// work a phone can't spare
+		if (this.canvas.offsetParent === null) return;
+
 		let size = Minimap.SIZE;
 		let centre = size / 2;
 		let context = this.context;

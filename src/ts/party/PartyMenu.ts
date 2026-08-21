@@ -29,7 +29,7 @@ export class PartyMenu
 			buttonsStyling: false,
 			allowOutsideClick: false,
 			allowEscapeKey: false,
-			footer: '<a href="https://github.com/swift502/Sketchbook" target="_blank">GitHub page</a>',
+			footer: '<a href="https://github.com/amindadgar/Sketchbook" target="_blank">GitHub page</a>',
 			onBeforeOpen: () =>
 			{
 				PartyMenu.bindSwatches();

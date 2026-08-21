@@ -112,3 +112,127 @@ body.touch #party-hud {
 	padding: 5px 10px;
 	font-size: 12px;
 }
+
+/* Held upright, the game is unplayable rather than merely cramped: the stick
+   and the buttons would sit on top of each other. So it says so and waits. */
+#rotate-notice {
+	display: none;
+}
+
+@media (orientation: portrait) {
+	body.touch #rotate-notice {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 18px;
+		background: #10141a;
+		color: #fff;
+		font-family: 'Solway', serif;
+		text-align: center;
+		padding: 24px;
+		/* Above everything, the menu included */
+		z-index: 5000;
+	}
+}
+
+#rotate-icon {
+	font-size: 64px;
+	color: #FFB900;
+	animation: rotate-hint 2s ease-in-out infinite;
+}
+
+@keyframes rotate-hint {
+	0%, 45% { transform: rotate(0deg); }
+	55%, 100% { transform: rotate(90deg); }
+}
+
+#rotate-text {
+	font-size: 18px;
+	letter-spacing: 0.03em;
+}
+
+/* Health as a number rather than a bar: a phone has no room to spare and a
+   count reads faster than a length at that size. */
+#health-badge {
+	display: none;
+}
+
+body.touch #health-badge {
+	position: fixed;
+	top: 16px;
+	right: 62px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 10px;
+	background: rgba(0, 0, 0, 0.45);
+	border-radius: 16px;
+	font-family: 'Solway', serif;
+	font-size: 16px;
+	font-weight: 700;
+	color: #fff;
+	pointer-events: none;
+	user-select: none;
+	z-index: 25;
+}
+
+#health-heart {
+	color: #e6394a;
+}
+
+body.touch #health-bar {
+	display: none;
+}
+
+/* The map folds away behind a button and comes back on a tap */
+#minimap-toggle {
+	display: none;
+}
+
+body.touch #minimap-toggle {
+	position: fixed;
+	top: 106px;
+	left: 14px;
+	width: 46px;
+	height: 46px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.45);
+	border: 2px solid rgba(255, 255, 255, 0.7);
+	border-radius: 50%;
+	font-family: 'Solway', serif;
+	font-size: 11px;
+	letter-spacing: 0.05em;
+	color: #fff;
+	touch-action: none;
+	user-select: none;
+	z-index: 25;
+}
+
+body.touch.map-open #minimap-toggle {
+	border-color: #FFB900;
+	color: #FFB900;
+}
+
+body.touch #minimap {
+	display: none;
+}
+
+/* Centred rather than tucked in a corner: a landscape phone is only ~390px
+   tall, so any corner the map sits in is a corner a thumb is already using.
+   It's a glance, not a permanent fixture, so it takes the middle and leaves. */
+body.touch.map-open #minimap {
+	display: block;
+	top: 50%;
+	left: 50%;
+	right: auto;
+	bottom: auto;
+	transform: translate(-50%, -50%) scale(1.1);
+}

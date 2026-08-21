@@ -847,7 +847,7 @@ export class World
 		// UI
 		$(`	<div id="ui-container" style="display: none;">
 				<div class="github-corner">
-					<a href="https://github.com/swift502/Sketchbook" target="_blank" title="Fork me on GitHub">
+					<a href="https://github.com/amindadgar/Sketchbook" target="_blank" title="Fork me on GitHub">
 						<svg viewbox="0 0 100 100" fill="currentColor">
 							<title>Fork me on GitHub</title>
 							<path d="M0 0v100h100V0H0zm60 70.2h.2c1 2.7.3 4.7 0 5.2 1.4 1.4 2 3 2 5.2 0 7.4-4.4 9-8.7 9.5.7.7 1.3 2
@@ -874,6 +874,8 @@ export class World
 					</svg>
 				</div>
 				<div id="settings-gear" title="Settings">&#9881;</div>
+				<div id="health-badge"><span id="health-heart">&#10084;</span><span id="health-number">100</span></div>
+				<div id="minimap-toggle">MAP</div>
 				<div id="scoreboard">
 					<div class="scoreboard-title">Players</div>
 					<div id="scoreboard-rows"></div>
@@ -905,6 +907,14 @@ export class World
 		{
 			UIManager.toggleSettings();
 		}, false);
+
+		// Outside the UI container on purpose: that stays hidden until the menu
+		// is dismissed, and a phone held upright needs telling before then
+		$(`	<div id="rotate-notice">
+				<div id="rotate-icon">\u21bb</div>
+				<div id="rotate-text">Turn your phone sideways to play</div>
+			</div>
+		`).appendTo('body');
 
 		// Canvas
 		document.body.appendChild(this.renderer.domElement);

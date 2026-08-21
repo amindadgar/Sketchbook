@@ -24,6 +24,15 @@ server {
 		add_header Cache-Control "no-store";
 	}
 
+	# A cached service worker is one you can't replace on the next deploy
+	location = /sw.js {
+		add_header Cache-Control "no-store";
+	}
+
+	location = /manifest.webmanifest {
+		default_type application/manifest+json;
+	}
+
 	# Models and sounds only change when a new image is built
 	location /build/assets/ {
 		expires 7d;

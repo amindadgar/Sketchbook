@@ -5,6 +5,14 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 	<title>Sketchbook</title>
+
+	<!-- Added to a home screen it runs standalone and landscape locked -->
+	<link rel="manifest" href="manifest.webmanifest">
+	<meta name="theme-color" content="#10141a">
+	<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-title" content="Sketchbook">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 
 <body>
@@ -12,6 +20,13 @@
 	<script src="build/sketchbook.min.js"></script>
 	<script>
 		const world = new Sketchbook.World('build/assets/world.glb');
+
+		// Only here so the browser offers to install it; it caches nothing
+		if ('serviceWorker' in navigator) {
+			window.addEventListener('load', function () {
+				navigator.serviceWorker.register('sw.js').catch(function () {});
+			});
+		}
 	</script>
 </body>
 

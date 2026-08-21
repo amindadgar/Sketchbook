@@ -23,6 +23,12 @@ export declare class TouchControls {
     private lookTouch;
     private lookAt;
     constructor(world: World);
+    /**
+     * Only works where the page is already fullscreen or installed to a home
+     * screen, and throws outright on iOS, so the portrait notice is what actually
+     * carries this. This is the nicety on top of it.
+     */
+    private static lockLandscape;
     private build;
     private addButton;
     private onStickStart;

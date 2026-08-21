@@ -39,6 +39,7 @@ export class TouchControls
 
 		document.body.classList.add('touch');
 		this.root = this.build();
+		TouchControls.lockLandscape();
 
 		// The look region is the whole screen; buttons above it stop their own
 		// touches from reaching it, so dragging anywhere else turns the camera
@@ -50,6 +51,27 @@ export class TouchControls
 	}
 
 	// ------------------------------------------------------------------ build
+
+	/**
+	 * Only works where the page is already fullscreen or installed to a home
+	 * screen, and throws outright on iOS, so the portrait notice is what actually
+	 * carries this. This is the nicety on top of it.
+	 */
+	private static lockLandscape(): void
+	{
+		try
+		{
+			let orientation = (window.screen as any).orientation;
+			if (orientation === undefined || orientation.lock === undefined) return;
+
+			let request = orientation.lock('landscape');
+			if (request !== undefined && request.catch !== undefined) request.catch(() => undefined);
+		}
+		catch (error)
+		{
+			// Not allowed here, which is what the notice is for
+		}
+	}
 
 	private build(): HTMLElement
 	{
@@ -79,6 +101,16 @@ export class TouchControls
 		this.addButton(buttons, 'touch-enter', 'ENTER', () => this.press('KeyF', true), () => this.press('KeyF', false));
 
 		document.getElementById('ui-container').appendChild(root);
+
+		// The map is worth a glance, not a permanent corner of a small screen
+		let mapButton = document.getElementById('minimap-toggle');
+		mapButton.addEventListener('touchstart', (event) =>
+		{
+			event.preventDefault();
+			event.stopPropagation();
+			document.body.classList.toggle('map-open');
+		}, { passive: false });
+
 		return root;
 	}
 

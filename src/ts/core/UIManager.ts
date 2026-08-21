@@ -20,6 +20,8 @@ export class UIManager
 	public static setCombatHud(health: number, weapon: string, ammo: number, reserve: number): void
 	{
 		document.getElementById('health-fill').style.width = (health * 100).toFixed(1) + '%';
+		// The phone layout shows a number instead of a bar
+		document.getElementById('health-number').textContent = String(Math.round(health * 100));
 
 		let readout = document.getElementById('weapon-readout');
 		if (weapon === undefined)

@@ -102,6 +102,20 @@ know touch exists. Desktop doesn't construct any of it.
 | Drag anywhere | Look |
 | FIRE / AIM | As the mouse buttons |
 | JUMP / ENTER | Space and F |
+| MAP | Shows the map in the middle of the screen, and puts it away again |
+
+Landscape only. Held upright the game isn't cramped so much as unplayable, the
+stick and the buttons would be on top of each other, so it says so and waits.
+The manifest asks for a landscape lock too, which browsers honour once the game
+has been added to a home screen.
+
+Health is a number rather than a bar on a phone, and the map folds away behind a
+button: a glance is worth a corner, a permanent map isn't.
+
+**Add to Home Screen** works. There's a web manifest, icons and a service worker
+that deliberately caches nothing, since the world alone is 25MB and a stale copy
+of it would cause far more trouble than an offline mode is worth for a game you
+need a server to play with anyone.
 
 The detection is `(pointer: coarse)` rather than "does a touch screen exist", so
 a laptop with a touch screen keeps its mouse and keyboard.
