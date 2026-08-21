@@ -7,6 +7,7 @@ import { EntityType } from '../enums/EntityType';
 export declare class Helicopter extends Vehicle implements IControllable, IWorldEntity {
     entityType: EntityType;
     rotors: THREE.Object3D[];
+    protected engineSoundPath: string;
     private enginePower;
     constructor(gltf: any);
     noDirectionPressed(): boolean;

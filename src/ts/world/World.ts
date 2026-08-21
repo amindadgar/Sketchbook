@@ -63,8 +63,12 @@ export class World
 	public paths: Path[] = [];
 	public scenarioGUIFolder: any;
 	public updatables: IUpdatable[] = [];
+	public audioListener: THREE.AudioListener;
+	public music: THREE.Audio;
+	public musicElement: HTMLAudioElement;
 
 	private lastScenarioID: string;
+	private boundResumeAudio: (evt: any) => void;
 
 	constructor(worldScenePath?: any)
 	{
@@ -147,6 +151,9 @@ export class World
 		// Create right panel GUI
 		this.createParamsGUI(scope);
 
+		// Audio
+		this.setupAudio();
+
 		// Initialization
 		this.inputManager = new InputManager(this, this.renderer.domElement);
 		this.cameraOperator = new CameraOperator(this, this.camera, this.params.Mouse_Sensitivity);
@@ -168,6 +175,7 @@ export class World
 					confirmButtonText: 'Okay',
 					buttonsStyling: false,
 					onClose: () => {
+						this.resumeAudio();
 						UIManager.setUserInterfaceVisible(true);
 					}
 				});
@@ -304,6 +312,32 @@ export class World
 	{
 		this.params.Time_Scale = value;
 		this.timeScaleTarget = value;
+	}
+
+	/**
+	 * Starts the audio context and the music track.
+	 * Browsers keep audio suspended until the user interacts with the page,
+	 * so this runs on the first click or key press, whichever comes first.
+	 */
+	public resumeAudio(): void
+	{
+		if (this.audioListener.context.state === 'suspended')
+		{
+			this.audioListener.context.resume();
+		}
+
+		if (this.musicElement.paused)
+		{
+			let musicRequest: any = this.musicElement.play();
+			if (musicRequest !== undefined)
+			{
+				// Missing file, or a browser that still refuses to play
+				musicRequest.catch(() => undefined);
+			}
+		}
+
+		document.removeEventListener('click', this.boundResumeAudio, false);
+		document.removeEventListener('keydown', this.boundResumeAudio, false);
 	}
 
 	public add(worldEntity: IWorldEntity): void
@@ -480,6 +514,34 @@ export class World
 		document.getElementById('controls').innerHTML = html;
 	}
 
+	private setupAudio(): void
+	{
+		// There can only be one listener. It rides the camera, so panning follows
+		// the view and the renderer keeps its matrix up to date for free.
+		this.audioListener = new THREE.AudioListener();
+		this.audioListener.setMasterVolume(this.params.Volume);
+		this.camera.add(this.audioListener);
+
+		// Music streams from an audio element instead of being decoded into memory,
+		// so a full length track doesn't cost tens of megabytes of RAM
+		this.musicElement = document.createElement('audio');
+		this.musicElement.src = 'build/assets/music.mp3';
+		this.musicElement.loop = true;
+		this.musicElement.addEventListener('error', () =>
+		{
+			console.warn('Couldn\'t load music from \'' + this.musicElement.src + '\'.');
+		}, false);
+
+		// Playback control stays on the element, the Audio object is just the volume knob
+		this.music = new THREE.Audio(this.audioListener);
+		this.music.setMediaElementSource(this.musicElement);
+		this.music.setVolume(this.params.Music_Volume);
+
+		this.boundResumeAudio = () => this.resumeAudio();
+		document.addEventListener('click', this.boundResumeAudio, false);
+		document.addEventListener('keydown', this.boundResumeAudio, false);
+	}
+
 	private generateHTML(): void
 	{
 		// Fonts
@@ -537,6 +599,8 @@ export class World
 			Debug_FPS: false,
 			Sun_Elevation: 50,
 			Sun_Rotation: 145,
+			Volume: 0.8,
+			Music_Volume: 0.3,
 		};
 
 		const gui = new GUI.GUI();
@@ -591,6 +655,16 @@ export class World
 			.onChange((value) =>
 			{
 				scope.cameraOperator.setSensitivity(value, value * 0.8);
+			});
+		settingsFolder.add(this.params, 'Volume', 0, 1)
+			.onChange((value) =>
+			{
+				scope.audioListener.setMasterVolume(value);
+			});
+		settingsFolder.add(this.params, 'Music_Volume', 0, 1)
+			.onChange((value) =>
+			{
+				scope.music.setVolume(value);
 			});
 		settingsFolder.add(this.params, 'Debug_Physics')
 			.onChange((enabled) =>

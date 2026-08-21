@@ -13,6 +13,9 @@ export class Helicopter extends Vehicle implements IControllable, IWorldEntity
 {
 	public entityType: EntityType = EntityType.Helicopter;
 	public rotors: THREE.Object3D[] = [];
+
+	protected engineSoundPath: string = 'build/assets/heli.wav';
+
 	private enginePower: number = 0;
 
 	constructor(gltf: any)
@@ -67,6 +70,11 @@ export class Helicopter extends Vehicle implements IControllable, IWorldEntity
 		{
 			rotor.rotateX(this.enginePower * timeStep * 30);
 		});
+
+		// Engine sound
+		// enginePower already fades in and out with the pilot, so it doubles as the volume
+		const climbing = this.actions.ascend.isPressed && !this.actions.descend.isPressed;
+		this.updateEngineSound(0.7 + this.enginePower * (climbing ? 0.6 : 0.4), this.enginePower);
 	}
 
 	public onInputChange(): void

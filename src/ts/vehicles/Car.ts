@@ -13,6 +13,9 @@ export class Car extends Vehicle implements IControllable
 {
 	public entityType: EntityType = EntityType.Car;
 	public drive: string = 'awd';
+
+	protected engineSoundPath: string = 'build/assets/car.wav';
+
 	get speed(): number {
 		return this._speed;
 	}
@@ -134,6 +137,17 @@ export class Car extends Vehicle implements IControllable
 				}
 			}
 		}
+
+		// Engine sound
+		// Revs are measured against the current gear, so the pitch drops on every shift up
+		const gearTopSpeed = this.actions.reverse.isPressed ? Math.abs(gearsMaxSpeeds['R']) : gearsMaxSpeeds[this.gear];
+		const revs = THREE.MathUtils.clamp(Math.abs(this.speed) / gearTopSpeed, 0, 1);
+		const throttling = this.actions.throttle.isPressed || this.actions.reverse.isPressed;
+
+		this.updateEngineSound(
+			0.6 + revs * 1.2,
+			this.controllingCharacter === undefined ? 0 : (0.25 + revs * 0.75) * (throttling ? 1 : 0.4)
+		);
 
 		// Steering
 		this.steeringSimulator.simulate(timeStep);

@@ -15,6 +15,7 @@ export declare class Airplane extends Vehicle implements IControllable, IWorldEn
     private aileronSimulator;
     private elevatorSimulator;
     private rudderSimulator;
+    protected engineSoundPath: string;
     private enginePower;
     private lastDrag;
     constructor(gltf: any);
