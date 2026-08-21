@@ -16,6 +16,7 @@ import { Sky } from './Sky';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartySession } from '../party/PartySession';
 import { Minimap } from '../core/Minimap';
+import { TouchControls } from '../core/TouchControls';
 import { CombatSystem } from '../combat/CombatSystem';
 export declare class World {
     renderer: THREE.WebGLRenderer;
@@ -55,6 +56,7 @@ export declare class World {
     party: PartySession;
     combat: CombatSystem;
     minimap: Minimap;
+    touchControls: TouchControls;
     lastScenarioID: string;
     /**
      * The playable area, used both to respawn anything that leaves it and to

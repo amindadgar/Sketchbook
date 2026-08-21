@@ -85,6 +85,31 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 | Mouse wheel | Slow down or speed up time |
 | Gear icon | Settings |
 
+## On a phone
+
+Devices whose primary pointer is a finger get an on-screen stick on the left,
+buttons on the right, and a drag-anywhere camera. The HUD rearranges itself
+around the thumbs and the keyboard hints go away.
+
+Nothing about it reaches into the game's logic. The stick dispatches the same
+key events a keyboard would, so every input receiver the engine already has, on
+foot, in a car, in an aeroplane, keeps its own mapping and none of them need to
+know touch exists. Desktop doesn't construct any of it.
+
+| Control | Does |
+| --- | --- |
+| Stick | Move. Push it all the way to sprint |
+| Drag anywhere | Look |
+| FIRE / AIM | As the mouse buttons |
+| JUMP / ENTER | Space and F |
+
+The detection is `(pointer: coarse)` rather than "does a touch screen exist", so
+a laptop with a touch screen keeps its mouse and keyboard.
+
+One thing this doesn't solve: the world is a 25MB model with shadow cascades and
+a full-screen anti-aliasing pass. Whether a given phone renders it comfortably
+is a separate question from whether it can be controlled.
+
 ## Running it
 
 ```bash

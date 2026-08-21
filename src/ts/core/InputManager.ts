@@ -112,7 +112,9 @@ export class InputManager implements IUpdatable
 
 	public onMouseDown(event: MouseEvent): void
 	{
-		if (this.pointerLock)
+		// Mobile browsers have no pointer lock, and calling a method that isn't
+		// there would take the rest of this handler down with it
+		if (this.pointerLock && typeof this.domElement.requestPointerLock === 'function')
 		{
 			this.domElement.requestPointerLock();
 		}

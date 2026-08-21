@@ -1,0 +1,114 @@
+/* Everything here is behind body.touch, which is only added when the game
+   decides the device has a coarse pointer. Desktop never sees any of it. */
+#touch-controls {
+	display: none;
+}
+
+body.touch #touch-controls {
+	display: block;
+}
+
+body.touch #canvas {
+	/* Otherwise a drag scrolls or zooms the page instead of turning the camera */
+	touch-action: none;
+}
+
+#touch-stick {
+	position: fixed;
+	left: 18px;
+	bottom: 18px;
+	width: 132px;
+	height: 132px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.3);
+	border: 2px solid rgba(255, 255, 255, 0.5);
+	border-radius: 50%;
+	touch-action: none;
+	user-select: none;
+	z-index: 30;
+}
+
+#touch-stick-knob {
+	width: 56px;
+	height: 56px;
+	background: rgba(255, 255, 255, 0.75);
+	border-radius: 50%;
+	pointer-events: none;
+}
+
+#touch-buttons {
+	position: fixed;
+	right: 18px;
+	bottom: 18px;
+	display: grid;
+	grid-template-columns: repeat(2, 72px);
+	gap: 10px;
+	z-index: 30;
+}
+
+.touch-button {
+	width: 72px;
+	height: 72px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.4);
+	border: 2px solid rgba(255, 255, 255, 0.6);
+	border-radius: 50%;
+	font-family: 'Solway', serif;
+	font-size: 12px;
+	letter-spacing: 0.06em;
+	color: #fff;
+	touch-action: none;
+	user-select: none;
+}
+
+.touch-button.held {
+	background: rgba(255, 185, 0, 0.55);
+}
+
+#touch-fire {
+	background: rgba(230, 57, 74, 0.45);
+}
+
+/* The HUD was laid out for a desktop window, so it gets rearranged around the
+   thumbs rather than left to sit underneath them. */
+body.touch #controls {
+	/* Keyboard hints are no use to a device without one */
+	display: none;
+}
+
+body.touch #minimap {
+	right: auto;
+	left: 14px;
+	top: 108px;
+	bottom: auto;
+}
+
+body.touch #scoreboard {
+	top: 58px;
+	right: 12px;
+	min-width: 0;
+	font-size: 12px;
+	padding: 6px 8px;
+}
+
+/* Lifted clear of the stick and the buttons. The stick's top edge is 150px up,
+   so anything below that ends up under a thumb. */
+body.touch #combat-hud {
+	width: 200px;
+	bottom: 202px;
+}
+
+body.touch #speedometer {
+	width: 200px;
+	bottom: 168px;
+}
+
+body.touch #party-hud {
+	top: 8px;
+	padding: 5px 10px;
+	font-size: 12px;
+}
