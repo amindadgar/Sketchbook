@@ -1,5 +1,6 @@
 server {
-	listen 80;
+	# Substituted at startup by the nginx image's entrypoint
+	listen ${PORT};
 	server_name _;
 	root /usr/share/nginx/html;
 	index index.html;
