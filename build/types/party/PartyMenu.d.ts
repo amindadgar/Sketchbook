@@ -13,6 +13,12 @@ export declare class PartyMenu {
     static show(options: PartyMenuOptions): void;
     private static buildHtml;
     private static bindPartyButtons;
+    /**
+     * The server row: what it's set to now, and a way to change it. Presets are
+     * labelled with the address they resolve to, so picking one is a choice
+     * between places rather than a URL to be typed correctly.
+     */
+    private static bindServerPicker;
     private static commitIdentity;
     private static serverUrl;
     private static bindSwatches;

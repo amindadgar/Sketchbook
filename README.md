@@ -121,8 +121,14 @@ The project deploys as two services, both built from the Dockerfiles in
 
 | Service | Dockerfile | Notes |
 | --- | --- | --- |
-| `game` | `docker/game.Dockerfile` | nginx, listens on `$PORT` |
+| `game` | `docker/game.Dockerfile` | nginx, listens on `$PORT`, reads `PARTY_SERVER_URL` |
 | `relay` | `docker/relay.Dockerfile` | node, listens on `$PORT`, healthcheck `/health` |
+
+Set **`PARTY_SERVER_URL`** on the game service to the relay's address, as a
+`wss://` URL with no port. The game is a static bundle, so the value can't be
+compiled in; the container writes it into `config.js` at startup and the page
+reads that before the bundle loads. Changing the variable and restarting is
+enough, with no rebuild.
 
 Give each a domain, then play at the game's URL. The relay is a separate
 service on its own domain, so its address goes in the menu's **Party server**
@@ -133,8 +139,8 @@ Currently deployed at:
 
 | | |
 | --- | --- |
-| Game | https://game-production-2fba.up.railway.app |
-| Party server | `wss://relay-production-d528.up.railway.app` |
+| Game | https://game-amin.up.railway.app |
+| Party server | `wss://game-amin-party.up.railway.app` |
 
 Pushing to master does **not** redeploy. Railway can only watch a repo that has
 its [GitHub App](https://github.com/apps/railway) installed, and this one
@@ -147,16 +153,16 @@ Start the game, pick a name and a colour, then either **Create party** for a fou
 character code, or type a friend's code and **Join**. Everyone in a party shares
 a scenario, so whoever launches one takes the rest along.
 
-The **Party server** field in the menu fills itself in from where the page came
-from, so it's usually already right:
+The party server is chosen for you and folded away under the buttons, with a
+**Change** link if you need it. In order:
 
-| Page served from | Field defaults to |
-| --- | --- |
-| localhost | `ws://localhost:9000` |
-| a LAN address | `ws://<that address>:9000` |
-| anywhere else | the deployed relay |
+1. Whatever you picked last, remembered per site
+2. `PARTY_SERVER_URL`, if the deployment set one
+3. Otherwise worked out from the page's own address: `ws://localhost:9000` when
+   served from localhost, `ws://<that address>:9000` from a LAN address
 
-Whatever you type over it wins, and is remembered between sessions.
+**Change** offers those as named choices rather than an address to type, plus
+**Other** for anything else.
 
 To play with people on your network, bind the dev server to every interface
 rather than just localhost:

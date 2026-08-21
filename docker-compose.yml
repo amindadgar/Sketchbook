@@ -5,6 +5,10 @@ services:
       dockerfile: docker/game.Dockerfile
     ports:
       - "8080:80"
+    environment:
+      # The relay clients should default to. Left empty they work it out from
+      # the address the page was served on, which is right for local play.
+      PARTY_SERVER_URL: ${PARTY_SERVER_URL:-}
     restart: unless-stopped
 
   relay:

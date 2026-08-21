@@ -32,6 +32,7 @@ export class PartyMenu
 			onBeforeOpen: () =>
 			{
 				PartyMenu.bindSwatches();
+				PartyMenu.bindServerPicker();
 				PartyMenu.bindPartyButtons(options, () => { entered = true; });
 			},
 			preConfirm: () =>
@@ -63,14 +64,22 @@ export class PartyMenu
 			+ '<label class="party-label">Your colour</label>'
 			+ '<div id="party-colors" class="party-colors">' + swatches + '</div>'
 			+ '<div class="party-divider"><span>or play with friends</span></div>'
-			+ '<label class="party-label" for="party-server">Party server</label>'
-			+ '<input id="party-server" class="party-input" spellcheck="false"'
-			+ ' value="' + PartyMenu.escape(NetworkClient.loadUrl()) + '">'
 			+ '<div class="party-row">'
 			+ '<input id="party-code-input" class="party-input party-code-input" maxlength="4"'
 			+ ' spellcheck="false" placeholder="CODE">'
 			+ '<button type="button" id="party-join" class="party-button">Join</button>'
 			+ '<button type="button" id="party-host" class="party-button party-button-primary">Create party</button>'
+			+ '</div>'
+			// Folded away, because the default is right almost always. It only
+			// needs to be reachable, not in the way.
+			+ '<div class="party-server-line">'
+			+ '<span class="party-server-label">Party server</span>'
+			+ '<span id="party-server-current" class="party-server-current"></span>'
+			+ '<button type="button" id="party-server-toggle" class="party-server-change">Change</button>'
+			+ '</div>'
+			+ '<div id="party-server-panel" class="party-server-panel">'
+			+ '<select id="party-server-choice" class="party-input"></select>'
+			+ '<input id="party-server" class="party-input party-server-custom" spellcheck="false">'
 			+ '</div>'
 			+ '<div id="party-status" class="party-status"></div>';
 	}
@@ -122,6 +131,74 @@ export class PartyMenu
 			}
 
 			begin(() => options.onJoin(PartyMenu.serverUrl(), code));
+		}, false);
+	}
+
+	/**
+	 * The server row: what it's set to now, and a way to change it. Presets are
+	 * labelled with the address they resolve to, so picking one is a choice
+	 * between places rather than a URL to be typed correctly.
+	 */
+	private static bindServerPicker(): void
+	{
+		let input = document.getElementById('party-server') as HTMLInputElement;
+		let choice = document.getElementById('party-server-choice') as HTMLSelectElement;
+		let current = document.getElementById('party-server-current');
+		let panel = document.getElementById('party-server-panel');
+		let toggle = document.getElementById('party-server-toggle');
+
+		let fallback = NetworkClient.defaultUrl();
+		let local = NetworkClient.LOCAL_URL;
+		let stored = NetworkClient.loadUrl();
+
+		let presets: { value: string, label: string, url: string }[] = [
+			{ value: 'default', label: 'Default', url: fallback }
+		];
+
+		if (local !== fallback) presets.push({ value: 'local', label: 'This machine', url: local });
+		presets.push({ value: 'custom', label: 'Other', url: '' });
+
+		presets.forEach((preset) =>
+		{
+			let option = document.createElement('option');
+			option.value = preset.value;
+			option.textContent = preset.url.length > 0 ? preset.label + ' \u2014 ' + preset.url : preset.label + '\u2026';
+			choice.appendChild(option);
+		});
+
+		let show = (url: string) =>
+		{
+			input.value = url;
+			current.textContent = url;
+			current.title = url;
+		};
+
+		let matching = presets.filter((preset) => preset.url === stored)[0];
+		choice.value = matching !== undefined ? matching.value : 'custom';
+		input.style.display = choice.value === 'custom' ? 'block' : 'none';
+		show(stored);
+
+		choice.addEventListener('change', () =>
+		{
+			let picked = presets.filter((preset) => preset.value === choice.value)[0];
+			let custom = choice.value === 'custom';
+
+			input.style.display = custom ? 'block' : 'none';
+
+			if (custom) input.focus();
+			else show(picked.url);
+		}, false);
+
+		input.addEventListener('input', () =>
+		{
+			current.textContent = input.value;
+			current.title = input.value;
+		}, false);
+
+		toggle.addEventListener('click', () =>
+		{
+			let open = panel.classList.toggle('open');
+			toggle.textContent = open ? 'Done' : 'Change';
 		}, false);
 	}
 

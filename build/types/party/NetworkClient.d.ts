@@ -11,7 +11,7 @@ export interface PlayerInfo {
 export declare class NetworkClient {
     /** The relay that ships alongside the hosted game. */
     static readonly DEPLOYED_URL: string;
-    private static readonly LOCAL_URL;
+    static readonly LOCAL_URL: string;
     private static readonly STORAGE_KEY;
     id: number;
     code: string;
@@ -36,6 +36,8 @@ export declare class NetworkClient {
      * address. Typing over it still wins, and what's typed is remembered.
      */
     static defaultUrl(): string;
+    /** Whatever config.js declared, if anything. */
+    private static configuredUrl;
     private static isPrivateAddress;
     static saveUrl(url: string): void;
     /** Resolves once the socket is open, rejects with a readable reason. */

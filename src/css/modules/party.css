@@ -189,3 +189,65 @@
 	margin-right: 6px;
 	border-radius: 50%;
 }
+
+/* The server row sits quiet under the buttons: what it's pointed at, and a way
+   to change it. The default is right almost always, so it stays out of the way. */
+.party-server-line {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin: 4px 0 0 0;
+	font-size: 13px;
+	color: #9a9a9a;
+}
+
+.party-server-label {
+	font-family: 'Solway', serif;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	flex-shrink: 0;
+}
+
+.party-server-current {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	text-align: left;
+	color: #6b6b6b;
+}
+
+.party-server-change {
+	flex-shrink: 0;
+	padding: 0;
+	border: none;
+	background: none;
+	font-family: 'Solway', serif;
+	font-size: 13px;
+	color: #d09400;
+	text-decoration: underline;
+	cursor: pointer;
+	outline: none;
+}
+
+.party-server-change:hover {
+	color: #FFB900;
+}
+
+.party-server-panel {
+	display: none;
+	margin: 8px 0 0 0;
+}
+
+.party-server-panel.open {
+	display: block;
+}
+
+.party-server-panel .party-input {
+	margin-bottom: 8px;
+}
+
+.party-server-custom {
+	display: none;
+}

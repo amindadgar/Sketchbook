@@ -14,7 +14,7 @@ export class NetworkClient
 {
 	/** The relay that ships alongside the hosted game. */
 	public static readonly DEPLOYED_URL: string = 'wss://relay-production-d528.up.railway.app';
-	private static readonly LOCAL_URL: string = 'ws://localhost:9000';
+	public static readonly LOCAL_URL: string = 'ws://localhost:9000';
 	private static readonly STORAGE_KEY: string = 'sketchbook.serverUrl';
 
 	public id: number;
@@ -55,6 +55,11 @@ export class NetworkClient
 	 */
 	public static defaultUrl(): string
 	{
+		// A deployment names its own relay in config.js, which the container
+		// rewrites from its environment. That beats guessing.
+		let configured = NetworkClient.configuredUrl();
+		if (configured !== undefined) return configured;
+
 		let host = window.location.hostname;
 
 		// Served from the same machine, so the relay is expected beside it
@@ -67,6 +72,16 @@ export class NetworkClient
 		// Anything else is the hosted deployment, whose relay is its own service
 		// on its own domain, behind TLS on the standard port
 		return NetworkClient.DEPLOYED_URL;
+	}
+
+	/** Whatever config.js declared, if anything. */
+	private static configuredUrl(): string
+	{
+		let config = (window as any).SKETCHBOOK_CONFIG;
+		if (config === undefined || config === null) return undefined;
+
+		let url = config.partyServer;
+		return (typeof url === 'string' && url.length > 0) ? url : undefined;
 	}
 
 	private static isPrivateAddress(host: string): boolean

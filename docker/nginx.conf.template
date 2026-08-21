@@ -5,6 +5,10 @@ server {
 	root /usr/share/nginx/html;
 	index index.html;
 
+	# The bundle is utf-8 and says so nowhere else, so a browser left to
+	# guess renders anything non-ascii in it as mojibake
+	charset utf-8;
+
 	# The bundle is over a megabyte of text and compresses well. The models and
 	# audio underneath are already compressed, so they're left alone.
 	gzip on;
@@ -13,6 +17,11 @@ server {
 
 	location / {
 		try_files $uri $uri/ =404;
+	}
+
+	# The one file that changes without a rebuild, so it must not be held
+	location = /config.js {
+		add_header Cache-Control "no-store";
 	}
 
 	# Models and sounds only change when a new image is built
