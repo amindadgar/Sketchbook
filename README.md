@@ -171,7 +171,6 @@ replacing the file, with no code change:
 | File | What it is |
 | --- | --- |
 | `world.glb`, `car.glb`, `heli.glb`, `airplane.glb`, `boxman.glb` | Scenes and models, exported from `src/blend` |
-| `sportscar.glb` | Imported from an asset pack with `tools/ImportCar.py` |
 | `car.wav`, `heli.wav`, `airplane.wav` | Engine loops |
 | `music.mp3` | Music, streamed rather than decoded into memory |
 | `gun_*.wav` | Weapon reports |
@@ -182,31 +181,6 @@ it streams and the seam is far less noticeable.
 
 The four `gun_*.wav` files are synthesised stand-ins rather than recordings.
 Replacing them with real ones is just a file copy.
-
-## Adding a car
-
-Models from asset packs aren't drivable as they come: Sketchbook reads a
-vehicle's wheels, seats, entry points, collision shapes and camera point out of
-custom properties on the nodes, and packs ship none of them. They also tend to
-bake wheel positions into the mesh and leave every node at the origin, which
-Sketchbook can't use, since it drives each wheel from the physics simulation and
-reads the node to know where that wheel is bolted on.
-
-```bash
-python3 tools/ImportCar.py "Sports Car.glb" build/assets/sportscar.glb
-```
-
-That scales the model so its wheels match the raycast wheel radius Car.ts hard
-codes, moves each wheel's geometry onto its own node, and writes the properties.
-Where a pack models the rear pair as one fused mesh, the front wheel meshes are
-reused for the rear, since a fused pair can't be steered or spun separately.
-
-Then add the name to the `switch` in `VehicleSpawnPoint`, to the accepted types
-in `Scenario`, and give it a spawn point.
-
-Bodywork is painted in the driver's colour and glass, lights, trim and tyres are
-left alone, matched on material name. A model whose paintwork is called
-something unexpected will simply not be painted.
 
 ## Making your own worlds
 

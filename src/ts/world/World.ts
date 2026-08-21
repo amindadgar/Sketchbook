@@ -674,7 +674,6 @@ export class World
 		let scenario = new Scenario(root, this);
 		scenario.addSpawnPoint(new CharacterSpawnPoint(start));
 		scenario.addSpawnPoint(this.createVehicleSpawnBetween(start, aircraft, 'car', 8));
-		scenario.addSpawnPoint(this.createVehicleSpawnBetween(start, aircraft, 'sportscar', 15));
 
 		this.scenarios.push(scenario);
 	}
