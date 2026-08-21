@@ -12,6 +12,13 @@ export interface PartyMenuOptions {
 export declare class PartyMenu {
     static show(options: PartyMenuOptions): void;
     private static buildHtml;
+    /**
+     * Phones run this far better once installed, so say so, but only where it
+     * can actually be acted on: a touch device that isn't already standalone.
+     */
+    private static buildInstallHint;
+    private static isInstalled;
+    private static isIOS;
     private static bindPartyButtons;
     /**
      * The server row: what it's set to now, and a way to change it. Presets are

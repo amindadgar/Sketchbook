@@ -251,3 +251,16 @@
 .party-server-custom {
 	display: none;
 }
+
+/* Add-to-home-screen nudge, only ever built on an uninstalled touch device */
+.party-install {
+	margin: 0 0 18px 0;
+	padding: 10px 12px;
+	background: #fff6dd;
+	border: 1px solid #f0dca6;
+	border-radius: 4px;
+	font-size: 14px;
+	line-height: 1.45;
+	text-align: left;
+	color: #6b5a24;
+}

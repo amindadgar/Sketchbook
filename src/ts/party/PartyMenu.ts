@@ -3,6 +3,7 @@ import Swal from 'sweetalert2';
 import { PlayerIdentity } from './PlayerIdentity';
 import { NetworkClient } from './NetworkClient';
 import { Account } from './Account';
+import { TouchControls } from '../core/TouchControls';
 
 export interface PartyMenuOptions
 {
@@ -60,6 +61,7 @@ export class PartyMenu
 
 		return '<p class="party-intro">Explore the world and hop into any vehicle.'
 			+ ' Scenarios are in the right hand panel.</p>'
+			+ PartyMenu.buildInstallHint()
 			+ '<label class="party-label" for="party-name">Your name</label>'
 			+ '<input id="party-name" class="party-input" maxlength="16" spellcheck="false"'
 			+ ' value="' + PartyMenu.escape(identity.name) + '">'
@@ -99,6 +101,39 @@ export class PartyMenu
 			+ '<input id="party-server" class="party-input party-server-custom" spellcheck="false">'
 			+ '</div>'
 			+ '<div id="party-status" class="party-status"></div>';
+	}
+
+	/**
+	 * Phones run this far better once installed, so say so, but only where it
+	 * can actually be acted on: a touch device that isn't already standalone.
+	 */
+	private static buildInstallHint(): string
+	{
+		if (!TouchControls.isTouchDevice()) return '';
+		if (PartyMenu.isInstalled()) return '';
+
+		let steps = PartyMenu.isIOS()
+			? 'tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>'
+			: 'open the browser menu, then <strong>Install app</strong>';
+
+		return '<p class="party-install">\uD83D\uDCF2 Playing on a phone? For a fullscreen,'
+			+ ' proper game feel, ' + steps + '.</p>';
+	}
+
+	private static isInstalled(): boolean
+	{
+		// iOS Safari never grew display-mode, and reports its own flag instead
+		if ((window.navigator as any).standalone === true) return true;
+		return window.matchMedia !== undefined
+			&& window.matchMedia('(display-mode: standalone)').matches;
+	}
+
+	private static isIOS(): boolean
+	{
+		// iPadOS lies and claims to be a Mac, so the touch point count settles it
+		let platform = window.navigator.platform || '';
+		if (/iPhone|iPad|iPod/.test(platform)) return true;
+		return platform === 'MacIntel' && window.navigator.maxTouchPoints > 1;
 	}
 
 	private static bindPartyButtons(options: PartyMenuOptions, markEntered: () => void): void
