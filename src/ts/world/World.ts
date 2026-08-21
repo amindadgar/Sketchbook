@@ -38,6 +38,7 @@ import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartyMenu } from '../party/PartyMenu';
 import { PartySession } from '../party/PartySession';
 import { Minimap } from '../core/Minimap';
+import { TouchControls } from '../core/TouchControls';
 import { CombatSystem } from '../combat/CombatSystem';
 
 export class World
@@ -79,6 +80,7 @@ export class World
 	public party: PartySession;
 	public combat: CombatSystem;
 	public minimap: Minimap;
+	public touchControls: TouchControls;
 	public lastScenarioID: string;
 
 	/**
@@ -190,6 +192,10 @@ export class World
 		this.inputManager = new InputManager(this, this.renderer.domElement);
 		this.cameraOperator = new CameraOperator(this, this.camera, this.params.Mouse_Sensitivity);
 		this.sky = new Sky(this);
+
+		// Only on devices whose primary pointer is a finger. Desktop never
+		// constructs this, so nothing about it changes.
+		if (TouchControls.isTouchDevice()) this.touchControls = new TouchControls(this);
 		
 		// Load scene if path is supplied
 		if (worldScenePath !== undefined)
