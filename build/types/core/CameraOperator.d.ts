@@ -25,12 +25,19 @@ export declare class CameraOperator implements IInputReceiver, IUpdatable {
     forwardVelocity: number;
     rightVelocity: number;
     followMode: boolean;
+    autoCenter: boolean;
     characterCaller: Character;
     constructor(world: World, camera: THREE.Camera, sensitivityX?: number, sensitivityY?: number);
     setSensitivity(sensitivityX: number, sensitivityY?: number): void;
     setRadius(value: number, instantly?: boolean): void;
     move(deltaX: number, deltaY: number): void;
     update(timeScale: number): void;
+    /**
+     * Swings the orbit angle around to sit behind whatever the player is steering,
+     * their character on foot or their vehicle while driving. Pitch is left alone,
+     * so whatever camera height they picked survives being centred.
+     */
+    private centerBehindSubject;
     handleKeyboardEvent(event: KeyboardEvent, code: string, pressed: boolean): void;
     handleMouseWheel(event: WheelEvent, value: number): void;
     handleMouseButton(event: MouseEvent, code: string, pressed: boolean): void;

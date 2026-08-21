@@ -88,6 +88,11 @@ export declare class World {
      * Browsers keep audio suspended until the user interacts with the page,
      * so this runs on the first click or key press, whichever comes first.
      */
+    /** Bound to M. */
+    toggleMusic(): void;
+    /** Bound to C. */
+    toggleCameraCentering(): void;
+    applyMusicVolume(): void;
     resumeAudio(): void;
     add(worldEntity: IWorldEntity): void;
     registerUpdatable(registree: IUpdatable): void;

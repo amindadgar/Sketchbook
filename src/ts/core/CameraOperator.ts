@@ -31,6 +31,7 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 	public rightVelocity: number = 0;
 
 	public followMode: boolean = false;
+	public autoCenter: boolean = false;
 
 	public characterCaller: Character;
 
@@ -98,6 +99,8 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		}
 		else 
 		{
+			if (this.autoCenter === true) this.centerBehindSubject();
+
 			this.radius = THREE.MathUtils.lerp(this.radius, this.targetRadius, 0.1);
 	
 			this.camera.position.x = this.target.x + this.radius * Math.sin(this.theta * Math.PI / 180) * Math.cos(this.phi * Math.PI / 180);
@@ -106,6 +109,38 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 			this.camera.updateMatrix();
 			this.camera.lookAt(this.target);
 		}
+	}
+
+	/**
+	 * Swings the orbit angle around to sit behind whatever the player is steering,
+	 * their character on foot or their vehicle while driving. Pitch is left alone,
+	 * so whatever camera height they picked survives being centred.
+	 */
+	private centerBehindSubject(): void
+	{
+		// In free camera this operator is the input receiver and the target is the
+		// camera itself, so there's nothing meaningful to sit behind
+		if (this.world.inputManager.inputReceiver === this) return;
+
+		let character = this.world.localCharacter;
+		if (character === undefined) return;
+
+		let subject: THREE.Object3D = character;
+		if (character.occupyingSeat !== null)
+		{
+			subject = character.occupyingSeat.vehicle as unknown as THREE.Object3D;
+		}
+
+		let subjectQuaternion = new THREE.Quaternion();
+		subject.getWorldQuaternion(subjectQuaternion);
+		let forward = new THREE.Vector3(0, 0, 1).applyQuaternion(subjectQuaternion);
+
+		// The camera belongs opposite the way the subject faces
+		let targetTheta = Math.atan2(-forward.x, -forward.z) * 180 / Math.PI;
+
+		// Shortest way round, so it never swings the long way past 180 degrees
+		let delta = ((((targetTheta - this.theta) % 360) + 540) % 360) - 180;
+		this.theta += delta * 0.1;
 	}
 
 	public handleKeyboardEvent(event: KeyboardEvent, code: string, pressed: boolean): void

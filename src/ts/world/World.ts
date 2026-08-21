@@ -390,6 +390,28 @@ export class World
 	 * Browsers keep audio suspended until the user interacts with the page,
 	 * so this runs on the first click or key press, whichever comes first.
 	 */
+	/** Bound to M. */
+	public toggleMusic(): void
+	{
+		this.params.Mute_Music = !this.params.Mute_Music;
+		this.applyMusicVolume();
+	}
+
+	/** Bound to C. */
+	public toggleCameraCentering(): void
+	{
+		this.params.Center_Camera = !this.params.Center_Camera;
+		this.cameraOperator.autoCenter = this.params.Center_Camera;
+	}
+
+	public applyMusicVolume(): void
+	{
+		if (this.music !== undefined)
+		{
+			this.music.setVolume(this.params.Mute_Music ? 0 : this.params.Music_Volume);
+		}
+	}
+
 	public resumeAudio(): void
 	{
 		if (this.audioListener.context.state === 'suspended')
@@ -585,6 +607,12 @@ export class World
 			html += '<span class="ctrl-desc">' + row.desc + '</span></div>';
 		});
 
+		// Available whatever the input receiver is, so they're listed everywhere
+		html += '<div class="ctrl-row"><span class="ctrl-key">M</span>'
+			+ '<span class="ctrl-desc">Mute music</span></div>';
+		html += '<div class="ctrl-row"><span class="ctrl-key">C</span>'
+			+ '<span class="ctrl-desc">Center camera</span></div>';
+
 		document.getElementById('controls').innerHTML = html;
 	}
 
@@ -686,6 +714,8 @@ export class World
 			Sun_Rotation: 145,
 			Volume: 0.8,
 			Music_Volume: 0.3,
+			Mute_Music: false,
+			Center_Camera: false,
 		};
 
 		const gui = new GUI.GUI();
@@ -747,9 +777,19 @@ export class World
 				scope.audioListener.setMasterVolume(value);
 			});
 		settingsFolder.add(this.params, 'Music_Volume', 0, 1)
-			.onChange((value) =>
+			.onChange(() =>
 			{
-				scope.music.setVolume(value);
+				scope.applyMusicVolume();
+			});
+		settingsFolder.add(this.params, 'Mute_Music').listen()
+			.onChange(() =>
+			{
+				scope.applyMusicVolume();
+			});
+		settingsFolder.add(this.params, 'Center_Camera').listen()
+			.onChange((enabled) =>
+			{
+				scope.cameraOperator.autoCenter = enabled;
 			});
 		settingsFolder.add(this.params, 'Debug_Physics')
 			.onChange((enabled) =>

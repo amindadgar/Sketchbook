@@ -27,7 +27,7 @@ Mostly a playground for exploring how conventional third person gameplay mechani
 	* Frame skipping
 	* FXAA anti-aliasing
 * Characters
-	* Third-person camera
+	* Third-person camera, centred behind you with C
 	* Raycast character controller with capsule collisions
 	* General state system
 	* Character AI
@@ -37,7 +37,7 @@ Mostly a playground for exploring how conventional third person gameplay mechani
 	* Helicopters
 * Audio
 	* Positional engine sound, pitched by revs
-	* Streamed music track
+	* Streamed music track, muted with M
 * Party mode
 	* Room codes, up to 8 players
 	* Per player name tags and colours
