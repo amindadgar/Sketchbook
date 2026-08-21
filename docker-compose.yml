@@ -2,7 +2,7 @@ services:
   game:
     build:
       context: .
-      target: game
+      dockerfile: docker/game.Dockerfile
     ports:
       - "8080:80"
     restart: unless-stopped
@@ -10,7 +10,7 @@ services:
   relay:
     build:
       context: .
-      target: relay
+      dockerfile: docker/relay.Dockerfile
     ports:
       - "9000:9000"
     restart: unless-stopped
