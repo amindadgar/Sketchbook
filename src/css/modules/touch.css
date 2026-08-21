@@ -236,3 +236,47 @@ body.touch.map-open #minimap {
 	bottom: auto;
 	transform: translate(-50%, -50%) scale(1.1);
 }
+
+/* A figure under the stick rather than a bar across the screen. At 390px tall
+   the bar was both hard to read and in the way of a thumb. */
+#speed-badge {
+	display: none;
+}
+
+body.touch #speed-badge {
+	position: fixed;
+	left: 18px;
+	bottom: 8px;
+	width: 132px;
+	display: flex;
+	align-items: baseline;
+	justify-content: center;
+	gap: 4px;
+	visibility: hidden;
+	font-family: 'Solway', serif;
+	color: #fff;
+	pointer-events: none;
+	user-select: none;
+	z-index: 25;
+}
+
+#speed-number {
+	font-size: 20px;
+	font-weight: 700;
+}
+
+#speed-unit {
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+/* Lifted to make room for the figure beneath it */
+body.touch #touch-stick {
+	bottom: 42px;
+}
+
+body.touch #speedometer {
+	/* The HUD writes display inline when a car is entered, which a plain rule
+	   here would lose to. The figure under the stick replaces this entirely. */
+	display: none !important;
+}

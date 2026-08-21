@@ -13,5 +13,5 @@ export declare class UIManager {
     static setPartyDetails(code: string, names: string[], colors: string[]): void;
     static setSpeedometerVisible(value: boolean): void;
     /** @param fill 0 at a standstill, 1 at the vehicle's top speed. */
-    static setSpeedometerFill(fill: number): void;
+    static setSpeedometerFill(fill: number, speed: number): void;
 }

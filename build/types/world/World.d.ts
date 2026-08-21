@@ -122,6 +122,19 @@ export declare class World {
     toggleCameraCentering(): void;
     applyMusicVolume(): void;
     resumeAudio(): void;
+    /**
+     * Stops listening only once the context is genuinely running.
+     *
+     * This used to unhook on the first attempt whether or not it worked, so a
+     * single refused resume, which is what happens when the call doesn't land
+     * inside a real gesture, left the game silent for the rest of the session
+     * with nothing left listening to try again.
+     */
+    private releaseAudioUnlock;
+    /** Puts the gesture listeners back, for when a context is lost after unlocking. */
+    private listenForAudioUnlock;
+    /** A silent one sample buffer, which is what actually unlocks iOS. */
+    private nudgeAudioContext;
     add(worldEntity: IWorldEntity): void;
     registerUpdatable(registree: IUpdatable): void;
     remove(worldEntity: IWorldEntity): void;

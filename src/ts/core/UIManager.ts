@@ -107,11 +107,14 @@ export class UIManager
 	public static setSpeedometerVisible(value: boolean): void
 	{
 		document.getElementById('speedometer').style.display = value ? 'block' : 'none';
+		document.getElementById('speed-badge').style.visibility = value ? 'visible' : 'hidden';
 	}
 
 	/** @param fill 0 at a standstill, 1 at the vehicle's top speed. */
-	public static setSpeedometerFill(fill: number): void
+	public static setSpeedometerFill(fill: number, speed: number): void
 	{
 		document.getElementById('speedometer-fill').style.width = (fill * 100).toFixed(1) + '%';
+		// The phone layout shows a figure under the stick instead of a bar
+		document.getElementById('speed-number').textContent = String(Math.round(speed));
 	}
 }

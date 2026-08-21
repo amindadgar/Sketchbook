@@ -118,7 +118,8 @@ stick and the buttons would be on top of each other, so it says so and waits.
 The manifest asks for a landscape lock too, which browsers honour once the game
 has been added to a home screen.
 
-Health is a number rather than a bar on a phone, and the map folds away behind a
+Health is a number rather than a bar on a phone, speed is a figure under the
+stick rather than a bar across the middle, and the map folds away behind a
 button: a glance is worth a corner, a permanent map isn't.
 
 **Add to Home Screen** works. There's a web manifest, icons and a service worker

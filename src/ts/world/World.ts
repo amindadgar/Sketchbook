@@ -435,7 +435,9 @@ export class World
 		}
 
 		UIManager.setSpeedometerVisible(driving);
-		UIManager.setSpeedometerFill(this.speedometerFill);
+		// The units are invented, but a number that moves reads better than a
+		// bar at the size a phone can spare for it
+		UIManager.setSpeedometerFill(this.speedometerFill, driving ? Math.abs(car.speed) * 10 : 0);
 	}
 
 	/**
@@ -488,9 +490,19 @@ export class World
 
 	public resumeAudio(): void
 	{
-		if (this.audioListener.context.state === 'suspended')
+		let context: any = this.audioListener.context;
+
+		// Safari wants a sound actually started inside the gesture, not merely a
+		// resume call, before it will let anything else through
+		this.nudgeAudioContext(context);
+
+		if (context.state !== 'running')
 		{
-			this.audioListener.context.resume();
+			let request: any = context.resume();
+			if (request !== undefined && request.then !== undefined)
+			{
+				request.then(() => this.releaseAudioUnlock()).catch(() => undefined);
+			}
 		}
 
 		if (this.musicElement.paused)
@@ -503,8 +515,48 @@ export class World
 			}
 		}
 
+		this.releaseAudioUnlock();
+	}
+
+	/**
+	 * Stops listening only once the context is genuinely running.
+	 *
+	 * This used to unhook on the first attempt whether or not it worked, so a
+	 * single refused resume, which is what happens when the call doesn't land
+	 * inside a real gesture, left the game silent for the rest of the session
+	 * with nothing left listening to try again.
+	 */
+	private releaseAudioUnlock(): void
+	{
+		if (this.audioListener.context.state !== 'running') return;
+
 		document.removeEventListener('click', this.boundResumeAudio, false);
 		document.removeEventListener('keydown', this.boundResumeAudio, false);
+		document.removeEventListener('touchend', this.boundResumeAudio, false);
+	}
+
+	/** Puts the gesture listeners back, for when a context is lost after unlocking. */
+	private listenForAudioUnlock(): void
+	{
+		document.addEventListener('click', this.boundResumeAudio, false);
+		document.addEventListener('keydown', this.boundResumeAudio, false);
+		document.addEventListener('touchend', this.boundResumeAudio, false);
+	}
+
+	/** A silent one sample buffer, which is what actually unlocks iOS. */
+	private nudgeAudioContext(context: any): void
+	{
+		try
+		{
+			let source = context.createBufferSource();
+			source.buffer = context.createBuffer(1, 1, 22050);
+			source.connect(context.destination);
+			source.start(0);
+		}
+		catch (error)
+		{
+			// Nothing to do; the resume below is the other half of the attempt
+		}
 	}
 
 	public add(worldEntity: IWorldEntity): void
@@ -857,9 +909,23 @@ export class World
 		this.music.setMediaElementSource(this.musicElement);
 		this.music.setVolume(this.params.Music_Volume);
 
+		// touchend as well as click: the touch controls call preventDefault, which
+		// stops a tap on them from ever becoming a click
 		this.boundResumeAudio = () => this.resumeAudio();
 		document.addEventListener('click', this.boundResumeAudio, false);
 		document.addEventListener('keydown', this.boundResumeAudio, false);
+		document.addEventListener('touchend', this.boundResumeAudio, false);
+
+		// A phone call or a trip to another app interrupts the context, and
+		// coming back is not a gesture, so nothing else would ever revive it
+		document.addEventListener('visibilitychange', () =>
+		{
+			if (document.visibilityState !== 'visible') return;
+			if (this.audioListener.context.state === 'running') return;
+
+			this.listenForAudioUnlock();
+			this.resumeAudio();
+		}, false);
 	}
 
 	private generateHTML(): void
@@ -915,6 +981,7 @@ export class World
 				<div id="settings-gear" title="Settings">&#9881;</div>
 				<div id="health-badge"><span id="health-heart">&#10084;</span><span id="health-number">100</span></div>
 				<div id="minimap-toggle">MAP</div>
+				<div id="speed-badge"><span id="speed-number">0</span><span id="speed-unit">km/h</span></div>
 				<div id="scoreboard">
 					<div class="scoreboard-title">Players</div>
 					<div id="scoreboard-rows"></div>
