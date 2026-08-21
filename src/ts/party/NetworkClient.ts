@@ -174,14 +174,14 @@ export class NetworkClient
 		});
 	}
 
-	public createRoom(name: string, color: string, scenario: string): void
+	public createRoom(name: string, color: string, scenario: string, token: string): void
 	{
-		this.send({ t: 'create', name: name, color: color, scenario: scenario });
+		this.send({ t: 'create', name: name, color: color, scenario: scenario, token: token });
 	}
 
-	public joinRoom(code: string, name: string, color: string): void
+	public joinRoom(code: string, name: string, color: string, token: string): void
 	{
-		this.send({ t: 'join', code: code, name: name, color: color });
+		this.send({ t: 'join', code: code, name: name, color: color, token: token });
 	}
 
 	public send(message: any): void

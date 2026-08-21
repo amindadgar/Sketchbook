@@ -19,6 +19,12 @@ export declare class PartyMenu {
      * between places rather than a URL to be typed correctly.
      */
     private static bindServerPicker;
+    /**
+     * Signing in is optional: the party works without it. What it buys is having
+     * kills counted against a name that persists, which is what a leaderboard
+     * will be built on.
+     */
+    private static bindAccount;
     private static commitIdentity;
     private static serverUrl;
     private static bindSwatches;

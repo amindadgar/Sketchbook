@@ -42,8 +42,8 @@ export declare class NetworkClient {
     static saveUrl(url: string): void;
     /** Resolves once the socket is open, rejects with a readable reason. */
     connect(url: string): Promise<void>;
-    createRoom(name: string, color: string, scenario: string): void;
-    joinRoom(code: string, name: string, color: string): void;
+    createRoom(name: string, color: string, scenario: string, token: string): void;
+    joinRoom(code: string, name: string, color: string, token: string): void;
     send(message: any): void;
     disconnect(): void;
     private handleMessage;

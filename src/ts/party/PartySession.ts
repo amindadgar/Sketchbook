@@ -6,6 +6,7 @@ import { IUpdatable } from '../interfaces/IUpdatable';
 import { NetworkClient, PlayerInfo } from './NetworkClient';
 import { RemotePlayer } from './RemotePlayer';
 import { PlayerIdentity } from './PlayerIdentity';
+import { Account } from './Account';
 import { UIManager } from '../core/UIManager';
 import * as THREE from 'three';
 
@@ -145,7 +146,7 @@ export class PartySession implements IUpdatable
 		{
 			NetworkClient.saveUrl(url);
 			return this.awaitRoom(() =>
-				this.client.createRoom(identity.name, identity.color, this.world.lastScenarioID));
+				this.client.createRoom(identity.name, identity.color, this.world.lastScenarioID, Account.token));
 		});
 	}
 
@@ -154,7 +155,7 @@ export class PartySession implements IUpdatable
 		return this.client.connect(url).then(() =>
 		{
 			NetworkClient.saveUrl(url);
-			return this.awaitRoom(() => this.client.joinRoom(code, identity.name, identity.color));
+			return this.awaitRoom(() => this.client.joinRoom(code, identity.name, identity.color, Account.token));
 		});
 	}
 

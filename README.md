@@ -122,7 +122,7 @@ The project deploys as two services, both built from the Dockerfiles in
 | Service | Dockerfile | Notes |
 | --- | --- | --- |
 | `game` | `docker/game.Dockerfile` | nginx, listens on `$PORT`, reads `PARTY_SERVER_URL` |
-| `relay` | `docker/relay.Dockerfile` | node, listens on `$PORT`, healthcheck `/health` |
+| `relay` | `docker/relay.Dockerfile` | node, listens on `$PORT`, healthcheck `/health`, reads `DATABASE_URL` and `AUTH_SECRET` |
 
 Set **`PARTY_SERVER_URL`** on the game service to the relay's address, as a
 `wss://` URL with no port. The game is a static bundle, so the value can't be
@@ -200,6 +200,33 @@ reports a hit, and the player who was hit decides what it did to them.
 One owner per number beats two clients disagreeing about it, but it does mean a
 modified client can claim to be anywhere it likes and can decline to die. That's
 fine for playing with friends and not fine for anything competitive.
+
+## Accounts
+
+Optional, and the party works without them. What signing in buys is having your
+kills counted against a name that persists, which is what a leaderboard will be
+built on.
+
+The party server grows a few endpoints and a Postgres database:
+
+| | |
+| --- | --- |
+| `POST /auth/register` | `{username, password}` returns a token |
+| `POST /auth/login` | same, for an existing account |
+| `GET /auth/me` | the signed-in profile and its tallies |
+| `GET /leaderboard` | top players by kills |
+
+Set `DATABASE_URL` on the relay to switch accounts on; without it the relay
+still runs parties and simply reports that accounts are unavailable. Set
+`AUTH_SECRET` too, or every restart signs everyone out.
+
+Passwords are hashed with scrypt and tokens signed with an HMAC, both from
+Node's own crypto. Neither needs a dependency in a service whose job is
+forwarding small JSON messages.
+
+Kills are recorded server side, from the same death message that awards a point
+in game, so they inherit its trust model: a client that lies about dying will
+lie to the database too. Good enough for friends, not for a public ranking.
 
 ## Combat
 

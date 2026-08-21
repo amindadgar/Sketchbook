@@ -17,9 +17,35 @@ services:
       dockerfile: docker/relay.Dockerfile
     ports:
       - "9000:9000"
+    environment:
+      DATABASE_URL: postgres://sketchbook:sketchbook@db:5432/sketchbook
+      # Without this, sign-ins stop working every time the relay restarts
+      AUTH_SECRET: ${AUTH_SECRET:-local-development-secret}
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:9000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # Accounts and their tallies. Only the relay talks to it.
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sketchbook
+      POSTGRES_PASSWORD: sketchbook
+      POSTGRES_DB: sketchbook
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sketchbook"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  db-data:

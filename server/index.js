@@ -12,6 +12,8 @@
  */
 
 const http = require('http');
+const db = require('./db');
+const auth = require('./auth');
 // ws 7 exposes the server as WebSocket.Server, ws 8 also has a named export.
 // Going through the class works on both.
 const WebSocket = require('ws');
@@ -68,7 +70,28 @@ function broadcast(room, message, exclude)
 
 function publicInfo(player)
 {
-	return { id: player.id, name: player.name, color: player.color, score: player.score };
+	return {
+		id: player.id, name: player.name, color: player.color,
+		score: player.score, account: player.account
+	};
+}
+
+/** Attaches the signed-in account, if the client presented a valid token. */
+function adoptToken(player, token)
+{
+	const claims = auth.verify(token);
+	if (claims === null) return;
+
+	player.userId = claims.uid;
+	player.account = claims.name;
+}
+
+/** Tallies are best effort: a database hiccup shouldn't interrupt a game. */
+function tally(action, userId)
+{
+	if (userId === undefined || !db.available()) return;
+
+	action(userId).catch((error) => console.error('stats:', error.message));
 }
 
 function sanitizeName(name)
@@ -117,6 +140,8 @@ function joinRoom(player, room)
 		scenario: room.scenario,
 		players: others
 	});
+
+	tally(db.recordPlayed, player.userId);
 	broadcast(room, { t: 'join', ...publicInfo(player) }, player);
 
 	console.log('player %d (%s) joined room %s, %d in room', player.id, player.name, room.code, room.players.size);
@@ -124,16 +149,24 @@ function joinRoom(player, room)
 
 const server = http.createServer((req, res) =>
 {
+	const url = (req.url || '/').split('?')[0];
+
 	// Hosting platforms want something to poll
-	if (req.url === '/health')
+	if (url === '/health')
 	{
 		res.writeHead(200, { 'Content-Type': 'application/json' });
-		res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+		res.end(JSON.stringify({ ok: true, rooms: rooms.size, accounts: db.available() }));
 		return;
 	}
 
-	res.writeHead(404);
-	res.end();
+	// Answers /auth/* and /leaderboard, and reports whether it did
+	auth.handle(req, res, url).then((handled) =>
+	{
+		if (handled) return;
+
+		res.writeHead(404);
+		res.end();
+	});
 });
 
 const wss = new WebSocket.Server({ server, maxPayload: MAX_MESSAGE_BYTES });
@@ -178,6 +211,7 @@ wss.on('connection', (ws) =>
 			{
 				player.name = sanitizeName(msg.name);
 				player.color = sanitizeColor(msg.color);
+				adoptToken(player, msg.token);
 
 				const code = makeRoomCode();
 				if (code === null)
@@ -196,6 +230,7 @@ wss.on('connection', (ws) =>
 			{
 				player.name = sanitizeName(msg.name);
 				player.color = sanitizeColor(msg.color);
+				adoptToken(player, msg.token);
 
 				const code = typeof msg.code === 'string' ? msg.code.toUpperCase().trim() : '';
 				const room = rooms.get(code);
@@ -256,11 +291,14 @@ wss.on('connection', (ws) =>
 				// that owns their health. The point goes to whoever they name.
 				if (player.room === null) break;
 
+				tally(db.recordDeath, player.userId);
+
 				for (const other of player.room.players)
 				{
 					if (other.id === msg.killer && other !== player)
 					{
 						other.score++;
+						tally(db.recordKill, other.userId);
 						broadcast(player.room, { t: 'score', id: other.id, score: other.score });
 						break;
 					}
@@ -331,7 +369,16 @@ wss.on('close', () =>
 	clearInterval(sweep);
 });
 
-server.listen(PORT, () =>
-{
-	console.log('Sketchbook party relay listening on port %d', PORT);
-});
+db.connect()
+	.catch((error) =>
+	{
+		// A database that won't come up shouldn't stop people playing together
+		console.error('db: %s, carrying on without accounts', error.message);
+	})
+	.then(() =>
+	{
+		server.listen(PORT, () =>
+		{
+			console.log('Sketchbook party relay listening on port %d', PORT);
+		});
+	});

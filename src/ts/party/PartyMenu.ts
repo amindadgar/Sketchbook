@@ -2,6 +2,7 @@ import Swal from 'sweetalert2';
 
 import { PlayerIdentity } from './PlayerIdentity';
 import { NetworkClient } from './NetworkClient';
+import { Account } from './Account';
 
 export interface PartyMenuOptions
 {
@@ -33,6 +34,7 @@ export class PartyMenu
 			{
 				PartyMenu.bindSwatches();
 				PartyMenu.bindServerPicker();
+				PartyMenu.bindAccount(options.identity);
 				PartyMenu.bindPartyButtons(options, () => { entered = true; });
 			},
 			preConfirm: () =>
@@ -63,6 +65,21 @@ export class PartyMenu
 			+ ' value="' + PartyMenu.escape(identity.name) + '">'
 			+ '<label class="party-label">Your colour</label>'
 			+ '<div id="party-colors" class="party-colors">' + swatches + '</div>'
+			+ '<div class="party-divider"><span>account</span></div>'
+			+ '<div class="party-server-line">'
+			+ '<span class="party-server-label">Account</span>'
+			+ '<span id="party-account-current" class="party-server-current">Not signed in</span>'
+			+ '<button type="button" id="party-account-toggle" class="party-server-change">Sign in</button>'
+			+ '</div>'
+			+ '<div id="party-account-panel" class="party-server-panel">'
+			+ '<input id="party-account-name" class="party-input" maxlength="16" spellcheck="false" placeholder="Name">'
+			+ '<input id="party-account-password" class="party-input" type="password" placeholder="Password">'
+			+ '<div class="party-row">'
+			+ '<button type="button" id="party-account-login" class="party-button">Sign in</button>'
+			+ '<button type="button" id="party-account-register" class="party-button">Create account</button>'
+			+ '</div>'
+			+ '<div id="party-account-status" class="party-status"></div>'
+			+ '</div>'
 			+ '<div class="party-divider"><span>or play with friends</span></div>'
 			+ '<div class="party-row">'
 			+ '<input id="party-code-input" class="party-input party-code-input" maxlength="4"'
@@ -199,6 +216,89 @@ export class PartyMenu
 		{
 			let open = panel.classList.toggle('open');
 			toggle.textContent = open ? 'Done' : 'Change';
+		}, false);
+	}
+
+	/**
+	 * Signing in is optional: the party works without it. What it buys is having
+	 * kills counted against a name that persists, which is what a leaderboard
+	 * will be built on.
+	 */
+	private static bindAccount(identity: PlayerIdentity): void
+	{
+		let line = document.getElementById('party-account-current');
+		let toggle = document.getElementById('party-account-toggle');
+		let panel = document.getElementById('party-account-panel');
+		let status = document.getElementById('party-account-status');
+		let name = document.getElementById('party-account-name') as HTMLInputElement;
+		let password = document.getElementById('party-account-password') as HTMLInputElement;
+
+		let render = () =>
+		{
+			if (Account.signedIn)
+			{
+				let profile = Account.profile;
+				line.textContent = profile.username + ' \u2014 ' + profile.kills + ' kills, ' + profile.deaths + ' deaths';
+				toggle.textContent = 'Sign out';
+				panel.classList.remove('open');
+			}
+			else
+			{
+				line.textContent = 'Not signed in';
+				toggle.textContent = 'Sign in';
+			}
+		};
+
+		let fail = (error: Error) =>
+		{
+			status.textContent = error.message;
+			status.className = 'party-status party-status-error';
+		};
+
+		let succeed = () =>
+		{
+			status.textContent = '';
+			password.value = '';
+
+			// A default name is worth replacing with the one they just signed in as
+			let nameField = document.getElementById('party-name') as HTMLInputElement;
+			if (nameField.value === 'Player') nameField.value = Account.profile.username;
+
+			render();
+		};
+
+		let attempt = (action: () => Promise<any>) =>
+		{
+			status.textContent = 'Talking to the server\u2026';
+			status.className = 'party-status';
+			action().then(succeed).catch(fail);
+		};
+
+		render();
+
+		// Quietly pick a previous session back up, if the server still honours it
+		Account.resume(PartyMenu.serverUrl()).then(render).catch(() => undefined);
+
+		toggle.addEventListener('click', () =>
+		{
+			if (Account.signedIn)
+			{
+				Account.signOut();
+				render();
+				return;
+			}
+
+			panel.classList.toggle('open');
+		}, false);
+
+		document.getElementById('party-account-login').addEventListener('click', () =>
+		{
+			attempt(() => Account.login(PartyMenu.serverUrl(), name.value, password.value));
+		}, false);
+
+		document.getElementById('party-account-register').addEventListener('click', () =>
+		{
+			attempt(() => Account.register(PartyMenu.serverUrl(), name.value, password.value));
 		}, false);
 	}
 

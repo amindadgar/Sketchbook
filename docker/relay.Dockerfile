@@ -11,6 +11,7 @@ WORKDIR /app
 COPY package.json /tmp/package.json
 RUN npm install --no-package-lock --no-audit --no-fund \
     "ws@$(node -p "require('/tmp/package.json').dependencies.ws")" \
+    "pg@$(node -p "require('/tmp/package.json').dependencies.pg")" \
     && rm /tmp/package.json
 
 COPY server ./server
