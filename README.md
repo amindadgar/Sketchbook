@@ -114,6 +114,21 @@ Both ports bind every interface, so people on your network can play without any
 extra flags: they open `http://<your-address>:8080` and set the party server to
 `ws://<your-address>:9000`.
 
+## Railway
+
+The project deploys as two services, both built from the Dockerfiles in
+`docker/`, so a service's Dockerfile path has to be set on it:
+
+| Service | Dockerfile | Notes |
+| --- | --- | --- |
+| `game` | `docker/game.Dockerfile` | nginx, listens on `$PORT` |
+| `relay` | `docker/relay.Dockerfile` | node, listens on `$PORT`, healthcheck `/health` |
+
+Give each a domain, then play at the game's URL. The relay is a separate
+service on its own domain, so its address goes in the menu's **Party server**
+field as a `wss://` URL with no port: Railway terminates TLS and proxies to the
+container.
+
 ## Party mode
 
 Start the game, pick a name and a colour, then either **Create party** for a four
