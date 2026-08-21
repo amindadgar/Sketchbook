@@ -1,0 +1,43 @@
+#speedometer {
+	position: fixed;
+	bottom: 42px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 320px;
+	height: 18px;
+	padding: 3px;
+	box-sizing: border-box;
+	display: none;
+	background: rgba(0, 0, 0, 0.45);
+	border: 2px solid rgba(255, 255, 255, 0.8);
+	border-radius: 3px;
+	pointer-events: none;
+	user-select: none;
+}
+
+#speedometer-track {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+
+#speedometer-fill {
+	width: 0%;
+	height: 100%;
+	/* Sized to the track rather than to itself, so the gradient stays anchored
+	   and the leading edge colour tracks actual speed instead of stretching */
+	background-image: linear-gradient(to right, #4cc95d 0%, #f5d327 55%, #e6394a 100%);
+	background-size: 306px 100%;
+	background-repeat: no-repeat;
+}
+
+.speedometer-split {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	margin-left: -1px;
+	/* Light, so the splits read against both the empty track and the coloured fill */
+	background: rgba(255, 255, 255, 0.8);
+}

@@ -1,0 +1,61 @@
+.party-intro {
+	margin: 0 0 18px 0;
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+.party-label {
+	display: block;
+	margin: 0 0 6px 2px;
+	font-family: 'Solway', serif;
+	font-weight: 700;
+	font-size: 14px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: #6b6b6b;
+	text-align: left;
+}
+
+.party-input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 10px 12px;
+	margin: 0 0 18px 0;
+	border: 2px solid #d9d9d9;
+	border-radius: 4px;
+	font-family: 'Solway', serif;
+	font-size: 17px;
+	color: #222;
+	outline: none;
+}
+
+.party-input:focus {
+	border-color: #FFB900;
+}
+
+.party-colors {
+	display: flex;
+	justify-content: space-between;
+	margin: 0 0 4px 0;
+}
+
+.party-swatch {
+	width: 38px;
+	height: 38px;
+	padding: 0;
+	border: 3px solid transparent;
+	border-radius: 50%;
+	cursor: pointer;
+	outline: none;
+	box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+	transition: transform 0.1s ease;
+}
+
+.party-swatch:hover {
+	transform: scale(1.12);
+}
+
+.party-swatch.selected {
+	border-color: #333;
+	transform: scale(1.12);
+}

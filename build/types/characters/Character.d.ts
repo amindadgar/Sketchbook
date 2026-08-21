@@ -14,6 +14,7 @@ import { CapsuleCollider } from '../physics/colliders/CapsuleCollider';
 import { VehicleEntryInstance } from './VehicleEntryInstance';
 import { GroundImpactData } from './GroundImpactData';
 import { EntityType } from '../enums/EntityType';
+import { NameTag } from '../party/NameTag';
 export declare class Character extends THREE.Object3D implements IWorldEntity {
     updateOrder: number;
     entityType: EntityType;
@@ -57,7 +58,11 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     controlledObject: IControllable;
     occupyingSeat: VehicleSeat;
     vehicleEntryInstance: VehicleEntryInstance;
+    playerName: string;
+    playerColor: string;
+    nameTag: NameTag;
     private physicsEnabled;
+    private originalColors;
     constructor(gltf: any);
     setAnimations(animations: []): void;
     setArcadeVelocityInfluence(x: number, y?: number, z?: number): void;
@@ -74,6 +79,17 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     resetOrientation(): void;
     setBehaviour(behaviour: ICharacterAI): void;
     setPhysicsEnabled(value: boolean): void;
+    /**
+     * Names and colours the character. The tag is parented to the model container,
+     * so it rides along into vehicles and hides itself in first person view.
+     */
+    setPlayerAppearance(name: string, color: string): void;
+    /**
+     * Model container sits 0.57 below the character origin, so that's the baseline.
+     * Sitting lifts the character, so the tag comes down to hug the vehicle roof.
+     */
+    private updateNameTagHeight;
+    setTint(color: string): void;
     readCharacterData(gltf: any): void;
     handleKeyboardEvent(event: KeyboardEvent, code: string, pressed: boolean): void;
     handleMouseButton(event: MouseEvent, code: string, pressed: boolean): void;
