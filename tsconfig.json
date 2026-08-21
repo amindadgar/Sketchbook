@@ -5,6 +5,7 @@
     "compilerOptions": {
         "module": "commonjs",
         "target": "es5",
+        "lib": ["es2017", "dom"],
         "moduleResolution": "node",
         "declaration": true,
         "declarationDir": "build/types",

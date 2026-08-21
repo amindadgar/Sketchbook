@@ -41,7 +41,9 @@ export class ExitingVehicle extends ExitingStateBase
 		{
 			this.detachCharacterFromVehicle();
 
-			this.seat.door.physicsEnabled = true;
+			// Not every vehicle has doors, and the checks further down this same
+			// block already know that
+			if (this.seat.door !== undefined) this.seat.door.physicsEnabled = true;
 
 			if (!this.character.rayHasHit)
 			{

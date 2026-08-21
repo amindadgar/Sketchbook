@@ -137,8 +137,8 @@ export declare class World {
      */
     private prepareCombat;
     private createMergedScenario;
-    /** Parks a car on the line from the player to the aircraft, where the apron is clear. */
-    private createCarSpawnBetween;
+    /** Parks a vehicle on the line from the player to the aircraft, where the apron is clear. */
+    private createVehicleSpawnBetween;
     launchScenario(scenarioID: string, loadingManager?: LoadingManager): void;
     restartScenario(): void;
     clearEntities(): void;

@@ -40,6 +40,10 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	protected engineSoundPath: string;
 	protected engineSoundRefDistance: number = 6;
 	private originalColors: { [uuid: string]: THREE.Color } = {};
+	private static readonly UNPAINTED: string[] = [
+		'wheel', 'tire', 'tyre', 'window', 'glass', 'headlight',
+		'taillight', 'light', 'black', 'grey', 'gray', 'chrome'
+	];
 	private enginePitch: number = 1;
 	private engineVolume: number = 0;
 
@@ -437,7 +441,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 
 		this.materials.forEach((mat: any) =>
 		{
-			if (mat.color === undefined || mat.name === 'Wheel') return;
+			if (mat.color === undefined || Vehicle.isUnpainted(mat.name)) return;
 
 			if (this.originalColors[mat.uuid] === undefined)
 			{
@@ -446,6 +450,25 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 
 			mat.color.copy(target);
 		});
+	}
+
+	/**
+	 * Bodywork gets the driver's colour; glass, lights, trim and tyres don't.
+	 * Matched on the material name, since that's all an imported model carries,
+	 * and a red windscreen reads as a bug rather than a paint job.
+	 */
+	private static isUnpainted(name: string): boolean
+	{
+		if (name === undefined) return false;
+
+		let lower = name.toLowerCase();
+
+		for (const part of Vehicle.UNPAINTED)
+		{
+			if (lower.indexOf(part) >= 0) return true;
+		}
+
+		return false;
 	}
 
 	public clearPlayerTint(): void

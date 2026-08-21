@@ -1,0 +1,19 @@
+# Installed inside the image
+node_modules
+
+.git
+.gitattributes
+.travis.yml
+
+# Blender sources and README art: 50MB that nothing at runtime reads
+src/blend
+src/img
+
+# Rebuilt by the image rather than copied in, so the bundle always matches src
+build/sketchbook.min.js
+build/types
+
+tools
+README.md
+LICENSE
+package-lock.json
