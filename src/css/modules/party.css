@@ -1,0 +1,191 @@
+.party-intro {
+	margin: 0 0 18px 0;
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+.party-label {
+	display: block;
+	margin: 0 0 6px 2px;
+	font-family: 'Solway', serif;
+	font-weight: 700;
+	font-size: 14px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: #6b6b6b;
+	text-align: left;
+}
+
+.party-input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 10px 12px;
+	margin: 0 0 18px 0;
+	border: 2px solid #d9d9d9;
+	border-radius: 4px;
+	font-family: 'Solway', serif;
+	font-size: 17px;
+	color: #222;
+	outline: none;
+}
+
+.party-input:focus {
+	border-color: #FFB900;
+}
+
+.party-colors {
+	display: flex;
+	justify-content: space-between;
+	margin: 0 0 4px 0;
+}
+
+.party-swatch {
+	width: 38px;
+	height: 38px;
+	padding: 0;
+	border: 3px solid transparent;
+	border-radius: 50%;
+	cursor: pointer;
+	outline: none;
+	box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+	transition: transform 0.1s ease;
+}
+
+.party-swatch:hover {
+	transform: scale(1.12);
+}
+
+.party-swatch.selected {
+	border-color: #333;
+	transform: scale(1.12);
+}
+
+.party-divider {
+	position: relative;
+	margin: 22px 0 18px 0;
+	text-align: center;
+	border-top: 1px solid #e0e0e0;
+}
+
+.party-divider span {
+	position: relative;
+	top: -11px;
+	padding: 0 12px;
+	background: #fff;
+	font-family: 'Solway', serif;
+	font-size: 13px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: #9a9a9a;
+}
+
+.party-row {
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	margin: 0 0 10px 0;
+}
+
+.party-code-input {
+	width: 96px;
+	margin: 0;
+	text-align: center;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	font-weight: 700;
+}
+
+.party-button {
+	flex: 1;
+	padding: 10px 14px;
+	border: 2px solid #d9d9d9;
+	border-radius: 4px;
+	background: #f4f4f4;
+	font-family: 'Solway', serif;
+	font-weight: 700;
+	font-size: 15px;
+	color: #333;
+	cursor: pointer;
+	outline: none;
+}
+
+.party-button:hover {
+	background: #ebebeb;
+}
+
+.party-button[disabled] {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.party-button-primary {
+	border-color: #FFB900;
+	background: #FFB900;
+	color: #222;
+}
+
+.party-button-primary:hover {
+	background: #ffc82e;
+}
+
+.party-status {
+	min-height: 18px;
+	font-size: 14px;
+	color: #6b6b6b;
+}
+
+.party-status-error {
+	color: #d3344a;
+}
+
+/* Party badge, shown in game once a party is running */
+#party-hud {
+	position: fixed;
+	top: 14px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: none;
+	padding: 8px 14px;
+	background: rgba(0, 0, 0, 0.45);
+	border-radius: 4px;
+	font-family: 'Solway', serif;
+	color: #fff;
+	text-align: center;
+	pointer-events: none;
+	user-select: none;
+}
+
+#party-code {
+	font-size: 13px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.65);
+}
+
+#party-code-value {
+	font-size: 17px;
+	font-weight: 700;
+	letter-spacing: 0.22em;
+	color: #FFB900;
+}
+
+#party-players {
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-top: 4px;
+	font-size: 14px;
+}
+
+.party-player {
+	display: inline-flex;
+	align-items: center;
+}
+
+.party-dot {
+	width: 9px;
+	height: 9px;
+	margin-right: 6px;
+	border-radius: 50%;
+}

@@ -39,6 +39,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	// Prefer wav or ogg over mp3, mp3 encoder padding leaves a gap at the loop point.
 	protected engineSoundPath: string;
 	protected engineSoundRefDistance: number = 6;
+	private originalColors: { [uuid: string]: THREE.Color } = {};
 	private enginePitch: number = 1;
 	private engineVolume: number = 0;
 
@@ -424,6 +425,38 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		// Time scale is baked in, so slow motion sounds like slow motion
 		this.engineSound.setPlaybackRate(this.enginePitch * this.world.params.Time_Scale);
 		this.engineSound.setVolume(this.engineVolume);
+	}
+
+	/**
+	 * Paints the vehicle in the driver's colour. Wheels are left alone,
+	 * a bright red tyre reads as a bug rather than a livery.
+	 */
+	public setPlayerTint(color: string): void
+	{
+		let target = new THREE.Color(color);
+
+		this.materials.forEach((mat: any) =>
+		{
+			if (mat.color === undefined || mat.name === 'Wheel') return;
+
+			if (this.originalColors[mat.uuid] === undefined)
+			{
+				this.originalColors[mat.uuid] = mat.color.clone();
+			}
+
+			mat.color.copy(target);
+		});
+	}
+
+	public clearPlayerTint(): void
+	{
+		this.materials.forEach((mat: any) =>
+		{
+			let original = this.originalColors[mat.uuid];
+			if (original !== undefined) mat.color.copy(original);
+		});
+
+		this.originalColors = {};
 	}
 
 	protected disposeEngineSound(): void

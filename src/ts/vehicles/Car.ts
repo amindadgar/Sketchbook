@@ -16,6 +16,9 @@ export class Car extends Vehicle implements IControllable
 
 	protected engineSoundPath: string = 'build/assets/car.wav';
 
+	// Top gear's max speed, what the speedometer fills up to
+	public topSpeed: number = 22;
+
 	get speed(): number {
 		return this._speed;
 	}

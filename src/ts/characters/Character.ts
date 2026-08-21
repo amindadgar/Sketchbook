@@ -27,6 +27,7 @@ import { GroundImpactData } from './GroundImpactData';
 import { ClosestObjectFinder } from '../core/ClosestObjectFinder';
 import { Object3D } from 'three';
 import { EntityType } from '../enums/EntityType';
+import { NameTag } from '../party/NameTag';
 
 export class Character extends THREE.Object3D implements IWorldEntity
 {
@@ -39,6 +40,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	public materials: THREE.Material[] = [];
 	public mixer: THREE.AnimationMixer;
 	public animations: any[];
+	// Remembered so the party layer can tell everyone else what to play
+	public currentAnimation: string;
 
 	// Movement
 	public acceleration: THREE.Vector3 = new THREE.Vector3();
@@ -80,7 +83,13 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	public occupyingSeat: VehicleSeat = null;
 	public vehicleEntryInstance: VehicleEntryInstance = null;
 	
+	// Party
+	public playerName: string;
+	public playerColor: string;
+	public nameTag: NameTag;
+	
 	private physicsEnabled: boolean = true;
+	private originalColors: { [uuid: string]: THREE.Color } = {};
 
 	constructor(gltf: any)
 	{
@@ -259,6 +268,64 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		}
 	}
 
+	/**
+	 * Names and colours the character. The tag is parented to the model container,
+	 * so it rides along into vehicles and hides itself in first person view.
+	 */
+	public setPlayerAppearance(name: string, color: string): void
+	{
+		this.playerName = name;
+		this.playerColor = color;
+
+		if (this.nameTag === undefined)
+		{
+			this.nameTag = new NameTag(name, color);
+			this.modelContainer.add(this.nameTag);
+		}
+		else
+		{
+			this.nameTag.setText(name, color);
+		}
+
+		this.updateNameTagHeight();
+
+		this.setTint(color);
+
+		// Recolour a vehicle already being driven
+		if (this.controlledObject !== undefined)
+		{
+			(this.controlledObject as unknown as Vehicle).setPlayerTint(color);
+		}
+	}
+
+	/**
+	 * Model container sits 0.57 below the character origin, so that's the baseline.
+	 * Sitting lifts the character, so the tag comes down to hug the vehicle roof.
+	 */
+	private updateNameTagHeight(): void
+	{
+		if (this.nameTag === undefined) return;
+
+		this.nameTag.position.y = 0.57 + (this.occupyingSeat !== null ? 0.5 : 0.95);
+	}
+
+	public setTint(color: string): void
+	{
+		let target = new THREE.Color(color);
+
+		this.materials.forEach((mat: any) =>
+		{
+			if (mat.color === undefined) return;
+
+			if (this.originalColors[mat.uuid] === undefined)
+			{
+				this.originalColors[mat.uuid] = mat.color.clone();
+			}
+
+			mat.color.copy(target);
+		});
+	}
+
 	public readCharacterData(gltf: any): void
 	{
 		gltf.scene.traverse((child) => {
@@ -387,6 +454,10 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		if (this.world !== undefined)
 		{
 			this.world.inputManager.setInputReceiver(this);
+
+			// Whoever takes control is the local player, so they get the name and colour
+			this.world.localCharacter = this;
+			this.setPlayerAppearance(this.world.localPlayer.name, this.world.localPlayer.color);
 		}
 		else
 		{
@@ -513,6 +584,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			this.mixer.stopAllAction();
 			action.fadeIn(fadeIn);
 			action.play();
+
+			this.currentAnimation = clipName;
 
 			return action.getClip().duration;
 		}
@@ -712,6 +785,11 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			vehicle.inputReceiverInit();
 	
 			vehicle.controllingCharacter = this;
+
+			if (this.playerColor !== undefined)
+			{
+				(vehicle as unknown as Vehicle).setPlayerTint(this.playerColor);
+			}
 		}
 	}
 
@@ -750,6 +828,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			this.controlledObject.allowSleep(true);
 			this.controlledObject.controllingCharacter = undefined;
 			this.controlledObject.resetControls();
+			(this.controlledObject as unknown as Vehicle).clearPlayerTint();
 			this.controlledObject = undefined;
 			this.inputReceiverInit();
 		}
@@ -776,6 +855,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	{
 		this.occupyingSeat = seat;
 		seat.occupiedBy = this;
+
+		this.updateNameTagHeight();
 	}
 
 	public leaveSeat(): void
@@ -784,6 +865,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		{
 			this.occupyingSeat.occupiedBy = null;
 			this.occupyingSeat = null;
+
+			this.updateNameTagHeight();
 		}
 	}
 
@@ -984,6 +1067,13 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			// Remove visuals
 			world.graphicsWorld.remove(this);
 			world.graphicsWorld.remove(this.raycastBox);
+
+			if (this.nameTag !== undefined)
+			{
+				this.modelContainer.remove(this.nameTag);
+				this.nameTag.dispose();
+				this.nameTag = undefined;
+			}
 		}
 	}
 }

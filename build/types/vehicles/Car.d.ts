@@ -6,6 +6,7 @@ export declare class Car extends Vehicle implements IControllable {
     entityType: EntityType;
     drive: string;
     protected engineSoundPath: string;
+    topSpeed: number;
     get speed(): number;
     private _speed;
     private steeringWheel;

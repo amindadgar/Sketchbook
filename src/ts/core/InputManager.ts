@@ -142,6 +142,24 @@ export class InputManager implements IUpdatable
 
 	public onKeyDown(event: KeyboardEvent): void
 	{
+		// Handled here rather than per receiver, so they work on foot, in a
+		// vehicle and in the free camera alike. Shift is left alone, Shift + C
+		// is already the free camera.
+		if (event.repeat !== true && event.shiftKey !== true)
+		{
+			if (event.code === 'KeyM')
+			{
+				this.world.toggleMusic();
+				return;
+			}
+
+			if (event.code === 'KeyC')
+			{
+				this.world.toggleCameraCentering();
+				return;
+			}
+		}
+
 		if (this.inputReceiver !== undefined)
 		{
 			this.inputReceiver.handleKeyboardEvent(event, event.code, true);

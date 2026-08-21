@@ -13,6 +13,8 @@ import { Path } from './Path';
 import { Vehicle } from '../vehicles/Vehicle';
 import { Scenario } from './Scenario';
 import { Sky } from './Sky';
+import { PlayerIdentity } from '../party/PlayerIdentity';
+import { PartySession } from '../party/PartySession';
 export declare class World {
     renderer: THREE.WebGLRenderer;
     camera: THREE.PerspectiveCamera;
@@ -46,7 +48,11 @@ export declare class World {
     audioListener: THREE.AudioListener;
     music: THREE.Audio;
     musicElement: HTMLAudioElement;
-    private lastScenarioID;
+    localPlayer: PlayerIdentity;
+    localCharacter: Character;
+    party: PartySession;
+    lastScenarioID: string;
+    private speedometerFill;
     private boundResumeAudio;
     constructor(worldScenePath?: any);
     update(timeStep: number, unscaledTimeStep: number): void;
@@ -60,12 +66,33 @@ export declare class World {
      * @param {World} world
      */
     render(world: World): void;
+    /**
+     * The car the local player is driving, if any. While driving, the character
+     * stays the input receiver and forwards input to the vehicle, so the car has
+     * to be reached through it rather than read off the receiver directly.
+     */
+    private getLocallyDrivenCar;
+    /**
+     * Shows the speed bar only while the local player is at the wheel of a car,
+     * and eases the fill so it climbs rather than snapping.
+     */
+    private updateSpeedometer;
+    /**
+     * Pushes the current name and colour onto the character the player controls.
+     * Called after the menu closes, since the character spawns before that.
+     */
+    applyLocalIdentity(): void;
     setTimeScale(value: number): void;
     /**
      * Starts the audio context and the music track.
      * Browsers keep audio suspended until the user interacts with the page,
      * so this runs on the first click or key press, whichever comes first.
      */
+    /** Bound to M. */
+    toggleMusic(): void;
+    /** Bound to C. */
+    toggleCameraCentering(): void;
+    applyMusicVolume(): void;
     resumeAudio(): void;
     add(worldEntity: IWorldEntity): void;
     registerUpdatable(registree: IUpdatable): void;

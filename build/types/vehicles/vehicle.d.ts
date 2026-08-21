@@ -29,6 +29,7 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     private firstPerson;
     protected engineSoundPath: string;
     protected engineSoundRefDistance: number;
+    private originalColors;
     private enginePitch;
     private engineVolume;
     constructor(gltf: any, handlingSetup?: any);
@@ -64,6 +65,12 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
      * values are lerped so gear shifts and throttle taps glide instead of clicking.
      */
     protected updateEngineSound(pitch: number, volume: number): void;
+    /**
+     * Paints the vehicle in the driver's colour. Wheels are left alone,
+     * a bright red tyre reads as a bug rather than a livery.
+     */
+    setPlayerTint(color: string): void;
+    clearPlayerTint(): void;
     protected disposeEngineSound(): void;
     readVehicleData(gltf: any): void;
     private connectSeats;

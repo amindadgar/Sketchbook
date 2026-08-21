@@ -25,12 +25,16 @@ import { IUpdatable } from '../interfaces/IUpdatable';
 import { Character } from '../characters/Character';
 import { Path } from './Path';
 import { CollisionGroups } from '../enums/CollisionGroups';
+import { EntityType } from '../enums/EntityType';
 import { BoxCollider } from '../physics/colliders/BoxCollider';
 import { TrimeshCollider } from '../physics/colliders/TrimeshCollider';
 import { Vehicle } from '../vehicles/Vehicle';
 import { Scenario } from './Scenario';
 import { Sky } from './Sky';
 import { Ocean } from './Ocean';
+import { PlayerIdentity } from '../party/PlayerIdentity';
+import { PartyMenu } from '../party/PartyMenu';
+import { PartySession } from '../party/PartySession';
 
 export class World
 {
@@ -66,8 +70,13 @@ export class World
 	public audioListener: THREE.AudioListener;
 	public music: THREE.Audio;
 	public musicElement: HTMLAudioElement;
+	public localPlayer: PlayerIdentity = PlayerIdentity.load();
+	public localCharacter: Character;
+	public party: PartySession;
+	public lastScenarioID: string;
 
-	private lastScenarioID: string;
+
+	private speedometerFill: number = 0;
 	private boundResumeAudio: (evt: any) => void;
 
 	constructor(worldScenePath?: any)
@@ -154,6 +163,9 @@ export class World
 		// Audio
 		this.setupAudio();
 
+		// Multiplayer, idle until a party is actually started
+		this.party = new PartySession(this);
+
 		// Initialization
 		this.inputManager = new InputManager(this, this.renderer.domElement);
 		this.cameraOperator = new CameraOperator(this, this.camera, this.params.Mouse_Sensitivity);
@@ -168,16 +180,16 @@ export class World
 				this.update(1, 1);
 				this.setTimeScale(1);
 	
-				Swal.fire({
-					title: 'Welcome to Sketchbook!',
-					text: 'Feel free to explore the world and interact with available vehicles. There are also various scenarios ready to launch from the right panel.',
-					footer: '<a href="https://github.com/swift502/Sketchbook" target="_blank">GitHub page</a><a href="https://discord.gg/fGuEqCe" target="_blank">Discord server</a>',
-					confirmButtonText: 'Okay',
-					buttonsStyling: false,
-					onClose: () => {
+				PartyMenu.show({
+					identity: this.localPlayer,
+					onPlay: () =>
+					{
+						this.applyLocalIdentity();
 						this.resumeAudio();
 						UIManager.setUserInterfaceVisible(true);
-					}
+					},
+					onHost: (url) => this.party.host(url, this.localPlayer),
+					onJoin: (url, code) => this.party.join(url, code, this.localPlayer)
 				});
 			};
 			loadingManager.loadGLTF(worldScenePath, (gltf) =>
@@ -214,6 +226,8 @@ export class World
 
 		// Lerp time scale
 		this.params.Time_Scale = THREE.MathUtils.lerp(this.params.Time_Scale, this.timeScaleTarget, 0.2);
+
+		this.updateSpeedometer();
 
 		// Physics debug
 		if (this.params.Debug_Physics) this.cannonDebugRenderer.update();
@@ -308,6 +322,63 @@ export class World
 		this.renderDelta = this.clock.getDelta();
 	}
 
+	/**
+	 * The car the local player is driving, if any. While driving, the character
+	 * stays the input receiver and forwards input to the vehicle, so the car has
+	 * to be reached through it rather than read off the receiver directly.
+	 */
+	private getLocallyDrivenCar(): any
+	{
+		let receiver = this.inputManager.inputReceiver as any;
+		if (receiver === undefined) return undefined;
+
+		if (receiver.entityType === EntityType.Car) return receiver;
+
+		let controlled = receiver.controlledObject;
+		if (controlled !== undefined && controlled.entityType === EntityType.Car) return controlled;
+
+		return undefined;
+	}
+
+	/**
+	 * Shows the speed bar only while the local player is at the wheel of a car,
+	 * and eases the fill so it climbs rather than snapping.
+	 */
+	private updateSpeedometer(): void
+	{
+		let car = this.getLocallyDrivenCar();
+		let driving = car !== undefined;
+
+		if (driving)
+		{
+			let target = THREE.MathUtils.clamp(Math.abs(car.speed) / car.topSpeed, 0, 1);
+			this.speedometerFill = THREE.MathUtils.lerp(this.speedometerFill, target, 0.12);
+		}
+		else if (this.speedometerFill === 0)
+		{
+			return;
+		}
+		else
+		{
+			this.speedometerFill = 0;
+		}
+
+		UIManager.setSpeedometerVisible(driving);
+		UIManager.setSpeedometerFill(this.speedometerFill);
+	}
+
+	/**
+	 * Pushes the current name and colour onto the character the player controls.
+	 * Called after the menu closes, since the character spawns before that.
+	 */
+	public applyLocalIdentity(): void
+	{
+		if (this.localCharacter !== undefined)
+		{
+			this.localCharacter.setPlayerAppearance(this.localPlayer.name, this.localPlayer.color);
+		}
+	}
+
 	public setTimeScale(value: number): void
 	{
 		this.params.Time_Scale = value;
@@ -319,6 +390,28 @@ export class World
 	 * Browsers keep audio suspended until the user interacts with the page,
 	 * so this runs on the first click or key press, whichever comes first.
 	 */
+	/** Bound to M. */
+	public toggleMusic(): void
+	{
+		this.params.Mute_Music = !this.params.Mute_Music;
+		this.applyMusicVolume();
+	}
+
+	/** Bound to C. */
+	public toggleCameraCentering(): void
+	{
+		this.params.Center_Camera = !this.params.Center_Camera;
+		this.cameraOperator.autoCenter = this.params.Center_Camera;
+	}
+
+	public applyMusicVolume(): void
+	{
+		if (this.music !== undefined)
+		{
+			this.music.setVolume(this.params.Mute_Music ? 0 : this.params.Music_Volume);
+		}
+	}
+
 	public resumeAudio(): void
 	{
 		if (this.audioListener.context.state === 'suspended')
@@ -448,6 +541,9 @@ export class World
 				scenario.launch(loadingManager, this);
 			}
 		}
+
+		// Everyone in a party has to be in the same scenario, or vehicle ids don't line up
+		if (this.party !== undefined) this.party.onScenarioLaunched(scenarioID);
 	}
 
 	public restartScenario(): void
@@ -510,6 +606,12 @@ export class World
 
 			html += '<span class="ctrl-desc">' + row.desc + '</span></div>';
 		});
+
+		// Available whatever the input receiver is, so they're listed everywhere
+		html += '<div class="ctrl-row"><span class="ctrl-key">M</span>'
+			+ '<span class="ctrl-desc">Mute music</span></div>';
+		html += '<div class="ctrl-row"><span class="ctrl-key">C</span>'
+			+ '<span class="ctrl-desc">Center camera</span></div>';
 
 		document.getElementById('controls').innerHTML = html;
 	}
@@ -579,6 +681,17 @@ export class World
 				<div class="left-panel">
 					<div id="controls" class="panel-segment flex-bottom"></div>
 				</div>
+				<div id="party-hud">
+					<div id="party-code">PARTY <span id="party-code-value"></span></div>
+					<div id="party-players"></div>
+				</div>
+				<div id="speedometer">
+					<div id="speedometer-track">
+						<div id="speedometer-fill"></div>
+						<div class="speedometer-split" style="left: 33.33%;"></div>
+						<div class="speedometer-split" style="left: 66.66%;"></div>
+					</div>
+				</div>
 			</div>
 		`).appendTo('body');
 
@@ -601,6 +714,8 @@ export class World
 			Sun_Rotation: 145,
 			Volume: 0.8,
 			Music_Volume: 0.3,
+			Mute_Music: false,
+			Center_Camera: false,
 		};
 
 		const gui = new GUI.GUI();
@@ -662,9 +777,19 @@ export class World
 				scope.audioListener.setMasterVolume(value);
 			});
 		settingsFolder.add(this.params, 'Music_Volume', 0, 1)
-			.onChange((value) =>
+			.onChange(() =>
 			{
-				scope.music.setVolume(value);
+				scope.applyMusicVolume();
+			});
+		settingsFolder.add(this.params, 'Mute_Music').listen()
+			.onChange(() =>
+			{
+				scope.applyMusicVolume();
+			});
+		settingsFolder.add(this.params, 'Center_Camera').listen()
+			.onChange((enabled) =>
+			{
+				scope.cameraOperator.autoCenter = enabled;
 			});
 		settingsFolder.add(this.params, 'Debug_Physics')
 			.onChange((enabled) =>
