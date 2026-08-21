@@ -71,6 +71,7 @@ export declare class World {
         floor: number;
     };
     private speedometerFill;
+    private fxaaPass;
     private boundResumeAudio;
     constructor(worldScenePath?: any);
     update(timeStep: number, unscaledTimeStep: number): void;
@@ -83,6 +84,15 @@ export declare class World {
      * Calls world's "update" function before rendering.
      * @param {World} world
      */
+    /**
+     * iOS in standalone doesn't reliably fire resize when the device is turned,
+     * which leaves the canvas at its portrait size with the page showing through
+     * the rest of the screen. Rather than trust any single event to arrive, the
+     * render loop notices the window no longer matches and puts it right. Two
+     * comparisons a frame, and it can't be missed.
+     */
+    private syncViewportSize;
+    applyViewportSize(): void;
     render(world: World): void;
     /**
      * The car the local player is driving, if any. While driving, the character

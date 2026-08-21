@@ -98,6 +98,7 @@ export class World
 
 
 	private speedometerFill: number = 0;
+	private fxaaPass: any;
 	private boundResumeAudio: (evt: any) => void;
 
 	constructor(worldScenePath?: any)
@@ -128,16 +129,9 @@ export class World
 
 		this.generateHTML();
 
-		// Auto window resize
-		function onWindowResize(): void
-		{
-			scope.camera.aspect = window.innerWidth / window.innerHeight;
-			scope.camera.updateProjectionMatrix();
-			scope.renderer.setSize(window.innerWidth, window.innerHeight);
-			fxaaPass.uniforms['resolution'].value.set(1 / (window.innerWidth * pixelRatio), 1 / (window.innerHeight * pixelRatio));
-			scope.composer.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio);
-		}
-		window.addEventListener('resize', onWindowResize, false);
+		// Both are listened for, but neither is trusted: see syncViewportSize
+		window.addEventListener('resize', () => this.applyViewportSize(), false);
+		window.addEventListener('orientationchange', () => this.applyViewportSize(), false);
 
 		// Three.js scene
 		this.graphicsWorld = new THREE.Scene();
@@ -146,6 +140,7 @@ export class World
 		// Passes
 		let renderPass = new RenderPass( this.graphicsWorld, this.camera );
 		let fxaaPass = new ShaderPass( FXAAShader );
+		this.fxaaPass = fxaaPass;
 
 		// FXAA
 		let pixelRatio = this.renderer.getPixelRatio();
@@ -317,8 +312,52 @@ export class World
 	 * Calls world's "update" function before rendering.
 	 * @param {World} world 
 	 */
+	/**
+	 * iOS in standalone doesn't reliably fire resize when the device is turned,
+	 * which leaves the canvas at its portrait size with the page showing through
+	 * the rest of the screen. Rather than trust any single event to arrive, the
+	 * render loop notices the window no longer matches and puts it right. Two
+	 * comparisons a frame, and it can't be missed.
+	 */
+	private syncViewportSize(): void
+	{
+		// Compares the drawing buffer itself rather than what was last applied,
+		// so it corrects a mismatch however it arose. Reading canvas.width is an
+		// attribute, not a measurement, so it costs no layout.
+		let canvas = this.renderer.domElement;
+		let ratio = this.renderer.getPixelRatio();
+
+		if (canvas.width === Math.floor(window.innerWidth * ratio)
+			&& canvas.height === Math.floor(window.innerHeight * ratio)) return;
+
+		this.applyViewportSize();
+	}
+
+	public applyViewportSize(): void
+	{
+		// A resize can arrive before the constructor has finished building these
+		if (this.camera === undefined || this.composer === undefined) return;
+
+		let width = window.innerWidth;
+		let height = window.innerHeight;
+		let pixelRatio = this.renderer.getPixelRatio();
+
+		this.camera.aspect = width / height;
+		this.camera.updateProjectionMatrix();
+		this.renderer.setSize(width, height);
+
+		if (this.fxaaPass !== undefined)
+		{
+			this.fxaaPass.uniforms['resolution'].value.set(1 / (width * pixelRatio), 1 / (height * pixelRatio));
+		}
+
+		this.composer.setSize(width * pixelRatio, height * pixelRatio);
+	}
+
 	public render(world: World): void
 	{
+		this.syncViewportSize();
+
 		this.requestDelta = this.clock.getDelta();
 
 		requestAnimationFrame(() =>

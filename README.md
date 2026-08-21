@@ -1,10 +1,19 @@
 <p align="center">
-	<img src="./src/img/thumbnail.png">
+	<a href="https://game-amin.up.railway.app/"><img src="./src/img/thumbnail.png"></a>
+	<br>
+	<br>
+	<a href="https://game-amin.up.railway.app/"><b>▶ Play it now at game-amin.up.railway.app</b></a>
+	<br>
+	<sub>Drive, fly and shoot with friends. No install, no sign-up needed.</sub>
 </p>
 
 # 📒 Sketchbook
 
 Simple web based game engine built on [three.js](https://github.com/mrdoob/three.js) and [cannon.js](https://github.com/schteppe/cannon.js) focused on third-person character controls and related gameplay mechanics.
+
+**[Play it here.](https://game-amin.up.railway.app/)** Create a party, share the four
+character code, and whoever has it can join you. It works on a phone too, and can
+be added to a home screen.
 
 This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook), which its author archived in February 2023. The engine underneath is theirs; what this fork adds is sound, multiplayer and a deathmatch layer on top of it.
 

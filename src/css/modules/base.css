@@ -1,7 +1,9 @@
 /* Base */
 
 body {
-	background-color: #ffffff;
+	/* Whatever the canvas doesn't cover, briefly during a rotation or while
+	   loading, should look like the game rather than a blank page */
+	background-color: #10141a;
 	overflow: hidden;
 	margin: 0;
 	font-family: 'Solway', serif;
