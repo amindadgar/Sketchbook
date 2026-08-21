@@ -40,6 +40,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	public materials: THREE.Material[] = [];
 	public mixer: THREE.AnimationMixer;
 	public animations: any[];
+	// Remembered so the party layer can tell everyone else what to play
+	public currentAnimation: string;
 
 	// Movement
 	public acceleration: THREE.Vector3 = new THREE.Vector3();
@@ -582,6 +584,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			this.mixer.stopAllAction();
 			action.fadeIn(fadeIn);
 			action.play();
+
+			this.currentAnimation = clipName;
 
 			return action.getClip().duration;
 		}

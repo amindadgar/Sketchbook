@@ -34,6 +34,7 @@ import { Sky } from './Sky';
 import { Ocean } from './Ocean';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartyMenu } from '../party/PartyMenu';
+import { PartySession } from '../party/PartySession';
 
 export class World
 {
@@ -71,8 +72,10 @@ export class World
 	public musicElement: HTMLAudioElement;
 	public localPlayer: PlayerIdentity = PlayerIdentity.load();
 	public localCharacter: Character;
+	public party: PartySession;
+	public lastScenarioID: string;
 
-	private lastScenarioID: string;
+
 	private speedometerFill: number = 0;
 	private boundResumeAudio: (evt: any) => void;
 
@@ -160,6 +163,9 @@ export class World
 		// Audio
 		this.setupAudio();
 
+		// Multiplayer, idle until a party is actually started
+		this.party = new PartySession(this);
+
 		// Initialization
 		this.inputManager = new InputManager(this, this.renderer.domElement);
 		this.cameraOperator = new CameraOperator(this, this.camera, this.params.Mouse_Sensitivity);
@@ -174,11 +180,16 @@ export class World
 				this.update(1, 1);
 				this.setTimeScale(1);
 	
-				PartyMenu.show(this.localPlayer, () =>
-				{
-					this.applyLocalIdentity();
-					this.resumeAudio();
-					UIManager.setUserInterfaceVisible(true);
+				PartyMenu.show({
+					identity: this.localPlayer,
+					onPlay: () =>
+					{
+						this.applyLocalIdentity();
+						this.resumeAudio();
+						UIManager.setUserInterfaceVisible(true);
+					},
+					onHost: (url) => this.party.host(url, this.localPlayer),
+					onJoin: (url, code) => this.party.join(url, code, this.localPlayer)
 				});
 			};
 			loadingManager.loadGLTF(worldScenePath, (gltf) =>
@@ -508,6 +519,9 @@ export class World
 				scenario.launch(loadingManager, this);
 			}
 		}
+
+		// Everyone in a party has to be in the same scenario, or vehicle ids don't line up
+		if (this.party !== undefined) this.party.onScenarioLaunched(scenarioID);
 	}
 
 	public restartScenario(): void
@@ -638,6 +652,10 @@ export class World
 				</div>
 				<div class="left-panel">
 					<div id="controls" class="panel-segment flex-bottom"></div>
+				</div>
+				<div id="party-hud">
+					<div id="party-code">PARTY <span id="party-code-value"></span></div>
+					<div id="party-players"></div>
 				</div>
 				<div id="speedometer">
 					<div id="speedometer-track">

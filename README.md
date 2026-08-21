@@ -35,8 +35,43 @@ Mostly a playground for exploring how conventional third person gameplay mechani
 	* Cars
 	* Airplanes
 	* Helicopters
+* Audio
+	* Positional engine sound, pitched by revs
+	* Streamed music track
+* Party mode
+	* Room codes, up to 8 players
+	* Per player name tags and colours
+* HUD
+	* Speedometer
 
 All planned features can be found in the [GitHub Projects](https://github.com/swift502/Sketchbook/projects).
+
+## Party mode
+
+Sketchbook can be played with friends over a small WebSocket relay.
+
+```bash
+pnpm server          # listens on 9000
+PORT=8081 pnpm server
+```
+
+Start the game, pick a name and a colour, then either **Create party** to get a
+four character code, or type a friend's code and **Join**. Everyone in a party
+shares a scenario, so whoever launches one takes the rest along.
+
+The **Party server** field in the menu is remembered between sessions. It
+defaults to `ws://localhost:9000`, which is all you need on a LAN. To play with
+people elsewhere, deploy `server/index.js` anywhere that runs Node, and give
+them the resulting `wss://` address.
+
+The relay only tracks who is in which room. Every client simulates its own
+character and whichever vehicle it drives, and the server forwards those updates
+untouched. A modified client can therefore claim to be anywhere it likes, which
+is fine for playing with friends and not fine for anything competitive.
+
+Note that the race and stunt scenarios were built for one player, so they have a
+single spawn point and a party will share a car. Free roam is the one to use with
+friends: there are cars parked all over it and everyone can take their own.
 
 ## Usage
 

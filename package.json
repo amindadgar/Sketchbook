@@ -15,7 +15,8 @@
   "types": "build/types/sketchbook.d.ts",
   "scripts": {
     "dev": "webpack-dev-server --config webpack.dev.js",
-    "build": "webpack --config webpack.prod.js"
+    "build": "webpack --config webpack.prod.js",
+    "server": "node server/index.js"
   },
   "repository": {
     "type": "git",
@@ -44,6 +45,7 @@
     "lodash": "^4.17.21",
     "sweetalert2": "^9.17.2",
     "three": "0.113.0",
-    "three-csm": "1.0.2"
+    "three-csm": "1.0.2",
+    "ws": "^7.5.10"
   }
 }

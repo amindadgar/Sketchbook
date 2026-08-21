@@ -14,6 +14,7 @@ import { Vehicle } from '../vehicles/Vehicle';
 import { Scenario } from './Scenario';
 import { Sky } from './Sky';
 import { PlayerIdentity } from '../party/PlayerIdentity';
+import { PartySession } from '../party/PartySession';
 export declare class World {
     renderer: THREE.WebGLRenderer;
     camera: THREE.PerspectiveCamera;
@@ -49,7 +50,8 @@ export declare class World {
     musicElement: HTMLAudioElement;
     localPlayer: PlayerIdentity;
     localCharacter: Character;
-    private lastScenarioID;
+    party: PartySession;
+    lastScenarioID: string;
     private speedometerFill;
     private boundResumeAudio;
     constructor(worldScenePath?: any);

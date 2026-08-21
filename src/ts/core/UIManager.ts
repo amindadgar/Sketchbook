@@ -16,6 +16,34 @@ export class UIManager
 		document.getElementById('dat-gui-container').style.top = value ? '48px' : '0px';
 	}
 
+	public static setPartyVisible(value: boolean): void
+	{
+		document.getElementById('party-hud').style.display = value ? 'block' : 'none';
+	}
+
+	/** Names come off the network, so they're written as text nodes, never as HTML. */
+	public static setPartyDetails(code: string, names: string[], colors: string[]): void
+	{
+		document.getElementById('party-code-value').textContent = code;
+
+		let list = document.getElementById('party-players');
+		while (list.firstChild !== null) list.removeChild(list.firstChild);
+
+		for (let i = 0; i < names.length; i++)
+		{
+			let dot = document.createElement('span');
+			dot.className = 'party-dot';
+			dot.style.background = colors[i];
+
+			let entry = document.createElement('span');
+			entry.className = 'party-player';
+			entry.appendChild(dot);
+			entry.appendChild(document.createTextNode(names[i]));
+
+			list.appendChild(entry);
+		}
+	}
+
 	public static setSpeedometerVisible(value: boolean): void
 	{
 		document.getElementById('speedometer').style.display = value ? 'block' : 'none';

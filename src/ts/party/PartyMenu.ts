@@ -1,36 +1,48 @@
 import Swal from 'sweetalert2';
 
 import { PlayerIdentity } from './PlayerIdentity';
+import { NetworkClient } from './NetworkClient';
+
+export interface PartyMenuOptions
+{
+	identity: PlayerIdentity;
+	onPlay: () => void;
+	onHost: (url: string) => Promise<void>;
+	onJoin: (url: string, code: string) => Promise<void>;
+}
 
 /**
- * The dialog shown once the world has loaded, where the player picks the name
- * and colour their character, their car and their name tag will use.
+ * The dialog shown once the world has loaded. Picks the player's name and
+ * colour, and optionally starts or joins a party before the game begins.
  */
 export class PartyMenu
 {
-	public static show(identity: PlayerIdentity, onPlay: () => void): void
+	public static show(options: PartyMenuOptions): void
 	{
+		let entered = false;
+
 		Swal.fire({
 			title: 'Welcome to Sketchbook!',
-			html: PartyMenu.buildHtml(identity),
-			confirmButtonText: 'Play',
+			html: PartyMenu.buildHtml(options.identity),
+			confirmButtonText: 'Play solo',
 			buttonsStyling: false,
+			allowOutsideClick: false,
+			allowEscapeKey: false,
 			footer: '<a href="https://github.com/swift502/Sketchbook" target="_blank">GitHub page</a>',
 			onBeforeOpen: () =>
 			{
 				PartyMenu.bindSwatches();
+				PartyMenu.bindPartyButtons(options, () => { entered = true; });
 			},
 			preConfirm: () =>
 			{
-				let nameInput = document.getElementById('party-name') as HTMLInputElement;
-				identity.set(nameInput.value, PartyMenu.selectedColor());
-				identity.save();
+				PartyMenu.commitIdentity(options.identity);
 				return true;
-			},
-			onClose: () =>
-			{
-				onPlay();
 			}
+		}).then((result) =>
+		{
+			// Party paths close the dialog themselves and have already started the game
+			if (result.value === true && !entered) options.onPlay();
 		});
 	}
 
@@ -49,7 +61,81 @@ export class PartyMenu
 			+ '<input id="party-name" class="party-input" maxlength="16" spellcheck="false"'
 			+ ' value="' + PartyMenu.escape(identity.name) + '">'
 			+ '<label class="party-label">Your colour</label>'
-			+ '<div id="party-colors" class="party-colors">' + swatches + '</div>';
+			+ '<div id="party-colors" class="party-colors">' + swatches + '</div>'
+			+ '<div class="party-divider"><span>or play with friends</span></div>'
+			+ '<label class="party-label" for="party-server">Party server</label>'
+			+ '<input id="party-server" class="party-input" spellcheck="false"'
+			+ ' value="' + PartyMenu.escape(NetworkClient.loadUrl()) + '">'
+			+ '<div class="party-row">'
+			+ '<input id="party-code-input" class="party-input party-code-input" maxlength="4"'
+			+ ' spellcheck="false" placeholder="CODE">'
+			+ '<button type="button" id="party-join" class="party-button">Join</button>'
+			+ '<button type="button" id="party-host" class="party-button party-button-primary">Create party</button>'
+			+ '</div>'
+			+ '<div id="party-status" class="party-status"></div>';
+	}
+
+	private static bindPartyButtons(options: PartyMenuOptions, markEntered: () => void): void
+	{
+		let host = document.getElementById('party-host');
+		let join = document.getElementById('party-join');
+		let status = document.getElementById('party-status');
+
+		let begin = (action: () => Promise<void>) =>
+		{
+			PartyMenu.commitIdentity(options.identity);
+
+			host.setAttribute('disabled', 'disabled');
+			join.setAttribute('disabled', 'disabled');
+			status.textContent = 'Connecting…';
+			status.className = 'party-status';
+
+			action().then(() =>
+			{
+				markEntered();
+				Swal.close();
+				options.onPlay();
+			})
+			.catch((error) =>
+			{
+				host.removeAttribute('disabled');
+				join.removeAttribute('disabled');
+				status.textContent = error.message;
+				status.className = 'party-status party-status-error';
+			});
+		};
+
+		host.addEventListener('click', () =>
+		{
+			begin(() => options.onHost(PartyMenu.serverUrl()));
+		}, false);
+
+		join.addEventListener('click', () =>
+		{
+			let code = (document.getElementById('party-code-input') as HTMLInputElement).value.trim();
+
+			if (code.length === 0)
+			{
+				status.textContent = 'Enter the code your friend gave you.';
+				status.className = 'party-status party-status-error';
+				return;
+			}
+
+			begin(() => options.onJoin(PartyMenu.serverUrl(), code));
+		}, false);
+	}
+
+	private static commitIdentity(identity: PlayerIdentity): void
+	{
+		let nameInput = document.getElementById('party-name') as HTMLInputElement;
+		identity.set(nameInput.value, PartyMenu.selectedColor());
+		identity.save();
+	}
+
+	private static serverUrl(): string
+	{
+		let value = (document.getElementById('party-server') as HTMLInputElement).value.trim();
+		return value.length > 0 ? value : NetworkClient.DEFAULT_URL;
 	}
 
 	private static bindSwatches(): void
