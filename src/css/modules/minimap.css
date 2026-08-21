@@ -1,0 +1,17 @@
+#minimap {
+	position: fixed;
+	/* Bottom right, clear of the speedometer and the settings panel */
+	right: 22px;
+	bottom: 22px;
+	border-radius: 50%;
+	border: 3px solid rgba(255, 255, 255, 0.85);
+	background: #10141a;
+	box-shadow: 0 3px 14px rgba(0, 0, 0, 0.5);
+	overflow: hidden;
+	pointer-events: none;
+	user-select: none;
+}
+
+#minimap-canvas {
+	display: block;
+}

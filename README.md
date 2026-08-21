@@ -35,6 +35,7 @@ Mostly a playground for exploring how conventional third person gameplay mechani
 	* Cars
 	* Airplanes
 	* Helicopters
+	* All three within reach in the Free roam (everything) scenario
 * Audio
 	* Positional engine sound, pitched by revs
 	* Streamed music track, muted with M
@@ -83,9 +84,12 @@ character and whichever vehicle it drives, and the server forwards those updates
 untouched. A modified client can therefore claim to be anywhere it likes, which
 is fine for playing with friends and not fine for anything competitive.
 
+**Free roam (everything)** is the one to use with friends. It starts everyone at
+the airfield with a car, a helicopter and an aeroplane all within about thirty
+metres, so nobody has to walk across the map to fly.
+
 Note that the race and stunt scenarios were built for one player, so they have a
-single spawn point and a party will share a car. Free roam is the one to use with
-friends: there are cars parked all over it and everyone can take their own.
+single spawn point and a party will share a car.
 
 ## Usage
 

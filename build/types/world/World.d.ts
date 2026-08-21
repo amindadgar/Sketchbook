@@ -15,6 +15,7 @@ import { Scenario } from './Scenario';
 import { Sky } from './Sky';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartySession } from '../party/PartySession';
+import { Minimap } from '../core/Minimap';
 export declare class World {
     renderer: THREE.WebGLRenderer;
     camera: THREE.PerspectiveCamera;
@@ -51,7 +52,20 @@ export declare class World {
     localPlayer: PlayerIdentity;
     localCharacter: Character;
     party: PartySession;
+    minimap: Minimap;
     lastScenarioID: string;
+    /**
+     * The playable area, used both to respawn anything that leaves it and to
+     * frame the minimap. Measured from this world file.
+     */
+    worldBounds: {
+        minX: number;
+        maxX: number;
+        minZ: number;
+        maxZ: number;
+        seaLevel: number;
+        floor: number;
+    };
     private speedometerFill;
     private boundResumeAudio;
     constructor(worldScenePath?: any);
@@ -99,6 +113,22 @@ export declare class World {
     remove(worldEntity: IWorldEntity): void;
     unregisterUpdatable(registree: IUpdatable): void;
     loadScene(loadingManager: LoadingManager, gltf: any): void;
+    /**
+     * Adds a scenario with a car, a helicopter and an aeroplane all within reach.
+     *
+     * The world file has no such spot. Free roam (default) starts you with cars
+     * 4m away but the nearest helicopter 128m and aeroplane 141m off, and Free
+     * roam (aviation) is the mirror image, aircraft on the doorstep and the
+     * nearest car 149m away.
+     *
+     * The air vehicles scenario spawns always, so the aircraft are already
+     * parked at the airfield. Starting the player there and parking one extra
+     * car beside them is all it takes to put all three types within seconds of
+     * each other, without inventing positions that might land in scenery.
+     */
+    private createMergedScenario;
+    /** Parks a car on the line from the player to the aircraft, where the apron is clear. */
+    private createCarSpawnBetween;
     launchScenario(scenarioID: string, loadingManager?: LoadingManager): void;
     restartScenario(): void;
     clearEntities(): void;

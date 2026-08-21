@@ -30,11 +30,14 @@ import { BoxCollider } from '../physics/colliders/BoxCollider';
 import { TrimeshCollider } from '../physics/colliders/TrimeshCollider';
 import { Vehicle } from '../vehicles/Vehicle';
 import { Scenario } from './Scenario';
+import { CharacterSpawnPoint } from './CharacterSpawnPoint';
+import { VehicleSpawnPoint } from './VehicleSpawnPoint';
 import { Sky } from './Sky';
 import { Ocean } from './Ocean';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartyMenu } from '../party/PartyMenu';
 import { PartySession } from '../party/PartySession';
+import { Minimap } from '../core/Minimap';
 
 export class World
 {
@@ -73,7 +76,21 @@ export class World
 	public localPlayer: PlayerIdentity = PlayerIdentity.load();
 	public localCharacter: Character;
 	public party: PartySession;
+	public minimap: Minimap;
 	public lastScenarioID: string;
+
+	/**
+	 * The playable area, used both to respawn anything that leaves it and to
+	 * frame the minimap. Measured from this world file.
+	 */
+	public worldBounds = {
+		minX: -211.882,
+		maxX: 211.882,
+		minZ: -169.098,
+		maxZ: 153.232,
+		seaLevel: 14.989,
+		floor: 0.107
+	};
 
 
 	private speedometerFill: number = 0;
@@ -180,6 +197,10 @@ export class World
 				this.update(1, 1);
 				this.setTimeScale(1);
 	
+				// Snapshot the world from overhead now that everything is in place
+				this.minimap = new Minimap(this);
+				this.minimap.capture();
+	
 				PartyMenu.show({
 					identity: this.localPlayer,
 					onPlay: () =>
@@ -258,10 +279,12 @@ export class World
 
 	public isOutOfBounds(position: CANNON.Vec3): boolean
 	{
-		let inside = position.x > -211.882 && position.x < 211.882 &&
-					position.z > -169.098 && position.z < 153.232 &&
-					position.y > 0.107;
-		let belowSeaLevel = position.y < 14.989;
+		let bounds = this.worldBounds;
+
+		let inside = position.x > bounds.minX && position.x < bounds.maxX &&
+					position.z > bounds.minZ && position.z < bounds.maxZ &&
+					position.y > bounds.floor;
+		let belowSeaLevel = position.y < bounds.seaLevel;
 
 		return !inside && belowSeaLevel;
 	}
@@ -517,6 +540,8 @@ export class World
 
 		this.graphicsWorld.add(gltf.scene);
 
+		this.createMergedScenario(gltf);
+
 		// Launch default scenario
 		let defaultScenarioID: string;
 		for (const scenario of this.scenarios) {
@@ -528,6 +553,103 @@ export class World
 		if (defaultScenarioID !== undefined) this.launchScenario(defaultScenarioID, loadingManager);
 	}
 	
+	/**
+	 * Adds a scenario with a car, a helicopter and an aeroplane all within reach.
+	 *
+	 * The world file has no such spot. Free roam (default) starts you with cars
+	 * 4m away but the nearest helicopter 128m and aeroplane 141m off, and Free
+	 * roam (aviation) is the mirror image, aircraft on the doorstep and the
+	 * nearest car 149m away.
+	 *
+	 * The air vehicles scenario spawns always, so the aircraft are already
+	 * parked at the airfield. Starting the player there and parking one extra
+	 * car beside them is all it takes to put all three types within seconds of
+	 * each other, without inventing positions that might land in scenery.
+	 */
+	private createMergedScenario(gltf: any): void
+	{
+		// Spawn points are read in world space, and nothing has rendered yet
+		gltf.scene.updateMatrixWorld(true);
+
+		let playerSpawns: THREE.Object3D[] = [];
+		let airplaneSpawns: THREE.Object3D[] = [];
+
+		gltf.scene.traverse((child: THREE.Object3D) =>
+		{
+			if (child.userData !== undefined && child.userData.data === 'spawn')
+			{
+				if (child.userData.type === 'player') playerSpawns.push(child);
+				else if (child.userData.type === 'airplane') airplaneSpawns.push(child);
+			}
+		});
+
+		if (playerSpawns.length === 0 || airplaneSpawns.length === 0)
+		{
+			console.warn('Couldn\'t build the merged scenario, the world has no player or airplane spawns.');
+			return;
+		}
+
+		// Whichever player start is nearest an aeroplane is the airfield. That's
+		// the open end of the map, with room to park a car in the clear.
+		let start: THREE.Object3D;
+		let aircraft: THREE.Object3D;
+		let shortest = Number.POSITIVE_INFINITY;
+
+		playerSpawns.forEach((player) =>
+		{
+			airplaneSpawns.forEach((airplane) =>
+			{
+				let distance = player.getWorldPosition(new THREE.Vector3())
+					.distanceTo(airplane.getWorldPosition(new THREE.Vector3()));
+
+				if (distance < shortest)
+				{
+					shortest = distance;
+					start = player;
+					aircraft = airplane;
+				}
+			});
+		});
+
+		let root = new THREE.Object3D();
+		root.name = 'everything';
+		root.userData = {
+			data: 'scenario',
+			name: 'Free roam (everything)',
+			desc_title: 'Free roam (everything)',
+			desc_content: 'A car, a helicopter and an aeroplane, all parked within a few seconds of each other.',
+			camera_angle: 0
+		};
+
+		let scenario = new Scenario(root, this);
+		scenario.addSpawnPoint(new CharacterSpawnPoint(start));
+		scenario.addSpawnPoint(this.createCarSpawnBetween(start, aircraft));
+
+		this.scenarios.push(scenario);
+	}
+
+	/** Parks a car on the line from the player to the aircraft, where the apron is clear. */
+	private createCarSpawnBetween(start: THREE.Object3D, aircraft: THREE.Object3D): VehicleSpawnPoint
+	{
+		let startPosition = start.getWorldPosition(new THREE.Vector3());
+		let towardAircraft = aircraft.getWorldPosition(new THREE.Vector3())
+			.sub(startPosition)
+			.setY(0)
+			.normalize();
+
+		let object = new THREE.Object3D();
+		// Named rather than left blank: the party layer matches vehicles across
+		// clients by their spawn point's name, so it has to be stable
+		object.name = 'merged_car_spawn';
+		object.position.copy(startPosition.add(towardAircraft.multiplyScalar(8)));
+		start.getWorldQuaternion(object.quaternion);
+
+		let spawnPoint = new VehicleSpawnPoint(object);
+		spawnPoint.type = 'car';
+
+		return spawnPoint;
+	}
+
 	public launchScenario(scenarioID: string, loadingManager?: LoadingManager): void
 	{
 		this.lastScenarioID = scenarioID;
@@ -680,6 +802,9 @@ export class World
 				</div>
 				<div class="left-panel">
 					<div id="controls" class="panel-segment flex-bottom"></div>
+				</div>
+				<div id="minimap">
+					<canvas id="minimap-canvas"></canvas>
 				</div>
 				<div id="party-hud">
 					<div id="party-code">PARTY <span id="party-code-value"></span></div>
