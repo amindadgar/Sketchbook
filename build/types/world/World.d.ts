@@ -99,6 +99,22 @@ export declare class World {
     remove(worldEntity: IWorldEntity): void;
     unregisterUpdatable(registree: IUpdatable): void;
     loadScene(loadingManager: LoadingManager, gltf: any): void;
+    /**
+     * Adds a scenario with a car, a helicopter and an aeroplane all within reach.
+     *
+     * The world file has no such spot. Free roam (default) starts you with cars
+     * 4m away but the nearest helicopter 128m and aeroplane 141m off, and Free
+     * roam (aviation) is the mirror image, aircraft on the doorstep and the
+     * nearest car 149m away.
+     *
+     * The air vehicles scenario spawns always, so the aircraft are already
+     * parked at the airfield. Starting the player there and parking one extra
+     * car beside them is all it takes to put all three types within seconds of
+     * each other, without inventing positions that might land in scenery.
+     */
+    private createMergedScenario;
+    /** Parks a car on the line from the player to the aircraft, where the apron is clear. */
+    private createCarSpawnBetween;
     launchScenario(scenarioID: string, loadingManager?: LoadingManager): void;
     restartScenario(): void;
     clearEntities(): void;

@@ -94,6 +94,12 @@ export class Scenario
 		});
 	}
 
+	/** Lets a scenario be assembled in code rather than read out of the world file. */
+	public addSpawnPoint(spawnPoint: ISpawnPoint): void
+	{
+		this.spawnPoints.push(spawnPoint);
+	}
+
 	public createLaunchLink(): void
 	{
 		this.world.params[this.name] = () =>
