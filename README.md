@@ -59,10 +59,24 @@ Start the game, pick a name and a colour, then either **Create party** to get a
 four character code, or type a friend's code and **Join**. Everyone in a party
 shares a scenario, so whoever launches one takes the rest along.
 
-The **Party server** field in the menu is remembered between sessions. It
-defaults to `ws://localhost:9000`, which is all you need on a LAN. To play with
-people elsewhere, deploy `server/index.js` anywhere that runs Node, and give
-them the resulting `wss://` address.
+The **Party server** field in the menu is remembered between sessions and
+defaults to `ws://localhost:9000`, which is right when you host and play on the
+same machine.
+
+To play with people on your network, bind the dev server to every interface
+rather than just localhost:
+
+```bash
+pnpm dev --host 0.0.0.0   # game
+pnpm server               # relay
+```
+
+Find your address with `ipconfig getifaddr en0` on macOS or `hostname -I` on
+Linux. Everyone else opens `http://<your-address>:8080` and sets the party
+server to `ws://<your-address>:9000`.
+
+To play with people further afield, deploy `server/index.js` anywhere that runs
+Node and give them the resulting `wss://` address.
 
 The relay only tracks who is in which room. Every client simulates its own
 character and whichever vehicle it drives, and the server forwards those updates
