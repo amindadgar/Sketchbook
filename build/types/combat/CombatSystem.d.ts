@@ -22,7 +22,17 @@ export declare class CombatSystem implements IUpdatable {
     private triggerWasDown;
     private deathTimer;
     private respawnPoints;
+    private gunBuffers;
+    private audioPool;
+    private audioCursor;
     constructor(world: World);
+    /**
+     * One buffer per weapon, played through a small pool of positional nodes.
+     * The automatic fires twelve times a second, and building and discarding a
+     * dozen audio nodes a second to keep up with it would be silly.
+     */
+    private loadGunAudio;
+    private playGunSound;
     setRespawnPoints(points: THREE.Vector3[]): void;
     /** One weapon per anchor, cycling the types so no corner is all shotguns. */
     placePickups(anchors: THREE.Vector3[]): void;
@@ -36,6 +46,9 @@ export declare class CombatSystem implements IUpdatable {
      * because everyone but the local player has their physics switched off: their
      * capsule isn't in the physics world at all, so a ray could never find it.
      */
+    /** Nothing left to load means the gun is spent, so it's dropped. */
+    private beginReload;
+    private finishReload;
     private trace;
     /**
      * Ray against an upright cylinder standing where the character does.

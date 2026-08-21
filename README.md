@@ -100,15 +100,19 @@ single spawn point and a party will share a car.
 ## Combat
 
 Weapons sit around the map turning inside a glowing column. Walk into one to
-pick it up; the column goes dark and comes back twenty seconds later. Fire with
-the left mouse button. Guns are stowed while driving.
+pick it up; the column goes dark and comes back twenty seconds later. Guns are
+stowed while driving.
 
-| Weapon | Damage | Rate | Magazine | Notes |
-| --- | --- | --- | --- | --- |
-| Handgun | 25 | semi | 12 | four shots to a kill |
-| Automatic | 13 | 12/s | 30 | wide spread, short range |
-| Rifle | 55 | slow | 8 | near zero spread, reaches 250m |
-| Shotgun | 12 x 8 | slow | 6 | a kill up close, useless at range |
+| Weapon | Damage | Rate | Mag | Carried | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Handgun | 25 | semi | 12 | 36 | four shots to a kill |
+| Automatic | 13 | 12/s | 30 | 90 | wide spread, short range |
+| Rifle | 55 | slow | 8 | 24 | near zero spread, reaches 250m |
+| Shotgun | 12 x 8 | slow | 6 | 18 | a kill up close, useless at range |
+
+Ammunition is finite. Reloads draw on what you're carrying, and once that and
+the magazine are both empty the gun is dropped and you're looking for another
+column. Fire with the left mouse button.
 
 Everyone starts on 100 health and respawns three seconds after dying. A kill
 scores a point on the scoreboard at the top right.

@@ -9,6 +9,8 @@ export interface WeaponSpec {
     /** Held trigger keeps firing, otherwise one shot per click. */
     automatic: boolean;
     magazine: number;
+    /** Spare rounds carried beyond the loaded magazine. Runs out for good. */
+    reserve: number;
     reloadTime: number;
     /** Cone half angle in radians. */
     spread: number;

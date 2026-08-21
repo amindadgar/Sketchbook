@@ -90,6 +90,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	public health: number = Character.MAX_HEALTH;
 	public weapon: WeaponSpec;
 	public ammo: number = 0;
+	public reserve: number = 0;
 	/** Set for anyone in a party, so hits can be addressed to their client. */
 	public networkId: number;
 
@@ -333,6 +334,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 		this.weapon = spec;
 		this.ammo = spec.magazine;
+		this.reserve = spec.reserve;
 
 		this.weaponModel = buildWeaponModel(spec);
 		this.weaponModel.position.set(0.24, 0.1, 0.2);
@@ -349,6 +351,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 		this.weapon = undefined;
 		this.ammo = 0;
+		this.reserve = 0;
 	}
 
 	/** Where shots leave the gun, so flashes and tracers start at the barrel. */

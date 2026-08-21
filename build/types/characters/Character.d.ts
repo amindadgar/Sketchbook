@@ -64,6 +64,7 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     health: number;
     weapon: WeaponSpec;
     ammo: number;
+    reserve: number;
     /** Set for anyone in a party, so hits can be addressed to their client. */
     networkId: number;
     playerName: string;

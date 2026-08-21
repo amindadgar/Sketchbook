@@ -17,7 +17,7 @@ export class UIManager
 	}
 
 	/** @param health 0 to 1. Weapon name undefined means empty handed. */
-	public static setCombatHud(health: number, weapon: string, ammo: number, magazine: number): void
+	public static setCombatHud(health: number, weapon: string, ammo: number, reserve: number): void
 	{
 		document.getElementById('health-fill').style.width = (health * 100).toFixed(1) + '%';
 
@@ -30,7 +30,7 @@ export class UIManager
 
 		readout.style.visibility = 'visible';
 		document.getElementById('weapon-name').textContent = weapon;
-		document.getElementById('weapon-ammo').textContent = ammo + ' / ' + magazine;
+		document.getElementById('weapon-ammo').textContent = ammo + ' / ' + reserve;
 	}
 
 	/** Names come off the network, so they're written as text, never as HTML. */

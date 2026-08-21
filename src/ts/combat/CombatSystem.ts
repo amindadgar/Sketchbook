@@ -39,11 +39,65 @@ export class CombatSystem implements IUpdatable
 	private triggerWasDown: boolean = false;
 	private deathTimer: number = 0;
 	private respawnPoints: THREE.Vector3[] = [];
+	private gunBuffers: { [id: string]: AudioBuffer } = {};
+	private audioPool: THREE.PositionalAudio[] = [];
+	private audioCursor: number = 0;
 
 	constructor(world: World)
 	{
 		this.world = world;
 		this.world.registerUpdatable(this);
+		this.loadGunAudio();
+	}
+
+	/**
+	 * One buffer per weapon, played through a small pool of positional nodes.
+	 * The automatic fires twelve times a second, and building and discarding a
+	 * dozen audio nodes a second to keep up with it would be silly.
+	 */
+	private loadGunAudio(): void
+	{
+		let loader = new THREE.AudioLoader();
+
+		WEAPONS.forEach((weapon) =>
+		{
+			loader.load('build/assets/gun_' + weapon.id + '.wav',
+				(buffer: AudioBuffer) =>
+				{
+					this.gunBuffers[weapon.id] = buffer;
+				},
+				undefined,
+				() =>
+				{
+					console.warn('Couldn\'t load the gun sound for ' + weapon.id + '.');
+				});
+		});
+
+		for (let i = 0; i < 8; i++)
+		{
+			let sound = new THREE.PositionalAudio(this.world.audioListener);
+			sound.setRefDistance(14);
+			sound.setRolloffFactor(1.4);
+			this.world.graphicsWorld.add(sound);
+			this.audioPool.push(sound);
+		}
+	}
+
+	private playGunSound(weaponId: string, position: THREE.Vector3): void
+	{
+		let buffer = this.gunBuffers[weaponId];
+		if (buffer === undefined || this.audioPool.length === 0) return;
+
+		let sound = this.audioPool[this.audioCursor];
+		this.audioCursor = (this.audioCursor + 1) % this.audioPool.length;
+
+		if (sound.isPlaying) sound.stop();
+
+		sound.position.copy(position);
+		sound.setBuffer(buffer);
+		sound.play();
+		// The panner only follows the matrix while playing, so move it after
+		sound.updateMatrixWorld(true);
 	}
 
 	public setRespawnPoints(points: THREE.Vector3[]): void
@@ -85,7 +139,7 @@ export class CombatSystem implements IUpdatable
 			character.health / Character.MAX_HEALTH,
 			character.weapon !== undefined ? character.weapon.name : undefined,
 			character.ammo,
-			character.weapon !== undefined ? character.weapon.magazine : 0
+			character.reserve
 		);
 	}
 
@@ -98,10 +152,7 @@ export class CombatSystem implements IUpdatable
 		if (this.reloadTimer > 0)
 		{
 			this.reloadTimer -= timeStep;
-			if (this.reloadTimer <= 0 && character.weapon !== undefined)
-			{
-				character.ammo = character.weapon.magazine;
-			}
+			if (this.reloadTimer <= 0) this.finishReload(character);
 		}
 
 		let weapon = character.weapon;
@@ -115,7 +166,7 @@ export class CombatSystem implements IUpdatable
 			if (weapon.automatic || !this.triggerWasDown)
 			{
 				if (character.ammo > 0) this.fire(character, weapon);
-				else this.reloadTimer = weapon.reloadTime;
+				else this.beginReload(character, weapon);
 			}
 		}
 
@@ -147,8 +198,9 @@ export class CombatSystem implements IUpdatable
 		}
 
 		this.addMuzzleFlash(muzzle);
+		this.playGunSound(weapon.id, muzzle);
 
-		if (character.ammo <= 0) this.reloadTimer = weapon.reloadTime;
+		if (character.ammo <= 0) this.beginReload(character, weapon);
 
 		this.world.party.publishShot(muzzle, aim, weapon.id);
 	}
@@ -160,6 +212,31 @@ export class CombatSystem implements IUpdatable
 	 * because everyone but the local player has their physics switched off: their
 	 * capsule isn't in the physics world at all, so a ray could never find it.
 	 */
+	/** Nothing left to load means the gun is spent, so it's dropped. */
+	private beginReload(character: Character, weapon: WeaponSpec): void
+	{
+		if (character.reserve <= 0)
+		{
+			character.unequipWeapon();
+			return;
+		}
+
+		this.reloadTimer = weapon.reloadTime;
+	}
+
+	private finishReload(character: Character): void
+	{
+		if (character.weapon === undefined) return;
+
+		let wanted = character.weapon.magazine - character.ammo;
+		let taken = Math.min(wanted, character.reserve);
+
+		character.ammo += taken;
+		character.reserve -= taken;
+
+		if (character.ammo <= 0) character.unequipWeapon();
+	}
+
 	private trace(origin: THREE.Vector3, direction: THREE.Vector3, range: number, shooter?: Character):
 		{ point: THREE.Vector3, character: Character }
 	{
@@ -327,6 +404,7 @@ export class CombatSystem implements IUpdatable
 		let hit = this.trace(from, direction, weapon.range);
 		this.addMuzzleFlash(from);
 		this.addTracer(from, hit.point, weapon.color);
+		this.playGunSound(weaponId, from);
 	}
 
 	private addMuzzleFlash(position: THREE.Vector3): void
