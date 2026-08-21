@@ -1,3 +1,5 @@
+import Swal from 'sweetalert2';
+
 import { World } from '../world/World';
 import { Vehicle } from '../vehicles/Vehicle';
 import { IUpdatable } from '../interfaces/IUpdatable';
@@ -24,6 +26,9 @@ export class PartySession implements IUpdatable
 	private players: { [id: number]: RemotePlayer } = {};
 	private sendTimer: number = 0;
 	private applyingRemoteScenario: boolean = false;
+	private pending: { resolve: () => void, reject: (error: Error) => void };
+	private pendingTimer: number;
+	private notice: string;
 
 	constructor(world: World)
 	{
@@ -41,6 +46,8 @@ export class PartySession implements IUpdatable
 			{
 				this.applyScenario(scenario);
 			}
+
+			this.settle();
 		};
 
 		this.client.onPlayerJoin = (info) =>
@@ -83,9 +90,26 @@ export class PartySession implements IUpdatable
 			this.applyScenario(id);
 		};
 
+		this.client.onError = (message) =>
+		{
+			// Before the room is confirmed this is a refusal, after it it's a kick
+			if (this.pending !== undefined) this.settle(new Error(message));
+			else this.notice = message;
+		};
+
 		this.client.onDisconnect = () =>
 		{
-			this.leave('Lost the connection to the party server.');
+			let reason = this.notice !== undefined ? this.notice : 'The connection to the party server dropped.';
+			this.notice = undefined;
+
+			this.leave();
+
+			Swal.fire({
+				icon: 'info',
+				title: 'Party ended',
+				text: reason,
+				buttonsStyling: false
+			});
 		};
 	}
 
@@ -94,7 +118,8 @@ export class PartySession implements IUpdatable
 		return this.client.connect(url).then(() =>
 		{
 			NetworkClient.saveUrl(url);
-			this.client.createRoom(identity.name, identity.color, this.world.lastScenarioID);
+			return this.awaitRoom(() =>
+				this.client.createRoom(identity.name, identity.color, this.world.lastScenarioID));
 		});
 	}
 
@@ -103,11 +128,50 @@ export class PartySession implements IUpdatable
 		return this.client.connect(url).then(() =>
 		{
 			NetworkClient.saveUrl(url);
-			this.client.joinRoom(code, identity.name, identity.color);
+			return this.awaitRoom(() => this.client.joinRoom(code, identity.name, identity.color));
 		});
 	}
 
-	public leave(reason?: string): void
+	/**
+	 * Settles once the server confirms the room rather than when the socket opens.
+	 * A wrong code used to close the menu and start the game as though it had
+	 * worked, with the refusal arriving after there was anywhere left to show it.
+	 */
+	private awaitRoom(request: () => void): Promise<void>
+	{
+		return new Promise<void>((resolve, reject) =>
+		{
+			this.pending = { resolve: resolve, reject: reject };
+			this.pendingTimer = window.setTimeout(() =>
+			{
+				this.settle(new Error('The party server didn\'t answer.'));
+			}, 8000);
+
+			request();
+		});
+	}
+
+	private settle(error?: Error): void
+	{
+		if (this.pending === undefined) return;
+
+		window.clearTimeout(this.pendingTimer);
+
+		let pending = this.pending;
+		this.pending = undefined;
+
+		if (error !== undefined)
+		{
+			this.client.disconnect();
+			pending.reject(error);
+		}
+		else
+		{
+			pending.resolve();
+		}
+	}
+
+	public leave(): void
 	{
 		if (!this.active && !this.client.connected) return;
 
@@ -121,8 +185,6 @@ export class PartySession implements IUpdatable
 		this.players = {};
 
 		this.refreshHud();
-
-		if (reason !== undefined) console.warn(reason);
 	}
 
 	/** Tells the party the local player's name or colour changed. */

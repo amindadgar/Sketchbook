@@ -19,12 +19,21 @@ const WebSocket = require('ws');
 const PORT = process.env.PORT || 9000;
 const MAX_PLAYERS_PER_ROOM = 8;
 const MAX_MESSAGE_BYTES = 4096;
+// Closing a browser closes the socket, and that path is immediate. These two
+// cover the cases where it doesn't: a sleeping laptop or dropped wifi can leave
+// a half open socket the OS never reports, and a frozen or backgrounded tab
+// keeps its socket alive while sending nothing at all. Without them either one
+// leaves a player standing in everyone else's world forever.
+const HEARTBEAT_INTERVAL = Number(process.env.HEARTBEAT_MS) || 30 * 1000;
+const IDLE_TIMEOUT = Number(process.env.IDLE_TIMEOUT_MS) || 5 * 60 * 1000;
 // No I/O/0/1, they get misread when someone reads a code out loud
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 
 /** @type {Map<string, {code: string, players: Set<object>, scenario: string}>} */
 const rooms = new Map();
+/** Every live connection, room or no room, so the sweep can see all of them. */
+const connections = new Set();
 let nextPlayerId = 1;
 
 function makeRoomCode()
@@ -131,10 +140,26 @@ const wss = new WebSocket.Server({ server, maxPayload: MAX_MESSAGE_BYTES });
 
 wss.on('connection', (ws) =>
 {
-	const player = { id: nextPlayerId++, ws, room: null, name: 'Player', color: '#cccccc' };
+	const player = {
+		id: nextPlayerId++,
+		ws,
+		room: null,
+		name: 'Player',
+		color: '#cccccc',
+		isAlive: true,
+		lastActivity: Date.now()
+	};
+	connections.add(player);
+
+	ws.on('pong', () =>
+	{
+		player.isAlive = true;
+	});
 
 	ws.on('message', (raw) =>
 	{
+		player.lastActivity = Date.now();
+
 		let msg;
 		try
 		{
@@ -226,13 +251,61 @@ wss.on('connection', (ws) =>
 
 	ws.on('close', () =>
 	{
+		connections.delete(player);
 		leaveRoom(player);
 	});
 
 	ws.on('error', () =>
 	{
+		connections.delete(player);
 		leaveRoom(player);
 	});
+});
+
+function drop(player, reason)
+{
+	console.log('dropping player %d (%s): %s', player.id, player.name, reason);
+
+	if (reason === 'idle')
+	{
+		// The socket still works, so they get told why before it goes
+		send(player, { t: 'error', message: 'Dropped from the party after 5 minutes without activity.' });
+		player.ws.close();
+	}
+	else
+	{
+		// Nothing is listening on the other end, so don't wait for a handshake
+		player.ws.terminate();
+	}
+}
+
+const sweep = setInterval(() =>
+{
+	const now = Date.now();
+
+	for (const player of connections)
+	{
+		// Never answered the last ping, so the far end is gone
+		if (player.isAlive === false)
+		{
+			drop(player, 'unresponsive');
+			continue;
+		}
+
+		if (now - player.lastActivity > IDLE_TIMEOUT)
+		{
+			drop(player, 'idle');
+			continue;
+		}
+
+		player.isAlive = false;
+		player.ws.ping();
+	}
+}, HEARTBEAT_INTERVAL);
+
+wss.on('close', () =>
+{
+	clearInterval(sweep);
 });
 
 server.listen(PORT, () =>

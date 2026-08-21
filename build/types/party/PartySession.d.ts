@@ -15,10 +15,20 @@ export declare class PartySession implements IUpdatable {
     private players;
     private sendTimer;
     private applyingRemoteScenario;
+    private pending;
+    private pendingTimer;
+    private notice;
     constructor(world: World);
     host(url: string, identity: PlayerIdentity): Promise<void>;
     join(url: string, code: string, identity: PlayerIdentity): Promise<void>;
-    leave(reason?: string): void;
+    /**
+     * Settles once the server confirms the room rather than when the socket opens.
+     * A wrong code used to close the menu and start the game as though it had
+     * worked, with the refusal arriving after there was anywhere left to show it.
+     */
+    private awaitRoom;
+    private settle;
+    leave(): void;
     /** Tells the party the local player's name or colour changed. */
     publishIdentity(identity: PlayerIdentity): void;
     /**
