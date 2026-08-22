@@ -47,6 +47,24 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	private enginePitch: number = 1;
 	private engineVolume: number = 0;
 
+	/**
+	 * Condition, 100 down to 0. Nothing about the handling depends on it: it
+	 * decides how hard the wreck smokes, which is the whole point of it. A
+	 * number the player can't see quietly throttling their engine would just
+	 * feel like the car had gone wrong.
+	 */
+	public integrity: number = 100;
+	/** Slower than this along the contact normal and it's a nudge, not a crash. */
+	private static readonly IMPACT_FLOOR: number = 6;
+	/** Health lost per metre a second over the floor. */
+	private static readonly IMPACT_DAMAGE: number = 3.2;
+	/** Condition lost per metre a second over the floor. */
+	private static readonly IMPACT_WEAR: number = 5;
+	private static readonly SMOKE_BELOW: number = 45;
+	private impactCooldown: number = 0;
+	private smokeTimer: number = 0;
+	private boundOnCollide: (event: any) => void;
+
 	constructor(gltf: any, handlingSetup?: any)
 	{
 		super();
@@ -113,6 +131,9 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		this.seats.forEach((seat: VehicleSeat) => {
 			seat.update(timeStep);
 		});
+
+		if (this.impactCooldown > 0) this.impactCooldown -= timeStep;
+		this.updateSmoke(timeStep);
 
 		for (let i = 0; i < this.rayCastVehicle.wheelInfos.length; i++)
 		{
@@ -317,6 +338,67 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		});
 	}
 
+	/**
+	 * Cannon reports a collision once, on the frame the two bodies first touch,
+	 * to both of them. A crash is still several of those as the car tumbles, so
+	 * there's a short cooldown to stop one accident being billed five times.
+	 */
+	private onCollide(event: any): void
+	{
+		if (this.impactCooldown > 0 || event.contact === undefined) return;
+
+		let impact = Math.abs(event.contact.getImpactVelocityAlongNormal());
+		if (impact < Vehicle.IMPACT_FLOOR) return;
+
+		this.impactCooldown = 0.5;
+
+		let over = impact - Vehicle.IMPACT_FLOOR;
+		this.integrity = Math.max(0, this.integrity - over * Vehicle.IMPACT_WEAR);
+
+		// Only the local player's own client decides what a crash did to them,
+		// the same way it already owns everything else about their health
+		if (this.controllingCharacter === undefined) return;
+		if (this.controllingCharacter !== this.world.localCharacter) return;
+
+		this.world.combat.applyCrashDamage(over * Vehicle.IMPACT_DAMAGE);
+	}
+
+	/** A battered vehicle smokes, harder the worse it is, and only while running. */
+	private updateSmoke(timeStep: number): void
+	{
+		if (this.integrity >= Vehicle.SMOKE_BELOW || this.world === undefined) return;
+
+		let hurt = 1 - this.integrity / Vehicle.SMOKE_BELOW;
+
+		this.smokeTimer -= timeStep;
+		if (this.smokeTimer > 0) return;
+		this.smokeTimer = 0.22 - 0.14 * hurt;
+
+		// Off the top of the body rather than its centre, so it rises out of the
+		// bonnet instead of appearing inside the cabin
+		let from = new THREE.Vector3(
+			this.position.x + (Math.random() - 0.5) * 0.5,
+			this.position.y + 0.45,
+			this.position.z + (Math.random() - 0.5) * 0.5);
+
+		this.world.effects.addSmoke(from, 0.6 + hurt * 0.5, 0.45 - hurt * 0.3);
+	}
+
+	/**
+	 * How hard the tyres hold on sideways. Dropping it on the driven pair is
+	 * what turns the handbrake from a full stop into a slide.
+	 */
+	public setFrictionSlip(value: number, driveFilter?: string): void
+	{
+		this.wheels.forEach((wheel) =>
+		{
+			if (driveFilter === undefined || driveFilter === wheel.drive)
+			{
+				this.rayCastVehicle.wheelInfos[wheel.rayCastWheelInfoIndex].frictionSlip = value;
+			}
+		});
+	}
+
 	public setBrake(brakeForce: number, driveFilter?: string): void
 	{
 		this.wheels.forEach((wheel) =>
@@ -346,6 +428,9 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 			// world.physicsWorld.addBody(this.collision);
 			this.rayCastVehicle.addToWorld(world.physicsWorld);
 
+			this.boundOnCollide = (event: any) => this.onCollide(event);
+			(this.collision as any).addEventListener('collide', this.boundOnCollide);
+
 			this.wheels.forEach((wheel) =>
 			{
 				world.graphicsWorld.attach(wheel.wheelObject);
@@ -373,6 +458,12 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 			world.graphicsWorld.remove(this);
 			// world.physicsWorld.remove(this.collision);
 			this.rayCastVehicle.removeFromWorld(world.physicsWorld);
+
+			if (this.boundOnCollide !== undefined)
+			{
+				(this.collision as any).removeEventListener('collide', this.boundOnCollide);
+				this.boundOnCollide = undefined;
+			}
 
 			this.wheels.forEach((wheel) =>
 			{

@@ -33,6 +33,23 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     private static readonly UNPAINTED;
     private enginePitch;
     private engineVolume;
+    /**
+     * Condition, 100 down to 0. Nothing about the handling depends on it: it
+     * decides how hard the wreck smokes, which is the whole point of it. A
+     * number the player can't see quietly throttling their engine would just
+     * feel like the car had gone wrong.
+     */
+    integrity: number;
+    /** Slower than this along the contact normal and it's a nudge, not a crash. */
+    private static readonly IMPACT_FLOOR;
+    /** Health lost per metre a second over the floor. */
+    private static readonly IMPACT_DAMAGE;
+    /** Condition lost per metre a second over the floor. */
+    private static readonly IMPACT_WEAR;
+    private static readonly SMOKE_BELOW;
+    private impactCooldown;
+    private smokeTimer;
+    private boundOnCollide;
     constructor(gltf: any, handlingSetup?: any);
     noDirectionPressed(): boolean;
     update(timeStep: number): void;
@@ -52,6 +69,19 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     setPosition(x: number, y: number, z: number): void;
     setSteeringValue(val: number): void;
     applyEngineForce(force: number): void;
+    /**
+     * Cannon reports a collision once, on the frame the two bodies first touch,
+     * to both of them. A crash is still several of those as the car tumbles, so
+     * there's a short cooldown to stop one accident being billed five times.
+     */
+    private onCollide;
+    /** A battered vehicle smokes, harder the worse it is, and only while running. */
+    private updateSmoke;
+    /**
+     * How hard the tyres hold on sideways. Dropping it on the driven pair is
+     * what turns the handbrake from a full stop into a slide.
+     */
+    setFrictionSlip(value: number, driveFilter?: string): void;
     setBrake(brakeForce: number, driveFilter?: string): void;
     addToWorld(world: World): void;
     removeFromWorld(world: World): void;

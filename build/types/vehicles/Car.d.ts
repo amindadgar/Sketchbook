@@ -17,6 +17,15 @@ export declare class Car extends Vehicle implements IControllable {
     private timeToShift;
     private canTiltForwards;
     private characterWantsToExit;
+    /** What the tyres grip at normally, and what the handbrake drops them to. */
+    private static readonly GRIP;
+    private static readonly HANDBRAKE_GRIP;
+    /**
+     * Downforce as a share of the car's own weight at top speed. Applied down
+     * the body's own up axis rather than the world's, so it presses the car into
+     * the loop ramp on the way round instead of pulling it off.
+     */
+    private static readonly DOWNFORCE;
     constructor(gltf: any);
     noDirectionPressed(): boolean;
     update(timeStep: number): void;

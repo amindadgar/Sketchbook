@@ -18,7 +18,6 @@ export declare class CombatSystem implements IUpdatable {
     private static readonly AIM_SPREAD_FACTOR;
     private world;
     pickups: WeaponPickup[];
-    private effects;
     private cooldown;
     private reloadTimer;
     private triggerWasDown;
@@ -63,6 +62,11 @@ export declare class CombatSystem implements IUpdatable {
     /** Random direction inside a cone, so a spread weapon doesn't fire a line. */
     private static spread;
     private reportHit;
+    /**
+     * Damage from driving into something, rather than from being shot. Nobody
+     * gets the point for it, so there's no attacker to name.
+     */
+    applyCrashDamage(damage: number): void;
     /** A hit arriving from somebody else's client. */
     takeRemoteHit(damage: number, attackerId: number): void;
     private applyDamage;
@@ -72,5 +76,4 @@ export declare class CombatSystem implements IUpdatable {
     showRemoteShot(from: THREE.Vector3, direction: THREE.Vector3, weaponId: string): void;
     private addMuzzleFlash;
     private addTracer;
-    private updateEffects;
 }

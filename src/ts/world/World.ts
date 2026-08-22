@@ -40,6 +40,7 @@ import { PartySession } from '../party/PartySession';
 import { Minimap } from '../core/Minimap';
 import { TouchControls } from '../core/TouchControls';
 import { DeviceProfile } from '../core/DeviceProfile';
+import { Effects } from '../core/Effects';
 import { CombatSystem } from '../combat/CombatSystem';
 
 export class World
@@ -80,6 +81,7 @@ export class World
 	public localCharacter: Character;
 	public party: PartySession;
 	public combat: CombatSystem;
+	public effects: Effects;
 	public minimap: Minimap;
 	public touchControls: TouchControls;
 	public lastScenarioID: string;
@@ -180,6 +182,9 @@ export class World
 
 		// Audio
 		this.setupAudio();
+
+		// Shared by everything that puts something on screen for half a second
+		this.effects = new Effects(this);
 
 		// Multiplayer, idle until a party is actually started
 		this.party = new PartySession(this);

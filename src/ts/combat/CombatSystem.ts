@@ -8,13 +8,6 @@ import { UIManager } from '../core/UIManager';
 import { WEAPONS, WeaponSpec, findWeapon, getFlashTexture } from './Weapons';
 import { WeaponPickup } from './WeaponPickup';
 
-interface Effect
-{
-	object: THREE.Object3D;
-	life: number;
-	total: number;
-}
-
 /**
  * Guns, health and kills.
  *
@@ -34,7 +27,6 @@ export class CombatSystem implements IUpdatable
 
 	private world: World;
 	public pickups: WeaponPickup[] = [];
-	private effects: Effect[] = [];
 
 	private cooldown: number = 0;
 	private reloadTimer: number = 0;
@@ -122,8 +114,6 @@ export class CombatSystem implements IUpdatable
 
 	public update(timeStep: number, unscaledTimeStep: number): void
 	{
-		this.updateEffects(unscaledTimeStep);
-
 		let character = this.world.localCharacter;
 		if (character === undefined) return;
 
@@ -366,6 +356,18 @@ export class CombatSystem implements IUpdatable
 		this.applyDamage(target, damage, undefined);
 	}
 
+	/**
+	 * Damage from driving into something, rather than from being shot. Nobody
+	 * gets the point for it, so there's no attacker to name.
+	 */
+	public applyCrashDamage(damage: number): void
+	{
+		let character = this.world.localCharacter;
+		if (character === undefined || character.health <= 0) return;
+
+		this.applyDamage(character, damage, undefined);
+	}
+
 	/** A hit arriving from somebody else's client. */
 	public takeRemoteHit(damage: number, attackerId: number): void
 	{
@@ -442,13 +444,11 @@ export class CombatSystem implements IUpdatable
 		// Varied per shot, otherwise repeat fire looks like a stuck frame
 		sprite.scale.setScalar(0.28 + Math.random() * 0.16);
 
-		this.world.graphicsWorld.add(sprite);
-		this.effects.push({ object: sprite, life: 0.06, total: 0.06 });
+		this.world.effects.add(sprite, 0.06);
 
 		let light = new THREE.PointLight(0xffaa44, 2.6, 7);
 		light.position.copy(position);
-		this.world.graphicsWorld.add(light);
-		this.effects.push({ object: light, life: 0.06, total: 0.06 });
+		this.world.effects.add(light, 0.06);
 	}
 
 	private addTracer(from: THREE.Vector3, to: THREE.Vector3, color: string): void
@@ -471,34 +471,6 @@ export class CombatSystem implements IUpdatable
 		tracer.position.copy(from);
 		tracer.lookAt(to);
 
-		this.world.graphicsWorld.add(tracer);
-		this.effects.push({ object: tracer, life: 0.07, total: 0.07 });
-	}
-
-	private updateEffects(timeStep: number): void
-	{
-		for (let i = this.effects.length - 1; i >= 0; i--)
-		{
-			let effect = this.effects[i];
-			effect.life -= timeStep;
-
-			if (effect.life <= 0)
-			{
-				this.world.graphicsWorld.remove(effect.object);
-
-				let mesh = effect.object as any;
-				if (mesh.geometry !== undefined) mesh.geometry.dispose();
-				if (mesh.material !== undefined) mesh.material.dispose();
-
-				this.effects.splice(i, 1);
-				continue;
-			}
-
-			let fade = effect.life / effect.total;
-			let object = effect.object as any;
-
-			if (object.isPointLight === true) object.intensity = 2.6 * fade;
-			else if (object.material !== undefined) object.material.opacity = fade;
-		}
+		this.world.effects.add(tracer, 0.07);
 	}
 }

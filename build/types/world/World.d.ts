@@ -17,6 +17,7 @@ import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartySession } from '../party/PartySession';
 import { Minimap } from '../core/Minimap';
 import { TouchControls } from '../core/TouchControls';
+import { Effects } from '../core/Effects';
 import { CombatSystem } from '../combat/CombatSystem';
 export declare class World {
     renderer: THREE.WebGLRenderer;
@@ -55,6 +56,7 @@ export declare class World {
     localCharacter: Character;
     party: PartySession;
     combat: CombatSystem;
+    effects: Effects;
     minimap: Minimap;
     touchControls: TouchControls;
     lastScenarioID: string;

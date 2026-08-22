@@ -38,6 +38,16 @@ export class Car extends Vehicle implements IControllable
 	private canTiltForwards: boolean = false;
 	private characterWantsToExit: boolean = false;
 
+	/** What the tyres grip at normally, and what the handbrake drops them to. */
+	private static readonly GRIP: number = 0.8;
+	private static readonly HANDBRAKE_GRIP: number = 0.28;
+	/**
+	 * Downforce as a share of the car's own weight at top speed. Applied down
+	 * the body's own up axis rather than the world's, so it presses the car into
+	 * the loop ramp on the way round instead of pulling it off.
+	 */
+	private static readonly DOWNFORCE: number = 0.55;
+
 	constructor(gltf: any)
 	{
 		super(gltf, {
@@ -205,6 +215,20 @@ export class Car extends Vehicle implements IControllable
 		// Measure speed
 		this._speed = this.collision.velocity.dot(Utils.cannonVector(forward));
 
+		// Downforce, squared with speed the way real aerodynamic load is, so it's
+		// absent at a crawl and only firms the car up once it's actually moving
+		if (this.rayCastVehicle.numWheelsOnGround > 0)
+		{
+			let load = (this.speed / this.topSpeed) ** 2 * Car.DOWNFORCE;
+			let weight = this.collision.mass * Math.abs(this.world.physicsWorld.gravity.y);
+			let push = Utils.cannonVector(up.clone().multiplyScalar(-load * weight));
+
+			// The point is relative to the centre of mass, and it belongs at the
+			// centre: anywhere else and the load pitches the car instead of
+			// pressing it down
+			this.collision.applyForce(push, new CANNON.Vec3());
+		}
+
 		// Air spin
 		// It takes 2 seconds until you have max spin air control since you leave the ground
 		let airSpinInfluence = THREE.MathUtils.clamp(this.airSpinTimer / 2, 0, 1);
@@ -297,10 +321,15 @@ export class Car extends Vehicle implements IControllable
 		if (this.actions.brake.justPressed)
 		{
 			this.setBrake(brakeForce, 'rwd');
+			// Locking the back wheels is only half a handbrake. The other half is
+			// letting them go sideways, which is the difference between stopping
+			// dead and coming round
+			this.setFrictionSlip(Car.HANDBRAKE_GRIP, 'rwd');
 		}
 		if (this.actions.brake.justReleased)
 		{
 			this.setBrake(0, 'rwd');
+			this.setFrictionSlip(Car.GRIP, 'rwd');
 		}
 		if (this.actions.view.justPressed)
 		{
