@@ -70,6 +70,21 @@ export class UIManager
 		document.getElementById('reticle').style.display = value ? 'block' : 'none';
 	}
 
+	/**
+	 * The four ticks that say a shot landed. Restarted rather than merely shown,
+	 * so a burst reads as several hits instead of one long one.
+	 */
+	public static flashHitMarker(): void
+	{
+		let marker = document.getElementById('hit-marker');
+
+		marker.classList.remove('struck');
+		// Reading a layout property forces the removal to take effect, which is
+		// what lets the animation start again from the beginning
+		void marker.offsetWidth;
+		marker.classList.add('struck');
+	}
+
 	public static toggleSettings(): void
 	{
 		let panel = document.getElementById('dat-gui-container');

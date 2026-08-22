@@ -19,6 +19,8 @@ export interface WeaponSpec
 	range: number;
 	/** Bullets per shot, only the shotgun fires more than one. */
 	pellets: number;
+	/** Degrees the view kicks up per shot, and settles back down from. */
+	recoil: number;
 	color: string;
 }
 
@@ -31,22 +33,22 @@ export const WEAPONS: WeaponSpec[] = [
 	{
 		id: 'handgun', name: 'Handgun', color: '#f5d327',
 		damage: 25, fireInterval: 0.32, automatic: false,
-		magazine: 12, reserve: 36, reloadTime: 1.2, spread: 0.012, range: 90, pellets: 1
+		magazine: 12, reserve: 36, reloadTime: 1.2, spread: 0.012, range: 90, pellets: 1, recoil: 1.2
 	},
 	{
 		id: 'automatic', name: 'Automatic', color: '#35bfd0',
 		damage: 13, fireInterval: 0.085, automatic: true,
-		magazine: 30, reserve: 90, reloadTime: 1.8, spread: 0.035, range: 70, pellets: 1
+		magazine: 30, reserve: 90, reloadTime: 1.8, spread: 0.035, range: 70, pellets: 1, recoil: 0.65
 	},
 	{
 		id: 'rifle', name: 'Rifle', color: '#9b5cf0',
 		damage: 55, fireInterval: 0.95, automatic: false,
-		magazine: 8, reserve: 24, reloadTime: 2.2, spread: 0.002, range: 250, pellets: 1
+		magazine: 8, reserve: 24, reloadTime: 2.2, spread: 0.002, range: 250, pellets: 1, recoil: 2.8
 	},
 	{
 		id: 'shotgun', name: 'Shotgun', color: '#e6394a',
 		damage: 12, fireInterval: 0.85, automatic: false,
-		magazine: 6, reserve: 18, reloadTime: 2.0, spread: 0.085, range: 35, pellets: 8
+		magazine: 6, reserve: 18, reloadTime: 2.0, spread: 0.085, range: 35, pellets: 8, recoil: 3.4
 	},
 ];
 

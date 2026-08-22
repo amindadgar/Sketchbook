@@ -988,6 +988,16 @@ export class World
 						</g>
 					</svg>
 				</div>
+				<div id="hit-marker">
+					<svg viewBox="0 0 100 100">
+						<g stroke="#ffffff" stroke-width="7" stroke-linecap="round">
+							<line x1="26" y1="26" x2="38" y2="38"></line>
+							<line x1="74" y1="26" x2="62" y2="38"></line>
+							<line x1="26" y1="74" x2="38" y2="62"></line>
+							<line x1="74" y1="74" x2="62" y2="62"></line>
+						</g>
+					</svg>
+				</div>
 				<div id="settings-gear" title="Settings">&#9881;</div>
 				<div id="health-badge"><span id="health-heart">&#10084;</span><span id="health-number">100</span></div>
 				<div id="minimap-toggle">MAP</div>

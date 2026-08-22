@@ -37,6 +37,7 @@ export class CombatSystem implements IUpdatable
 	private gunBuffers: { [id: string]: AudioBuffer } = {};
 	private audioPool: THREE.PositionalAudio[] = [];
 	private audioCursor: number = 0;
+	private hitSound: THREE.Audio;
 
 	constructor(world: World)
 	{
@@ -93,6 +94,38 @@ export class CombatSystem implements IUpdatable
 		sound.play();
 		// The panner only follows the matrix while playing, so move it after
 		sound.updateMatrixWorld(true);
+	}
+
+	/**
+	 * The click that says a shot landed. Synthesised rather than shipped: it's
+	 * two hundredths of a second of decaying tone, which is a strange thing to
+	 * make the player download.
+	 */
+	private buildHitSound(): void
+	{
+		let context = this.world.audioListener.context;
+		let length = Math.floor(context.sampleRate * 0.05);
+		let buffer = context.createBuffer(1, length, context.sampleRate);
+		let samples = buffer.getChannelData(0);
+
+		for (let i = 0; i < length; i++)
+		{
+			let t = i / context.sampleRate;
+			samples[i] = Math.sin(2 * Math.PI * 1500 * t) * Math.exp(-t * 90) * 0.5;
+		}
+
+		this.hitSound = new THREE.Audio(this.world.audioListener);
+		this.hitSound.setBuffer(buffer);
+		this.hitSound.setVolume(0.35);
+	}
+
+	private markHit(): void
+	{
+		UIManager.flashHitMarker();
+
+		if (this.hitSound === undefined) this.buildHitSound();
+		if (this.hitSound.isPlaying) this.hitSound.stop();
+		this.hitSound.play();
 	}
 
 	public setRespawnPoints(points: THREE.Vector3[]): void
@@ -194,6 +227,7 @@ export class CombatSystem implements IUpdatable
 		let muzzle = character.getMuzzlePosition();
 
 		let cone = weapon.spread * (this.aiming ? CombatSystem.AIM_SPREAD_FACTOR : 1);
+		let landed = false;
 
 		for (let i = 0; i < weapon.pellets; i++)
 		{
@@ -207,9 +241,15 @@ export class CombatSystem implements IUpdatable
 			if (hit.character !== undefined)
 			{
 				this.reportHit(hit.character, weapon.damage);
+				landed = true;
 			}
 		}
 
+		// One marker for the shot rather than one per pellet, otherwise a shotgun
+		// at close range restarts it eight times and it never animates
+		if (landed) this.markHit();
+
+		this.world.cameraOperator.addRecoil(weapon.recoil);
 		this.addMuzzleFlash(muzzle);
 		this.playGunSound(weapon.id, muzzle);
 
@@ -388,6 +428,9 @@ export class CombatSystem implements IUpdatable
 		if (target === this.world.localCharacter)
 		{
 			this.deathTimer = CombatSystem.RESPAWN_DELAY;
+			// Whatever was held at the moment of death stays held otherwise, and
+			// the body walks off under its own steam
+			target.resetControls();
 			target.unequipWeapon();
 			this.world.party.publishDeath(attackerId);
 		}

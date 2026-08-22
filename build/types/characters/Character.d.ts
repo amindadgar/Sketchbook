@@ -61,6 +61,8 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     occupyingSeat: VehicleSeat;
     vehicleEntryInstance: VehicleEntryInstance;
     static readonly MAX_HEALTH: number;
+    /** How far a body has to come down to lie on the ground rather than over it. */
+    private static readonly FALLEN_DROP;
     health: number;
     weapon: WeaponSpec;
     ammo: number;
@@ -141,6 +143,16 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     takeControl(): void;
     resetControls(): void;
     update(timeStep: number): void;
+    /**
+     * Falls over when killed, and gets up on respawn.
+     *
+     * Not a ragdoll: the skeleton drives every animation in the set and handing
+     * it to the solver means a physics body per bone. Tipping the whole model
+     * over reads as death from any distance a fight happens at, and costs a
+     * rotation. The model container hangs below the tilt group, so laying that
+     * group down also lifts the body, and the offset brings it back to ground.
+     */
+    private updateDeathPose;
     inputReceiverInit(): void;
     displayControls(): void;
     inputReceiverUpdate(timeStep: number): void;

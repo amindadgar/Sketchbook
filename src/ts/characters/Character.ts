@@ -85,6 +85,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	public vehicleEntryInstance: VehicleEntryInstance = null;
 	
 	public static readonly MAX_HEALTH: number = 100;
+	/** How far a body has to come down to lie on the ground rather than over it. */
+	private static readonly FALLEN_DROP: number = 0.49;
 
 	// Combat
 	public health: number = Character.MAX_HEALTH;
@@ -488,6 +490,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 	public handleKeyboardEvent(event: KeyboardEvent, code: string, pressed: boolean): void
 	{
+		if (this.health <= 0) return;
+
 		if (this.controlledObject !== undefined)
 		{
 			this.controlledObject.handleKeyboardEvent(event, code, pressed);
@@ -523,6 +527,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 	public handleMouseButton(event: MouseEvent, code: string, pressed: boolean): void
 	{
+		if (this.health <= 0) return;
+
 		if (this.controlledObject !== undefined)
 		{
 			this.controlledObject.handleMouseButton(event, code, pressed);
@@ -648,7 +654,37 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			this.characterCapsule.body.interpolatedPosition.copy(Utils.cannonVector(newPos));
 		}
 
+		this.updateDeathPose(timeStep);
 		this.updateMatrixWorld();
+	}
+
+	/**
+	 * Falls over when killed, and gets up on respawn.
+	 *
+	 * Not a ragdoll: the skeleton drives every animation in the set and handing
+	 * it to the solver means a physics body per bone. Tipping the whole model
+	 * over reads as death from any distance a fight happens at, and costs a
+	 * rotation. The model container hangs below the tilt group, so laying that
+	 * group down also lifts the body, and the offset brings it back to ground.
+	 */
+	private updateDeathPose(timeStep: number): void
+	{
+		let fallen = this.health <= 0 && this.occupyingSeat === null;
+		if (!fallen && this.tiltContainer.rotation.x === 0) return;
+
+		let ease = 1 - Math.exp(-9 * timeStep);
+
+		this.tiltContainer.rotation.x = THREE.MathUtils.lerp(
+			this.tiltContainer.rotation.x, fallen ? -Math.PI / 2 : 0, ease);
+
+		// Taken off whatever the run cycle just wrote rather than eased on its own:
+		// that runs first and rewrites the height every frame, so anything easing
+		// towards a target here would start again from scratch each time
+		let laid = this.tiltContainer.rotation.x / (-Math.PI / 2);
+		this.tiltContainer.position.y -= laid * Character.FALLEN_DROP;
+
+		// Close enough that the next frame of running would snap it back anyway
+		if (!fallen && Math.abs(this.tiltContainer.rotation.x) < 0.001) this.tiltContainer.rotation.x = 0;
 	}
 
 	public inputReceiverInit(): void

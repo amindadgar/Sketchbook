@@ -27,6 +27,7 @@ export declare class CombatSystem implements IUpdatable {
     private gunBuffers;
     private audioPool;
     private audioCursor;
+    private hitSound;
     constructor(world: World);
     /**
      * One buffer per weapon, played through a small pool of positional nodes.
@@ -35,6 +36,13 @@ export declare class CombatSystem implements IUpdatable {
      */
     private loadGunAudio;
     private playGunSound;
+    /**
+     * The click that says a shot landed. Synthesised rather than shipped: it's
+     * two hundredths of a second of decaying tone, which is a strange thing to
+     * make the player download.
+     */
+    private buildHitSound;
+    private markHit;
     setRespawnPoints(points: THREE.Vector3[]): void;
     /** One weapon per anchor, cycling the types so no corner is all shotguns. */
     placePickups(anchors: THREE.Vector3[]): void;

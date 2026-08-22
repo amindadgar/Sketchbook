@@ -17,6 +17,8 @@ export interface WeaponSpec {
     range: number;
     /** Bullets per shot, only the shotgun fires more than one. */
     pellets: number;
+    /** Degrees the view kicks up per shot, and settles back down from. */
+    recoil: number;
     color: string;
 }
 /**

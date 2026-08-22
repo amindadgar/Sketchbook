@@ -7,6 +7,11 @@ export declare class UIManager {
     /** Names come off the network, so they're written as text, never as HTML. */
     static setScoreboard(names: string[], colors: string[], scores: number[]): void;
     static setReticleVisible(value: boolean): void;
+    /**
+     * The four ticks that say a shot landed. Restarted rather than merely shown,
+     * so a burst reads as several hits instead of one long one.
+     */
+    static flashHitMarker(): void;
     static toggleSettings(): void;
     static setPartyVisible(value: boolean): void;
     /** Names come off the network, so they're written as text nodes, never as HTML. */

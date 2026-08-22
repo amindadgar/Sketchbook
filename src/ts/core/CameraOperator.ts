@@ -59,6 +59,10 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 	private static readonly SWING_RESPONSE: number = 6.3;
 	private manualLookTimer: number = 0;
 
+	/** How much of a shot's kick is still owed back to the player, in degrees. */
+	private recoilOwed: THREE.Vector2 = new THREE.Vector2();
+	private static readonly RECOIL_RECOVERY: number = 7;
+
 	public characterCaller: Character;
 
 	constructor(world: World, camera: THREE.Camera, sensitivityX: number = 1, sensitivityY: number = sensitivityX * 0.8)
@@ -115,6 +119,32 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		this.manualLookTimer = CameraOperator.MANUAL_LOOK_GRACE;
 	}
 
+	/**
+	 * Kicks the view for a shot. Every degree taken is given back over the next
+	 * fraction of a second, so a burst walks the aim up the target and settles
+	 * where it started rather than leaving the player pointing at the sky.
+	 */
+	public addRecoil(degrees: number): void
+	{
+		let sideways = (Math.random() - 0.5) * degrees * 0.6;
+
+		this.phi -= degrees;
+		this.theta -= sideways;
+		this.recoilOwed.set(sideways, degrees);
+	}
+
+	private recoverRecoil(timeStep: number): void
+	{
+		if (this.recoilOwed.lengthSq() < 0.0001) return;
+
+		let back = 1 - Math.exp(-CameraOperator.RECOIL_RECOVERY * timeStep);
+		let step = this.recoilOwed.clone().multiplyScalar(back);
+
+		this.theta += step.x;
+		this.phi += step.y;
+		this.recoilOwed.sub(step);
+	}
+
 	public move(deltaX: number, deltaY: number): void
 	{
 		this.theta -= deltaX * (this.sensitivity.x / 2);
@@ -126,6 +156,7 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 	public update(timeScale: number, unscaledTimeStep: number): void
 	{
 		if (this.manualLookTimer > 0) this.manualLookTimer -= unscaledTimeStep;
+		this.recoverRecoil(unscaledTimeStep);
 
 		if (this.followMode === true)
 		{

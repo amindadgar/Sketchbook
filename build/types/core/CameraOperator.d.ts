@@ -50,6 +50,9 @@ export declare class CameraOperator implements IInputReceiver, IUpdatable {
     /** Matches the old 10% a frame at 60fps, but no longer tied to the frame rate. */
     private static readonly SWING_RESPONSE;
     private manualLookTimer;
+    /** How much of a shot's kick is still owed back to the player, in degrees. */
+    private recoilOwed;
+    private static readonly RECOIL_RECOVERY;
     characterCaller: Character;
     constructor(world: World, camera: THREE.Camera, sensitivityX?: number, sensitivityY?: number);
     setSensitivity(sensitivityX: number, sensitivityY?: number): void;
@@ -61,6 +64,13 @@ export declare class CameraOperator implements IInputReceiver, IUpdatable {
      * move() would leave the desktop toggle with nothing to do.
      */
     noteManualLook(): void;
+    /**
+     * Kicks the view for a shot. Every degree taken is given back over the next
+     * fraction of a second, so a burst walks the aim up the target and settles
+     * where it started rather than leaving the player pointing at the sky.
+     */
+    addRecoil(degrees: number): void;
+    private recoverRecoil;
     move(deltaX: number, deltaY: number): void;
     update(timeScale: number, unscaledTimeStep: number): void;
     /** Narrows the view while aiming, which reads as zoom without moving the camera. */
