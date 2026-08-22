@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import * as catalogue from '../../../shared/weapons.json';
+
 export interface WeaponSpec
 {
 	id: string;
@@ -28,29 +30,12 @@ export interface WeaponSpec
  * Four weapons that want to be used differently: the rifle rewards aim, the
  * shotgun rewards closing the distance, the automatic rewards holding an angle,
  * and the handgun is the one you always have something better than.
+ *
+ * The numbers live in shared/weapons.json because the relay checks incoming
+ * hits against them. A second copy over there would drift from this one and
+ * start turning honest shots away.
  */
-export const WEAPONS: WeaponSpec[] = [
-	{
-		id: 'handgun', name: 'Handgun', color: '#f5d327',
-		damage: 25, fireInterval: 0.32, automatic: false,
-		magazine: 12, reserve: 36, reloadTime: 1.2, spread: 0.012, range: 90, pellets: 1, recoil: 1.2
-	},
-	{
-		id: 'automatic', name: 'Automatic', color: '#35bfd0',
-		damage: 13, fireInterval: 0.085, automatic: true,
-		magazine: 30, reserve: 90, reloadTime: 1.8, spread: 0.035, range: 70, pellets: 1, recoil: 0.65
-	},
-	{
-		id: 'rifle', name: 'Rifle', color: '#9b5cf0',
-		damage: 55, fireInterval: 0.95, automatic: false,
-		magazine: 8, reserve: 24, reloadTime: 2.2, spread: 0.002, range: 250, pellets: 1, recoil: 2.8
-	},
-	{
-		id: 'shotgun', name: 'Shotgun', color: '#e6394a',
-		damage: 12, fireInterval: 0.85, automatic: false,
-		magazine: 6, reserve: 18, reloadTime: 2.0, spread: 0.085, range: 35, pellets: 8, recoil: 3.4
-	},
-];
+export const WEAPONS: WeaponSpec[] = (catalogue as any).weapons;
 
 export function findWeapon(id: string): WeaponSpec
 {

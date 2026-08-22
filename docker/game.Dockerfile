@@ -12,6 +12,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY tsconfig.json webpack.common.js webpack.prod.js ./
 COPY src ./src
+COPY shared ./shared
 RUN pnpm build
 
 

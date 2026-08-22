@@ -15,6 +15,8 @@ RUN npm install --no-package-lock --no-audit --no-fund \
     && rm /tmp/package.json
 
 COPY server ./server
+# The weapon table the relay checks claimed hits against, shared with the game
+COPY shared ./shared
 
 # Nothing here needs root
 USER node

@@ -106,7 +106,10 @@ export class PartySession implements IUpdatable
 			// Relayed to the whole room, but only the player it names is hit
 			if (message.target !== this.client.id) return;
 
-			this.world.combat.takeRemoteHit(message.damage, message.id);
+			let from = Array.isArray(message.p)
+				? new THREE.Vector3(message.p[0], message.p[1], message.p[2]) : undefined;
+
+			this.world.combat.takeRemoteHit(message.damage, message.id, from);
 		};
 
 		this.client.onScore = (id, score) =>
@@ -251,12 +254,23 @@ export class PartySession implements IUpdatable
 		});
 	}
 
-	/** Their client owns their health, so a hit is a request, not a verdict. */
-	public publishHit(targetId: number, damage: number): void
+	/**
+	 * Their client owns their health, so a hit is a request, not a verdict.
+	 * The weapon and the place it was fired from travel with it: the relay uses
+	 * them to check the claim is possible, and the client being shot at uses
+	 * them to check there wasn't a wall in the way.
+	 */
+	public publishHit(targetId: number, damage: number, weaponId: string, from: THREE.Vector3): void
 	{
 		if (!this.active) return;
 
-		this.client.send({ t: 'hit', target: targetId, damage: damage });
+		this.client.send({
+			t: 'hit',
+			target: targetId,
+			damage: damage,
+			w: weaponId,
+			p: PartySession.round3([from.x, from.y, from.z])
+		});
 	}
 
 	public publishDeath(killerId: number): void

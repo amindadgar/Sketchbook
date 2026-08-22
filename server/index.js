@@ -14,6 +14,8 @@
 const http = require('http');
 const db = require('./db');
 const auth = require('./auth');
+// The same table the game builds its weapons from, so the two can't drift
+const WEAPONS = new Map(require('../shared/weapons.json').weapons.map((w) => [w.id, w]));
 // ws 7 exposes the server as WebSocket.Server, ws 8 also has a named export.
 // Going through the class works on both.
 const WebSocket = require('ws');
@@ -31,6 +33,20 @@ const IDLE_TIMEOUT = Number(process.env.IDLE_TIMEOUT_MS) || 5 * 60 * 1000;
 // No I/O/0/1, they get misread when someone reads a code out loud
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
+
+// A shot is still reported by the client that fired it, because only that
+// client knows what it was aiming at. What can be checked from here is checked:
+// that the weapon exists, that it can't do more damage than it has, that the
+// target was within its range, and that nobody is firing faster than any real
+// weapon can. Line of sight can't be: this server has never seen the map. The
+// client being shot at does that part, since it holds both the map and the
+// truth about where it is.
+const RANGE_SLACK = 1.35;
+// The automatic is the fastest honest damage in the game at about 153 a second
+const MAX_DAMAGE_PER_SECOND = 220;
+const DAMAGE_WINDOW_MS = 1000;
+// Long enough to cover the respawn, so one death can't be reported twice
+const DEATH_COOLDOWN_MS = 2500;
 
 /** @type {Map<string, {code: string, players: Set<object>, scenario: string}>} */
 const rooms = new Map();
@@ -92,6 +108,66 @@ function tally(action, userId)
 	if (userId === undefined || !db.available()) return;
 
 	action(userId).catch((error) => console.error('stats:', error.message));
+}
+
+function readPoint(value)
+{
+	if (!Array.isArray(value) || value.length < 3) return null;
+
+	for (let i = 0; i < 3; i++)
+	{
+		if (typeof value[i] !== 'number' || !Number.isFinite(value[i])) return null;
+	}
+
+	return value;
+}
+
+function apart(a, b)
+{
+	const dx = a[0] - b[0];
+	const dy = a[1] - b[1];
+	const dz = a[2] - b[2];
+	return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function findInRoom(room, id)
+{
+	for (const player of room.players)
+	{
+		if (player.id === id) return player;
+	}
+
+	return null;
+}
+
+/** Everything about a claimed hit that can be judged without the map. */
+function hitIsPlausible(player, msg, now)
+{
+	const weapon = WEAPONS.get(msg.w);
+	if (weapon === undefined) return 'unknown weapon';
+
+	if (typeof msg.damage !== 'number' || !(msg.damage > 0)) return 'damage is not a number';
+	if (msg.damage > weapon.damage + 0.001) return 'more damage than a ' + weapon.id + ' does';
+
+	const target = findInRoom(player.room, msg.target);
+	if (target === null || target === player) return 'no such target';
+
+	// Positions come from the movement updates both clients are already sending
+	const from = readPoint(msg.p) || player.position;
+	if (from !== null && target.position !== null)
+	{
+		const reach = weapon.range * RANGE_SLACK;
+		if (apart(from, target.position) > reach) return 'further than a ' + weapon.id + ' reaches';
+	}
+
+	// Sliding window rather than a shot counter, so swapping the named weapon
+	// every message doesn't buy a higher rate
+	player.damageWindow = player.damageWindow.filter((entry) => now - entry.at < DAMAGE_WINDOW_MS);
+	const recent = player.damageWindow.reduce((total, entry) => total + entry.damage, 0);
+	if (recent + msg.damage > MAX_DAMAGE_PER_SECOND) return 'more damage a second than any weapon does';
+
+	player.damageWindow.push({ at: now, damage: msg.damage });
+	return null;
 }
 
 function sanitizeName(name)
@@ -181,7 +257,11 @@ wss.on('connection', (ws) =>
 		color: '#cccccc',
 		score: 0,
 		isAlive: true,
-		lastActivity: Date.now()
+		lastActivity: Date.now(),
+		/** Last position from a movement update, for checking claimed hits. */
+		position: null,
+		damageWindow: [],
+		lastDeath: 0
 	};
 	connections.add(player);
 
@@ -273,9 +353,19 @@ wss.on('connection', (ws) =>
 			}
 
 			case 'state':
+			{
+				if (player.room === null) break;
+
+				const at = readPoint(msg.p);
+				if (at !== null) player.position = at;
+
+				msg.id = player.id;
+				broadcast(player.room, msg, player);
+				break;
+			}
+
 			case 'vehicle':
 			case 'shot':
-			case 'hit':
 			{
 				if (player.room !== null)
 				{
@@ -285,11 +375,36 @@ wss.on('connection', (ws) =>
 				break;
 			}
 
+			case 'hit':
+			{
+				if (player.room === null) break;
+
+				const problem = hitIsPlausible(player, msg, Date.now());
+				if (problem !== null)
+				{
+					console.log('rejected a hit from player %d (%s): %s', player.id, player.name, problem);
+					break;
+				}
+
+				msg.id = player.id;
+				broadcast(player.room, msg, player);
+				break;
+			}
+
 			case 'death':
 			{
 				// The player who died reports it, because their client is the one
 				// that owns their health. The point goes to whoever they name.
 				if (player.room === null) break;
+
+				// One death per respawn, so nobody can hand out points in bulk
+				const now = Date.now();
+				if (now - player.lastDeath < DEATH_COOLDOWN_MS)
+				{
+					console.log('ignored a repeat death from player %d (%s)', player.id, player.name);
+					break;
+				}
+				player.lastDeath = now;
 
 				tally(db.recordDeath, player.userId);
 

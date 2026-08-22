@@ -1,0 +1,177 @@
+import * as THREE from 'three';
+import * as CANNON from 'cannon';
+import { CameraOperator } from '../core/CameraOperator';
+import { Stats } from '../../lib/utils/Stats';
+import { CannonDebugRenderer } from '../../lib/cannon/CannonDebugRenderer';
+import { InputManager } from '../core/InputManager';
+import { LoadingManager } from '../core/LoadingManager';
+import { InfoStack } from '../core/InfoStack';
+import { IWorldEntity } from '../interfaces/IWorldEntity';
+import { IUpdatable } from '../interfaces/IUpdatable';
+import { Character } from '../characters/Character';
+import { Path } from './Path';
+import { Vehicle } from '../vehicles/Vehicle';
+import { Scenario } from './Scenario';
+import { Sky } from './Sky';
+import { PlayerIdentity } from '../party/PlayerIdentity';
+import { PartySession } from '../party/PartySession';
+import { Minimap } from '../core/Minimap';
+import { TouchControls } from '../core/TouchControls';
+import { Effects } from '../core/Effects';
+import { CombatSystem } from '../combat/CombatSystem';
+export declare class World {
+    renderer: THREE.WebGLRenderer;
+    camera: THREE.PerspectiveCamera;
+    composer: any;
+    stats: Stats;
+    graphicsWorld: THREE.Scene;
+    sky: Sky;
+    physicsWorld: CANNON.World;
+    parallelPairs: any[];
+    physicsFrameRate: number;
+    physicsFrameTime: number;
+    physicsMaxPrediction: number;
+    clock: THREE.Clock;
+    renderDelta: number;
+    logicDelta: number;
+    requestDelta: number;
+    sinceLastFrame: number;
+    justRendered: boolean;
+    params: any;
+    inputManager: InputManager;
+    cameraOperator: CameraOperator;
+    timeScaleTarget: number;
+    console: InfoStack;
+    cannonDebugRenderer: CannonDebugRenderer;
+    scenarios: Scenario[];
+    characters: Character[];
+    vehicles: Vehicle[];
+    paths: Path[];
+    scenarioGUIFolder: any;
+    updatables: IUpdatable[];
+    audioListener: THREE.AudioListener;
+    music: THREE.Audio;
+    musicElement: HTMLAudioElement;
+    localPlayer: PlayerIdentity;
+    localCharacter: Character;
+    party: PartySession;
+    combat: CombatSystem;
+    effects: Effects;
+    minimap: Minimap;
+    touchControls: TouchControls;
+    lastScenarioID: string;
+    /**
+     * The playable area, used both to respawn anything that leaves it and to
+     * frame the minimap. Measured from this world file.
+     */
+    worldBounds: {
+        minX: number;
+        maxX: number;
+        minZ: number;
+        maxZ: number;
+        seaLevel: number;
+        floor: number;
+    };
+    private speedometerFill;
+    private fxaaPass;
+    private boundResumeAudio;
+    constructor(worldScenePath?: any);
+    update(timeStep: number, unscaledTimeStep: number): void;
+    updatePhysics(timeStep: number): void;
+    isOutOfBounds(position: CANNON.Vec3): boolean;
+    outOfBoundsRespawn(body: CANNON.Body, position?: CANNON.Vec3): void;
+    /**
+     * Rendering loop.
+     * Implements fps limiter and frame-skipping
+     * Calls world's "update" function before rendering.
+     * @param {World} world
+     */
+    /**
+     * iOS in standalone doesn't reliably fire resize when the device is turned,
+     * which leaves the canvas at its portrait size with the page showing through
+     * the rest of the screen. Rather than trust any single event to arrive, the
+     * render loop notices the window no longer matches and puts it right. Two
+     * comparisons a frame, and it can't be missed.
+     */
+    private syncViewportSize;
+    applyViewportSize(): void;
+    render(world: World): void;
+    /**
+     * The car the local player is driving, if any. While driving, the character
+     * stays the input receiver and forwards input to the vehicle, so the car has
+     * to be reached through it rather than read off the receiver directly.
+     */
+    private getLocallyDrivenCar;
+    /**
+     * Shows the speed bar only while the local player is at the wheel of a car,
+     * and eases the fill so it climbs rather than snapping.
+     */
+    private updateSpeedometer;
+    /**
+     * Pushes the current name and colour onto the character the player controls.
+     * Called after the menu closes, since the character spawns before that.
+     */
+    applyLocalIdentity(): void;
+    setTimeScale(value: number): void;
+    /**
+     * Starts the audio context and the music track.
+     * Browsers keep audio suspended until the user interacts with the page,
+     * so this runs on the first click or key press, whichever comes first.
+     */
+    /** Bound to M. */
+    toggleMusic(): void;
+    /** Bound to C. */
+    toggleCameraCentering(): void;
+    applyMusicVolume(): void;
+    resumeAudio(): void;
+    /**
+     * Stops listening only once the context is genuinely running.
+     *
+     * This used to unhook on the first attempt whether or not it worked, so a
+     * single refused resume, which is what happens when the call doesn't land
+     * inside a real gesture, left the game silent for the rest of the session
+     * with nothing left listening to try again.
+     */
+    private releaseAudioUnlock;
+    /** Puts the gesture listeners back, for when a context is lost after unlocking. */
+    private listenForAudioUnlock;
+    /** A silent one sample buffer, which is what actually unlocks iOS. */
+    private nudgeAudioContext;
+    add(worldEntity: IWorldEntity): void;
+    registerUpdatable(registree: IUpdatable): void;
+    remove(worldEntity: IWorldEntity): void;
+    unregisterUpdatable(registree: IUpdatable): void;
+    loadScene(loadingManager: LoadingManager, gltf: any): void;
+    /**
+     * Adds a scenario with a car, a helicopter and an aeroplane all within reach.
+     *
+     * The world file has no such spot. Free roam (default) starts you with cars
+     * 4m away but the nearest helicopter 128m and aeroplane 141m off, and Free
+     * roam (aviation) is the mirror image, aircraft on the doorstep and the
+     * nearest car 149m away.
+     *
+     * The air vehicles scenario spawns always, so the aircraft are already
+     * parked at the airfield. Starting the player there and parking one extra
+     * car beside them is all it takes to put all three types within seconds of
+     * each other, without inventing positions that might land in scenery.
+     */
+    /**
+     * Scatters weapon pickups and works out where the dead come back.
+     *
+     * Spawn points are reused as the anchors rather than inventing positions:
+     * they're known good ground, spread across the map, and a gun dropped at an
+     * arbitrary coordinate could end up inside a wall or under the sea.
+     */
+    private prepareCombat;
+    private createMergedScenario;
+    /** Parks a vehicle on the line from the player to the aircraft, where the apron is clear. */
+    private createVehicleSpawnBetween;
+    launchScenario(scenarioID: string, loadingManager?: LoadingManager): void;
+    restartScenario(): void;
+    clearEntities(): void;
+    scrollTheTimeScale(scrollAmount: number): void;
+    updateControls(controls: any): void;
+    private setupAudio;
+    private generateHTML;
+    private createParamsGUI;
+}

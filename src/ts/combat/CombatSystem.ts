@@ -24,6 +24,8 @@ export class CombatSystem implements IUpdatable
 	private static readonly EYE_HEIGHT: number = 0.6;
 	/** Aiming is worth something beyond the view: shots land tighter. */
 	private static readonly AIM_SPREAD_FACTOR: number = 0.35;
+	/** How near a wall has to be to the player before it counts as their cover. */
+	private static readonly COVER_SLACK: number = 1.5;
 
 	private world: World;
 	public pickups: WeaponPickup[] = [];
@@ -240,7 +242,7 @@ export class CombatSystem implements IUpdatable
 
 			if (hit.character !== undefined)
 			{
-				this.reportHit(hit.character, weapon.damage);
+				this.reportHit(hit.character, weapon, eye);
 				landed = true;
 			}
 		}
@@ -384,16 +386,16 @@ export class CombatSystem implements IUpdatable
 
 	// ------------------------------------------------------------------ damage
 
-	private reportHit(target: Character, damage: number): void
+	private reportHit(target: Character, weapon: WeaponSpec, from: THREE.Vector3): void
 	{
 		// Their client owns their health, so it's told rather than told about
 		if (target.networkId !== undefined && target !== this.world.localCharacter)
 		{
-			this.world.party.publishHit(target.networkId, damage);
+			this.world.party.publishHit(target.networkId, weapon.damage, weapon.id, from);
 			return;
 		}
 
-		this.applyDamage(target, damage, undefined);
+		this.applyDamage(target, weapon.damage, undefined);
 	}
 
 	/**
@@ -408,13 +410,57 @@ export class CombatSystem implements IUpdatable
 		this.applyDamage(character, damage, undefined);
 	}
 
-	/** A hit arriving from somebody else's client. */
-	public takeRemoteHit(damage: number, attackerId: number): void
+	/**
+	 * A hit arriving from somebody else's client.
+	 *
+	 * The relay has already checked what it can, but it has never seen the map
+	 * and so can't tell a clear shot from one through a wall. This client can:
+	 * it holds the map, and it is the authority on where it is standing. So the
+	 * last word on whether a bullet could have arrived is here.
+	 */
+	public takeRemoteHit(damage: number, attackerId: number, from?: THREE.Vector3): void
 	{
 		let character = this.world.localCharacter;
 		if (character === undefined || character.health <= 0) return;
 
+		if (from !== undefined && this.behindCover(from, character)) return;
+
 		this.applyDamage(character, damage, attackerId);
+	}
+
+	/** True when something solid stands between the shot and this player. */
+	private behindCover(from: THREE.Vector3, character: Character): boolean
+	{
+		let eye = new THREE.Vector3().copy(character.position);
+		eye.y += CombatSystem.EYE_HEIGHT;
+
+		let toward = new THREE.Vector3().subVectors(eye, from);
+		let distance = toward.length();
+		if (distance < 1) return false;
+
+		toward.divideScalar(distance);
+
+		// Started clear of the shooter and stopped short of this player, so
+		// neither capsule can be mistaken for a wall
+		let start = new THREE.Vector3().copy(from).addScaledVector(toward, 0.7);
+		let end = new THREE.Vector3().copy(eye).addScaledVector(toward, -0.7);
+
+		let result = new CANNON.RaycastResult();
+		this.world.physicsWorld.raycastClosest(
+			new CANNON.Vec3(start.x, start.y, start.z),
+			new CANNON.Vec3(end.x, end.y, end.z),
+			{ collisionFilterMask: -1, collisionFilterGroup: -1, skipBackfaces: true },
+			result
+		);
+
+		if (result.hasHit !== true) return false;
+
+		// Both ends of the shot are a moment out of date by the time it lands, so
+		// only something well short of the player counts as cover
+		let blocker = new THREE.Vector3(
+			result.hitPointWorld.x, result.hitPointWorld.y, result.hitPointWorld.z);
+
+		return blocker.distanceTo(eye) > CombatSystem.COVER_SLACK;
 	}
 
 	private applyDamage(target: Character, damage: number, attackerId: number): void
