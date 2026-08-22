@@ -34,6 +34,7 @@ export class NetworkClient
 	public onScore: (id: number, score: number) => void;
 	public onMatch: (message: any) => void;
 	public onChat: (message: any) => void;
+	public onDeath: (message: any) => void;
 	public onError: (message: string) => void;
 	public onDisconnect: () => void;
 
@@ -258,6 +259,10 @@ export class NetworkClient
 
 			case 'hit':
 				if (this.onHit !== undefined) this.onHit(message);
+				break;
+
+			case 'death':
+				if (this.onDeath !== undefined) this.onDeath(message);
 				break;
 
 			case 'chat':

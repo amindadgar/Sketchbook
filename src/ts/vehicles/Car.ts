@@ -48,6 +48,18 @@ export class Car extends Vehicle implements IControllable
 	 */
 	private static readonly DOWNFORCE: number = 0.55;
 
+	/** Seconds of boost from full, and seconds to fill again from empty. */
+	private static readonly BOOST_SECONDS: number = 3.5;
+	private static readonly BOOST_RECHARGE: number = 9;
+	/** Newtons at a standstill, tapering to nothing at the boosted top speed. */
+	private static readonly BOOST_FORCE: number = 1900;
+	private static readonly BOOST_TOP: number = 36;
+
+	/** How much is left, nought to one. Read by the HUD. */
+	public boostLeft: number = 1;
+	public boosting: boolean = false;
+	private boostPuff: number = 0;
+
 	constructor(gltf: any)
 	{
 		super(gltf, {
@@ -74,6 +86,7 @@ export class Car extends Vehicle implements IControllable
 			'exitVehicle': new KeyBinding('KeyF'),
 			'seat_switch': new KeyBinding('KeyX'),
 			'view': new KeyBinding('KeyV'),
+			'boost': new KeyBinding('ShiftLeft'),
 		};
 
 		this.steeringSimulator = new SpringSimulator(60, 10, 0.6);
@@ -151,6 +164,8 @@ export class Car extends Vehicle implements IControllable
 			}
 		}
 
+		this.updateBoost(timeStep);
+
 		// Engine sound
 		// Revs are measured against the current gear, so the pitch drops on every shift up
 		const gearTopSpeed = this.actions.reverse.isPressed ? Math.abs(gearsMaxSpeeds['R']) : gearsMaxSpeeds[this.gear];
@@ -188,6 +203,40 @@ export class Car extends Vehicle implements IControllable
 		}
 	}
 
+	/**
+	 * Spends the boost while it's held and refills it when it isn't. Only the
+	 * meter and the flames are here; the push itself belongs in the physics
+	 * step, where it can be applied every substep rather than once a frame.
+	 */
+	private updateBoost(timeStep: number): void
+	{
+		let wanted = this.actions.boost.isPressed && this.boostLeft > 0
+			&& this.controllingCharacter !== undefined;
+
+		if (wanted && !this.boosting && this.world !== undefined) this.world.sfx.whoosh();
+		this.boosting = wanted;
+
+		if (wanted)
+		{
+			this.boostLeft = Math.max(0, this.boostLeft - timeStep / Car.BOOST_SECONDS);
+			this.trailFlames(timeStep);
+			return;
+		}
+
+		this.boostLeft = Math.min(1, this.boostLeft + timeStep / Car.BOOST_RECHARGE);
+	}
+
+	/** A flame out of the back, roughly where an exhaust would be. */
+	private trailFlames(timeStep: number): void
+	{
+		this.boostPuff -= timeStep;
+		if (this.boostPuff > 0 || this.world === undefined) return;
+		this.boostPuff = 0.045;
+
+		let back = new THREE.Vector3(0, 0.1, -1.35).applyQuaternion(this.quaternion).add(this.position);
+		this.world.effects.addFlame(back, 0.28 + Math.random() * 0.14);
+	}
+
 	public shiftUp(): void
 	{
 		this.gear++;
@@ -214,6 +263,17 @@ export class Car extends Vehicle implements IControllable
 
 		// Measure speed
 		this._speed = this.collision.velocity.dot(Utils.cannonVector(forward));
+
+		// Boost, tapering to nothing as it approaches its own top speed. Without
+		// the taper there's no air resistance in the simulation to stop it, and
+		// three seconds of a constant shove would put the car into orbit.
+		if (this.boosting)
+		{
+			let room = THREE.MathUtils.clamp(1 - Math.abs(this.speed) / Car.BOOST_TOP, 0, 1);
+			let shove = Utils.cannonVector(forward.clone().multiplyScalar(Car.BOOST_FORCE * room));
+
+			this.collision.applyForce(shove, new CANNON.Vec3());
+		}
 
 		// Downforce, squared with speed the way real aerodynamic load is, so it's
 		// absent at a crawl and only firms the car up once it's actually moving
@@ -349,6 +409,10 @@ export class Car extends Vehicle implements IControllable
 			{
 				keys: ['A', 'D'],
 				desc: 'Steering'
+			},
+			{
+				keys: ['Shift'],
+				desc: 'Boost'
 			},
 			{
 				keys: ['Space'],

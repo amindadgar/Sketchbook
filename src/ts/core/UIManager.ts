@@ -19,9 +19,13 @@ export class UIManager
 	/** @param health 0 to 1. Weapon name undefined means empty handed. */
 	public static setCombatHud(health: number, weapon: string, ammo: number, reserve: number): void
 	{
-		document.getElementById('health-fill').style.width = (health * 100).toFixed(1) + '%';
-		// The phone layout shows a number instead of a bar
-		document.getElementById('health-number').textContent = String(Math.round(health * 100));
+		let points = Math.round(health * 100);
+		document.getElementById('health-number').textContent = String(points);
+
+		// Turns red as it runs down, so a glance at the corner is enough
+		let badge = document.getElementById('health-badge');
+		badge.classList.toggle('hurt', points <= 60 && points > 25);
+		badge.classList.toggle('dying', points <= 25);
 
 		let readout = document.getElementById('weapon-readout');
 		if (weapon === undefined)
@@ -83,6 +87,72 @@ export class UIManager
 		// what lets the animation start again from the beginning
 		void marker.offsetWidth;
 		marker.classList.add('struck');
+	}
+
+	// ------------------------------------------------------------------ stunts
+
+	/** What the car is doing right now, mid air. Undefined takes it away. */
+	public static setStuntLive(what: string, airtime?: string): void
+	{
+		let panel = document.getElementById('stunt-live');
+
+		if (what === undefined)
+		{
+			panel.style.display = 'none';
+			return;
+		}
+
+		document.getElementById('stunt-what').textContent = what;
+		document.getElementById('stunt-air').textContent = airtime;
+		panel.style.display = 'block';
+	}
+
+	// ----------------------------------------------------------------- player
+
+	public static setPlayerPanel(level: number, xp: number, floor: number, ceiling: number): void
+	{
+		document.getElementById('panel-level').textContent = 'Level ' + level;
+		document.getElementById('panel-xp-text').textContent = (xp - floor) + ' / ' + (ceiling - floor) + ' XP';
+
+		let span = Math.max(1, ceiling - floor);
+		document.getElementById('panel-xp-fill').style.width =
+			(Math.min(1, (xp - floor) / span) * 100).toFixed(1) + '%';
+	}
+
+	/** Labels are ours, but the numbers are the player's, so both go in as text. */
+	public static setChallenges(rows: { label: string, at: number, goal: number, done: boolean, unit: string }[]): void
+	{
+		let list = document.getElementById('panel-challenge-rows');
+		while (list.firstChild !== null) list.removeChild(list.firstChild);
+
+		for (const entry of rows)
+		{
+			let label = document.createElement('span');
+			label.className = 'challenge-label';
+			label.appendChild(document.createTextNode(entry.label));
+
+			let count = document.createElement('span');
+			count.className = 'challenge-count';
+			count.appendChild(document.createTextNode(entry.done
+				? 'done'
+				: Math.floor(Math.min(entry.at, entry.goal)) + ' / ' + entry.goal + (entry.unit || '')));
+
+			let fill = document.createElement('div');
+			fill.className = 'challenge-fill';
+			fill.style.width = (Math.min(1, entry.at / entry.goal) * 100).toFixed(1) + '%';
+
+			let track = document.createElement('div');
+			track.className = 'challenge-track';
+			track.appendChild(fill);
+
+			let row = document.createElement('div');
+			row.className = 'challenge-row' + (entry.done ? ' done' : '');
+			row.appendChild(label);
+			row.appendChild(count);
+			row.appendChild(track);
+
+			list.appendChild(row);
+		}
 	}
 
 	// ------------------------------------------------------------------- death
@@ -301,6 +371,14 @@ export class UIManager
 	{
 		document.getElementById('speedometer').style.display = value ? 'block' : 'none';
 		document.getElementById('speed-badge').style.visibility = value ? 'visible' : 'hidden';
+		document.getElementById('boost').style.visibility = value ? 'visible' : 'hidden';
+	}
+
+	/** @param left 0 to 1, and whether it's being spent right now. */
+	public static setBoost(left: number, spending: boolean): void
+	{
+		document.getElementById('boost-fill').style.width = (left * 100).toFixed(1) + '%';
+		document.getElementById('boost').classList.toggle('spending', spending);
 	}
 
 	/** @param fill 0 at a standstill, 1 at the vehicle's top speed. */

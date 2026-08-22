@@ -53,7 +53,13 @@ export declare class PartySession implements IUpdatable {
      */
     publishHit(targetId: number, damage: number, weaponId: string, from: THREE.Vector3): void;
     publishChat(text: string): void;
-    publishDeath(killerId: number): void;
+    publishDeath(killerId: number, weaponId?: string): void;
+    /**
+     * The room hears about a death from the relay, but the player who died is
+     * excluded from that broadcast, so their own line is written here. Works
+     * outside a party too, where it's the only line there is.
+     */
+    reportOwnDeath(killerId: number, weaponId?: string): void;
     /**
      * Counts down between the server's updates, so the clock moves every frame
      * rather than once every five seconds, and gets corrected when one arrives.

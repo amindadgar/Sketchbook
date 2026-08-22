@@ -16,6 +16,12 @@ export declare class CombatSystem implements IUpdatable {
     private static readonly EYE_HEIGHT;
     /** Aiming is worth something beyond the view: shots land tighter. */
     private static readonly AIM_SPREAD_FACTOR;
+    /**
+     * What a run of kills is called, and where it stops being called anything.
+     * The reward is a magazine of spare rounds, which is help rather than a
+     * head start: a streak that armed the leader properly would end the round.
+     */
+    private static readonly STREAK_REWARDS;
     /** How near a wall has to be to the player before it counts as their cover. */
     private static readonly COVER_SLACK;
     private world;
@@ -26,6 +32,9 @@ export declare class CombatSystem implements IUpdatable {
     private deathTimer;
     /** Who to watch while down, when the shot came from someone in the party. */
     private lastKiller;
+    private lastWeapon;
+    /** Kills since last dying. Announced at three, five, seven and ten. */
+    private streak;
     private aiming;
     private respawnPoints;
     private gunBuffers;
@@ -87,7 +96,13 @@ export declare class CombatSystem implements IUpdatable {
      * it holds the map, and it is the authority on where it is standing. So the
      * last word on whether a bullet could have arrived is here.
      */
-    takeRemoteHit(damage: number, attackerId: number, from?: THREE.Vector3): void;
+    takeRemoteHit(damage: number, attackerId: number, from?: THREE.Vector3, weapon?: string): void;
+    /**
+     * A kill by the local player, learned from the room rather than claimed:
+     * the client that died is the one that reports it, so this is the first
+     * this client hears of it.
+     */
+    creditKill(): void;
     /** True when something solid stands between the shot and this player. */
     private behindCover;
     private applyDamage;

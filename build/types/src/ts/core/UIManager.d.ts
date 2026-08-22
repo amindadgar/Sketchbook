@@ -12,6 +12,17 @@ export declare class UIManager {
      * so a burst reads as several hits instead of one long one.
      */
     static flashHitMarker(): void;
+    /** What the car is doing right now, mid air. Undefined takes it away. */
+    static setStuntLive(what: string, airtime?: string): void;
+    static setPlayerPanel(level: number, xp: number, floor: number, ceiling: number): void;
+    /** Labels are ours, but the numbers are the player's, so both go in as text. */
+    static setChallenges(rows: {
+        label: string;
+        at: number;
+        goal: number;
+        done: boolean;
+        unit: string;
+    }[]): void;
     /**
      * What is happening while the player is down. Undefined takes it away.
      * The watched name comes off the network, so it goes in as text.
@@ -39,6 +50,8 @@ export declare class UIManager {
     /** Names come off the network, so they're written as text nodes, never as HTML. */
     static setPartyDetails(code: string, names: string[], colors: string[]): void;
     static setSpeedometerVisible(value: boolean): void;
+    /** @param left 0 to 1, and whether it's being spent right now. */
+    static setBoost(left: number, spending: boolean): void;
     /** @param fill 0 at a standstill, 1 at the vehicle's top speed. */
     static setSpeedometerFill(fill: number, speed: number): void;
 }

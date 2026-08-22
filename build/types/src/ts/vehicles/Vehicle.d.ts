@@ -49,6 +49,8 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     private static readonly SMOKE_BELOW;
     private impactCooldown;
     private smokeTimer;
+    private headlights;
+    private static lampTexture;
     private boundOnCollide;
     constructor(gltf: any, handlingSetup?: any);
     noDirectionPressed(): boolean;
@@ -69,6 +71,13 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     setPosition(x: number, y: number, z: number): void;
     setSteeringValue(val: number): void;
     applyEngineForce(force: number): void;
+    /**
+     * A pair of lamps at the front, lit after dark. Sprites rather than lights:
+     * they're parented to the vehicle so they follow it for nothing, and the
+     * point is that a car is visible in the dark, not that it lights the road.
+     */
+    setHeadlights(on: boolean): void;
+    private static getLampTexture;
     /**
      * Cannon reports a collision once, on the frame the two bodies first touch,
      * to both of them. A crash is still several of those as the car tumbles, so

@@ -2,6 +2,7 @@ import { Account } from './Account';
 import { NetworkClient } from './NetworkClient';
 import { World } from '../world/World';
 import { RaceSystem } from '../race/RaceSystem';
+import { UIManager } from '../core/UIManager';
 
 /**
  * The boards the server has been keeping all along and nothing ever showed:
@@ -38,6 +39,8 @@ export class Leaderboard
 		this.open = true;
 		this.panel.style.display = 'block';
 
+		this.drawProgress();
+
 		// The circuit being driven, when there is one, otherwise kills overall
 		let track = this.world.race.trackId;
 		document.getElementById('leaderboard-title').textContent = track === undefined
@@ -48,6 +51,21 @@ export class Leaderboard
 		Account.leaderboard(NetworkClient.loadUrl(), track)
 			.then((players) => this.fill(players, track !== undefined))
 			.catch((error) => this.setRows([['', error.message, '']]));
+	}
+
+	/** The player's own level and today's three, above whichever board is shown. */
+	private drawProgress(): void
+	{
+		let progress = this.world.progress;
+
+		UIManager.setPlayerPanel(progress.level, progress.xp, progress.levelFloor, progress.levelCeiling);
+		UIManager.setChallenges(progress.todaysChallenges.map((challenge) => ({
+			label: challenge.label,
+			at: progress.progressOn(challenge),
+			goal: challenge.goal,
+			done: progress.isDone(challenge),
+			unit: challenge.unit
+		})));
 	}
 
 	private fill(players: any[], laps: boolean): void

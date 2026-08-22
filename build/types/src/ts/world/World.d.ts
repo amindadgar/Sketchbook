@@ -21,6 +21,10 @@ import { Effects } from '../core/Effects';
 import { RaceSystem } from '../race/RaceSystem';
 import { Chat } from '../party/Chat';
 import { Leaderboard } from '../party/Leaderboard';
+import { Notices } from '../core/Notices';
+import { Sfx } from '../core/Sfx';
+import { Progress } from '../progress/Progress';
+import { StuntSystem } from '../stunts/StuntSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 export declare class World {
     renderer: THREE.WebGLRenderer;
@@ -63,6 +67,12 @@ export declare class World {
     race: RaceSystem;
     chat: Chat;
     leaderboard: Leaderboard;
+    notices: Notices;
+    sfx: Sfx;
+    progress: Progress;
+    stunts: StuntSystem;
+    private headlightsOn;
+    private beam;
     minimap: Minimap;
     touchControls: TouchControls;
     lastScenarioID: string;
@@ -102,6 +112,15 @@ export declare class World {
     private syncViewportSize;
     applyViewportSize(): void;
     render(world: World): void;
+    /**
+     * Lights on after dark. Every car gets a pair of glowing lamps, which cost
+     * two sprites and nothing else, and the car the player is in also gets the
+     * one real light in the scene: eight spotlights would rebuild every shader
+     * in the world and buy very little at the speed a car goes past.
+     */
+    private updateHeadlights;
+    /** Distance, speed and time aloft, the things nothing else was counting. */
+    private updateProgress;
     /**
      * The car the local player is driving, if any. While driving, the character
      * stays the input receiver and forwards input to the vehicle, so the car has

@@ -63,6 +63,8 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	private static readonly SMOKE_BELOW: number = 45;
 	private impactCooldown: number = 0;
 	private smokeTimer: number = 0;
+	private headlights: THREE.Group;
+	private static lampTexture: THREE.Texture;
 	private boundOnCollide: (event: any) => void;
 
 	constructor(gltf: any, handlingSetup?: any)
@@ -339,6 +341,62 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	}
 
 	/**
+	 * A pair of lamps at the front, lit after dark. Sprites rather than lights:
+	 * they're parented to the vehicle so they follow it for nothing, and the
+	 * point is that a car is visible in the dark, not that it lights the road.
+	 */
+	public setHeadlights(on: boolean): void
+	{
+		if (this.entityType !== EntityType.Car) return;
+
+		if (this.headlights === undefined)
+		{
+			this.headlights = new THREE.Group();
+
+			for (const side of [-0.52, 0.52])
+			{
+				let lamp = new THREE.Sprite(new THREE.SpriteMaterial({
+					map: Vehicle.getLampTexture(),
+					color: 0xfff3d0,
+					blending: THREE.AdditiveBlending,
+					transparent: true,
+					depthWrite: false,
+					opacity: 0.7
+				}));
+
+				lamp.position.set(side, 0.32, 1.32);
+				lamp.scale.setScalar(0.42);
+				this.headlights.add(lamp);
+			}
+
+			this.add(this.headlights);
+		}
+
+		this.headlights.visible = on;
+	}
+
+	private static getLampTexture(): THREE.Texture
+	{
+		if (Vehicle.lampTexture !== undefined) return Vehicle.lampTexture;
+
+		let canvas = document.createElement('canvas');
+		canvas.width = 64;
+		canvas.height = 64;
+
+		let context = canvas.getContext('2d');
+		let gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
+		gradient.addColorStop(0.0, 'rgba(255, 255, 255, 1)');
+		gradient.addColorStop(0.35, 'rgba(255, 240, 200, 0.5)');
+		gradient.addColorStop(1.0, 'rgba(255, 220, 150, 0)');
+
+		context.fillStyle = gradient;
+		context.fillRect(0, 0, 64, 64);
+
+		Vehicle.lampTexture = new THREE.CanvasTexture(canvas);
+		return Vehicle.lampTexture;
+	}
+
+	/**
 	 * Cannon reports a collision once, on the frame the two bodies first touch,
 	 * to both of them. A crash is still several of those as the car tumbles, so
 	 * there's a short cooldown to stop one accident being billed five times.
@@ -354,6 +412,8 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 
 		let over = impact - Vehicle.IMPACT_FLOOR;
 		this.integrity = Math.max(0, this.integrity - over * Vehicle.IMPACT_WEAR);
+
+		this.world.sfx.thud(this.position, Math.min(1, over / 14));
 
 		// Only the local player's own client decides what a crash did to them,
 		// the same way it already owns everything else about their health

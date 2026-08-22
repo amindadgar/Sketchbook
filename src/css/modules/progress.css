@@ -1,0 +1,108 @@
+/* What the car is doing, while it's doing it. Big, central, brief. */
+#stunt-live {
+	position: fixed;
+	top: 30%;
+	left: 0;
+	right: 0;
+	display: none;
+	text-align: center;
+	font-family: 'Alfa Slab One', serif;
+	color: #FFB900;
+	text-shadow: 0 3px 14px rgba(0, 0, 0, 0.8);
+	pointer-events: none;
+	user-select: none;
+	z-index: 31;
+}
+
+#stunt-what {
+	font-size: 34px;
+	letter-spacing: 0.01em;
+}
+
+#stunt-air {
+	margin-top: 2px;
+	font-family: 'Solway', serif;
+	font-size: 15px;
+	font-variant-numeric: tabular-nums;
+	color: rgba(255, 255, 255, 0.85);
+}
+
+/* The player's own level and today's three, above whichever board is open */
+#panel-progress {
+	margin-bottom: 14px;
+}
+
+#panel-level {
+	font-family: 'Alfa Slab One', serif;
+	font-size: 22px;
+	color: #FFB900;
+}
+
+#panel-xp {
+	height: 8px;
+	margin: 6px 0 4px 0;
+	padding: 2px;
+	box-sizing: border-box;
+	background: rgba(255, 255, 255, 0.14);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+#panel-xp-fill {
+	height: 100%;
+	background: #FFB900;
+	border-radius: 2px;
+}
+
+#panel-xp-text {
+	font-size: 12px;
+	letter-spacing: 0.04em;
+	color: rgba(255, 255, 255, 0.55);
+}
+
+.panel-heading {
+	margin: 14px 0 6px 0;
+	font-size: 12px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.45);
+}
+
+.challenge-row {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 2px 10px;
+	padding: 5px 0;
+	font-size: 14px;
+}
+
+.challenge-row.done .challenge-label {
+	color: rgba(255, 255, 255, 0.45);
+	text-decoration: line-through;
+}
+
+.challenge-count {
+	font-variant-numeric: tabular-nums;
+	color: rgba(255, 255, 255, 0.6);
+}
+
+.challenge-row.done .challenge-count {
+	color: #4cc95d;
+}
+
+.challenge-track {
+	grid-column: 1 / -1;
+	height: 4px;
+	background: rgba(255, 255, 255, 0.14);
+	border-radius: 2px;
+	overflow: hidden;
+}
+
+.challenge-fill {
+	height: 100%;
+	background: #35bfd0;
+}
+
+.challenge-row.done .challenge-fill {
+	background: #4cc95d;
+}

@@ -1,0 +1,85 @@
+/* Toasts: things that happened to you, centre top, gone in a few seconds */
+#notices {
+	position: fixed;
+	top: 62px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	pointer-events: none;
+	user-select: none;
+	z-index: 32;
+}
+
+.notice {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 6px 14px;
+	background: rgba(0, 0, 0, 0.55);
+	border-radius: 16px;
+	font-family: 'Solway', serif;
+	font-size: 15px;
+	color: #fff;
+	white-space: nowrap;
+	animation: notice-in 0.25s ease-out;
+}
+
+.notice-good {
+	background: rgba(180, 130, 0, 0.68);
+	color: #fff6dd;
+}
+
+.notice-bad {
+	background: rgba(150, 30, 40, 0.68);
+}
+
+.notice-detail {
+	font-size: 13px;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+@keyframes notice-in {
+	from { opacity: 0; transform: translateY(-8px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+/* The feed: things that happened to other people, out of the way on the right */
+#kill-feed {
+	position: fixed;
+	top: 178px;
+	right: 12px;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 3px;
+	pointer-events: none;
+	user-select: none;
+	z-index: 24;
+}
+
+.kill-line {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 3px 9px;
+	background: rgba(0, 0, 0, 0.45);
+	border-radius: 4px;
+	font-family: 'Solway', serif;
+	font-size: 13px;
+	color: #fff;
+	animation: notice-in 0.2s ease-out;
+}
+
+.kill-who {
+	font-weight: 700;
+}
+
+.kill-weapon {
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.55);
+}

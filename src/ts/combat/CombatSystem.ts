@@ -24,6 +24,14 @@ export class CombatSystem implements IUpdatable
 	private static readonly EYE_HEIGHT: number = 0.6;
 	/** Aiming is worth something beyond the view: shots land tighter. */
 	private static readonly AIM_SPREAD_FACTOR: number = 0.35;
+	/**
+	 * What a run of kills is called, and where it stops being called anything.
+	 * The reward is a magazine of spare rounds, which is help rather than a
+	 * head start: a streak that armed the leader properly would end the round.
+	 */
+	private static readonly STREAK_REWARDS: { [count: number]: string } = {
+		3: 'On a roll', 5: 'Rampage', 7: 'Unstoppable', 10: 'Godlike'
+	};
 	/** How near a wall has to be to the player before it counts as their cover. */
 	private static readonly COVER_SLACK: number = 1.5;
 
@@ -36,6 +44,9 @@ export class CombatSystem implements IUpdatable
 	private deathTimer: number = 0;
 	/** Who to watch while down, when the shot came from someone in the party. */
 	private lastKiller: number;
+	private lastWeapon: string;
+	/** Kills since last dying. Announced at three, five, seven and ten. */
+	private streak: number = 0;
 	private aiming: boolean = false;
 	private respawnPoints: THREE.Vector3[] = [];
 	private gunBuffers: { [id: string]: AudioBuffer } = {};
@@ -421,14 +432,38 @@ export class CombatSystem implements IUpdatable
 	 * it holds the map, and it is the authority on where it is standing. So the
 	 * last word on whether a bullet could have arrived is here.
 	 */
-	public takeRemoteHit(damage: number, attackerId: number, from?: THREE.Vector3): void
+	public takeRemoteHit(damage: number, attackerId: number, from?: THREE.Vector3, weapon?: string): void
 	{
 		let character = this.world.localCharacter;
 		if (character === undefined || character.health <= 0) return;
 
 		if (from !== undefined && this.behindCover(from, character)) return;
 
+		this.lastWeapon = weapon;
 		this.applyDamage(character, damage, attackerId);
+	}
+
+	/**
+	 * A kill by the local player, learned from the room rather than claimed:
+	 * the client that died is the one that reports it, so this is the first
+	 * this client hears of it.
+	 */
+	public creditKill(): void
+	{
+		this.streak++;
+		this.world.progress.addKill();
+
+		let reward = CombatSystem.STREAK_REWARDS[this.streak];
+		if (reward === undefined) return;
+
+		this.world.notices.say(reward, 'good', this.streak + ' in a row');
+
+		// Something small enough that being ahead doesn't run away with the round
+		let character = this.world.localCharacter;
+		if (character !== undefined && character.weapon !== undefined)
+		{
+			character.reserve += character.weapon.magazine;
+		}
 	}
 
 	/** True when something solid stands between the shot and this player. */
@@ -478,11 +513,13 @@ export class CombatSystem implements IUpdatable
 		{
 			this.deathTimer = CombatSystem.RESPAWN_DELAY;
 			this.lastKiller = attackerId;
+			this.streak = 0;
 			// Whatever was held at the moment of death stays held otherwise, and
 			// the body walks off under its own steam
 			target.resetControls();
 			target.unequipWeapon();
-			this.world.party.publishDeath(attackerId);
+			this.world.party.publishDeath(attackerId, this.lastWeapon);
+			this.world.party.reportOwnDeath(attackerId, this.lastWeapon);
 		}
 	}
 
@@ -527,6 +564,7 @@ export class CombatSystem implements IUpdatable
 	{
 		UIManager.setDeathNotice(undefined);
 		this.lastKiller = undefined;
+		this.lastWeapon = undefined;
 
 		character.health = Character.MAX_HEALTH;
 		character.ammo = 0;
@@ -549,6 +587,8 @@ export class CombatSystem implements IUpdatable
 
 			character.equipWeapon(pickup.spec);
 			pickup.consume();
+			this.world.progress.addPickup();
+			this.world.notices.say('Picked up ' + pickup.spec.name);
 			break;
 		}
 	}

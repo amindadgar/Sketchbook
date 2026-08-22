@@ -27,6 +27,18 @@ export class Sky extends THREE.Object3D implements IUpdatable
 	private _phi: number = 50;
 	private _theta: number = 145;
 
+	/**
+	 * How far round the day it is, nought to one. The sun rises, crosses and
+	 * sets, and the elevation stops just short of the horizon rather than going
+	 * under it: the sky here is an atmospheric scattering shader with no stars
+	 * behind it, and a game nobody can see is worse than a short night.
+	 */
+	private phase: number = 0.32;
+	private static readonly LOW_SUN: number = 3;
+	private static readonly HIGH_SUN: number = 78;
+	/** Below this the world is lit like dusk and the headlights come on. */
+	private static readonly NIGHT_BELOW: number = 16;
+
 	private hemiLight: THREE.HemisphereLight;
 	private maxHemiIntensity: number = 0.9;
 	private minHemiIntensity: number = 0.3;
@@ -107,13 +119,43 @@ export class Sky extends THREE.Object3D implements IUpdatable
 		world.registerUpdatable(this);
 	}
 
-	public update(timeScale: number): void
+	/** True when it's dark enough to want the lights on. */
+	public get isNight(): boolean
+	{
+		return this._phi < Sky.NIGHT_BELOW;
+	}
+
+	public update(timeScale: number, unscaledTimeStep: number): void
 	{
 		this.position.copy(this.world.camera.position);
+		this.advanceDay(unscaledTimeStep);
 		this.refreshSunPosition();
 
 		this.csm.update(this.world.camera.matrix);
 		this.csm.lightDirection = new THREE.Vector3(-this.sunPosition.x, -this.sunPosition.y, -this.sunPosition.z).normalize();
+	}
+
+	/**
+	 * Walks the sun round on its own, unless somebody is dragging the sliders
+	 * in the settings, in which case it stays where they put it.
+	 */
+	private advanceDay(unscaledTimeStep: number): void
+	{
+		if (this.world.params.Day_Night !== true) return;
+
+		let length = Math.max(30, this.world.params.Day_Length);
+		this.phase = (this.phase + unscaledTimeStep / length) % 1;
+
+		// A sine puts the sun overhead at midday and low at either end, and
+		// spends longer near the top than a straight ramp would
+		let height = Math.sin(this.phase * Math.PI * 2) * 0.5 + 0.5;
+
+		this.world.params.Sun_Elevation = Sky.LOW_SUN + height * (Sky.HIGH_SUN - Sky.LOW_SUN);
+		this.world.params.Sun_Rotation = (this.phase * 360) % 360;
+
+		this._phi = this.world.params.Sun_Elevation;
+		this._theta = this.world.params.Sun_Rotation;
+		this.refreshHemiIntensity();
 	}
 
 	public refreshSunPosition(): void
@@ -131,5 +173,15 @@ export class Sky extends THREE.Object3D implements IUpdatable
 	public refreshHemiIntensity(): void
 	{
 		this.hemiLight.intensity = this.minHemiIntensity + Math.pow(1 - (Math.abs(this._phi - 90) / 90), 0.25) * (this.maxHemiIntensity - this.minHemiIntensity);
+
+		// Dusk is bluer as well as dimmer, which is most of what sells it
+		let dusk = THREE.MathUtils.clamp(1 - this._phi / Sky.NIGHT_BELOW, 0, 1);
+		this.hemiLight.intensity *= 1 - dusk * 0.6;
+		this.hemiLight.color.setHSL(0.59, 0.4, 0.6 - dusk * 0.3);
+
+		// The sky is a scattering shader with nothing behind it, so it never gets
+		// truly dark on its own. Pulling the exposure down takes the whole frame
+		// with it, sky included, which is what makes night look like night.
+		this.world.renderer.toneMappingExposure = 1 - dusk * 0.62;
 	}
 }

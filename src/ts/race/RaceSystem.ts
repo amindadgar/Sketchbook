@@ -232,10 +232,13 @@ export class RaceSystem implements IUpdatable
 
 	private completeLap(): void
 	{
+		this.world.progress.addLap();
+
 		if (this.bestLap === undefined || this.lapTime < this.bestLap)
 		{
 			this.bestLap = this.lapTime;
 			this.saveBest(this.lapTime);
+			this.world.notices.say('Best lap', 'good', RaceSystem.clock(this.lapTime));
 		}
 
 		if (this.lap >= RaceSystem.LAPS)
@@ -252,6 +255,7 @@ export class RaceSystem implements IUpdatable
 	private finish(): void
 	{
 		this.running = false;
+		this.world.progress.addRaceFinish(this.place);
 
 		this.disposeMarker();
 		UIManager.setRaceResult(this.place, this.field,

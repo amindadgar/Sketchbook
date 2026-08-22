@@ -44,6 +44,10 @@ import { Effects } from '../core/Effects';
 import { RaceSystem } from '../race/RaceSystem';
 import { Chat } from '../party/Chat';
 import { Leaderboard } from '../party/Leaderboard';
+import { Notices } from '../core/Notices';
+import { Sfx } from '../core/Sfx';
+import { Progress } from '../progress/Progress';
+import { StuntSystem } from '../stunts/StuntSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 
 export class World
@@ -88,6 +92,12 @@ export class World
 	public race: RaceSystem;
 	public chat: Chat;
 	public leaderboard: Leaderboard;
+	public notices: Notices;
+	public sfx: Sfx;
+	public progress: Progress;
+	public stunts: StuntSystem;
+	private headlightsOn: boolean = false;
+	private beam: THREE.SpotLight;
 	public minimap: Minimap;
 	public touchControls: TouchControls;
 	public lastScenarioID: string;
@@ -196,6 +206,10 @@ export class World
 		this.party = new PartySession(this);
 		this.combat = new CombatSystem(this);
 		this.race = new RaceSystem(this);
+		this.notices = new Notices(this);
+		this.sfx = new Sfx(this);
+		this.progress = new Progress(this);
+		this.stunts = new StuntSystem(this);
 		this.chat = new Chat(this);
 		this.leaderboard = new Leaderboard(this);
 
@@ -274,6 +288,9 @@ export class World
 		if (this.touchControls !== undefined) this.touchControls.update();
 
 		this.chat.update(unscaledTimeStep);
+		this.updateProgress(unscaledTimeStep);
+		this.progress.update(unscaledTimeStep);
+		this.updateHeadlights();
 
 		// Physics debug
 		if (this.params.Debug_Physics) this.cannonDebugRenderer.update();
@@ -415,6 +432,68 @@ export class World
 	}
 
 	/**
+	 * Lights on after dark. Every car gets a pair of glowing lamps, which cost
+	 * two sprites and nothing else, and the car the player is in also gets the
+	 * one real light in the scene: eight spotlights would rebuild every shader
+	 * in the world and buy very little at the speed a car goes past.
+	 */
+	private updateHeadlights(): void
+	{
+		let night = this.sky !== undefined && this.sky.isNight;
+
+		if (night !== this.headlightsOn)
+		{
+			this.headlightsOn = night;
+			this.vehicles.forEach((vehicle) => vehicle.setHeadlights(night));
+		}
+
+		if (this.beam === undefined)
+		{
+			this.beam = new THREE.SpotLight(0xfff0cc, 0, 42, Math.PI / 7, 0.45, 1.2);
+			this.beam.castShadow = false;
+			this.graphicsWorld.add(this.beam);
+			this.graphicsWorld.add(this.beam.target);
+		}
+
+		let driven = this.localCharacter !== undefined
+			? this.localCharacter.controlledObject as any : undefined;
+
+		if (!night || driven === undefined || driven.entityType !== EntityType.Car)
+		{
+			this.beam.intensity = 0;
+			return;
+		}
+
+		this.beam.intensity = 3;
+		this.beam.position.copy(driven.position).add(
+			new THREE.Vector3(0, 0.5, 1).applyQuaternion(driven.quaternion));
+		this.beam.target.position.copy(driven.position).add(
+			new THREE.Vector3(0, -0.6, 14).applyQuaternion(driven.quaternion));
+		this.beam.target.updateMatrixWorld();
+	}
+
+	/** Distance, speed and time aloft, the things nothing else was counting. */
+	private updateProgress(unscaledTimeStep: number): void
+	{
+		let character = this.localCharacter;
+		if (character === undefined) return;
+
+		let driven = character.controlledObject as any;
+		if (driven === undefined || driven.collision === undefined) return;
+
+		let speed = driven.collision.velocity.length();
+		let flying = driven.entityType === EntityType.Airplane || driven.entityType === EntityType.Helicopter;
+		let airborne = driven.rayCastVehicle !== undefined
+			&& driven.rayCastVehicle.numWheelsOnGround === 0 && !flying;
+
+		this.progress.addDriving(
+			speed * unscaledTimeStep,
+			speed,
+			flying ? unscaledTimeStep : 0,
+			airborne ? unscaledTimeStep : 0);
+	}
+
+	/**
 	 * The car the local player is driving, if any. While driving, the character
 	 * stays the input receiver and forwards input to the vehicle, so the car has
 	 * to be reached through it rather than read off the receiver directly.
@@ -459,6 +538,7 @@ export class World
 		// The units are invented, but a number that moves reads better than a
 		// bar at the size a phone can spare for it
 		UIManager.setSpeedometerFill(this.speedometerFill, driving ? Math.abs(car.speed) * 10 : 0);
+		UIManager.setBoost(driving ? car.boostLeft : 0, driving && car.boosting);
 	}
 
 	/**
@@ -1030,6 +1110,7 @@ export class World
 				<div id="health-badge"><span id="health-heart">&#10084;</span><span id="health-number">100</span></div>
 				<div id="minimap-toggle">MAP</div>
 				<div id="speed-badge"><span id="speed-number">0</span><span id="speed-unit">km/h</span></div>
+				<div id="boost"><div id="boost-fill"></div></div>
 				<div id="scoreboard">
 					<div class="scoreboard-title">Players</div>
 					<div id="match-clock"></div>
@@ -1041,12 +1122,25 @@ export class World
 						placeholder="Say something, Enter to send">
 					<div id="chat-open">&#128172;</div>
 				</div>
+				<div id="stunt-live">
+					<div id="stunt-what"></div>
+					<div id="stunt-air"></div>
+				</div>
+				<div id="notices"></div>
+				<div id="kill-feed"></div>
 				<div id="death-notice">
 					<div id="death-title">You died</div>
 					<div id="death-watching"></div>
 					<div id="death-timer"></div>
 				</div>
 				<div id="leaderboard">
+					<div id="panel-progress">
+						<div id="panel-level">Level 1</div>
+						<div id="panel-xp"><div id="panel-xp-fill"></div></div>
+						<div id="panel-xp-text">0 / 100 XP</div>
+					</div>
+					<div class="panel-heading">Today's challenges</div>
+					<div id="panel-challenge-rows"></div>
 					<div id="leaderboard-head">
 						<span id="leaderboard-title">Most kills</span>
 						<span id="leaderboard-close">&times;</span>
@@ -1059,7 +1153,6 @@ export class World
 					<div id="match-result-next">Next round starting</div>
 				</div>
 				<div id="combat-hud">
-					<div id="health-bar"><div id="health-fill"></div></div>
 					<div id="weapon-readout">
 						<span id="weapon-name"></span><span id="weapon-ammo"></span>
 					</div>
@@ -1123,6 +1216,8 @@ export class World
 			Debug_FPS: false,
 			Sun_Elevation: 50,
 			Sun_Rotation: 145,
+			Day_Night: true,
+			Day_Length: 420,
 			Volume: 0.8,
 			Music_Volume: 0.3,
 			Mute_Music: false,
@@ -1142,14 +1237,19 @@ export class World
 			{
 				scope.timeScaleTarget = value;
 			});
+		worldFolder.add(this.params, 'Day_Night').listen();
+		worldFolder.add(this.params, 'Day_Length', 60, 1800).listen();
 		worldFolder.add(this.params, 'Sun_Elevation', 0, 180).listen()
 			.onChange((value) =>
 			{
+				// Moving it by hand means taking it off the clock
+				scope.params.Day_Night = false;
 				scope.sky.phi = value;
 			});
 		worldFolder.add(this.params, 'Sun_Rotation', 0, 360).listen()
 			.onChange((value) =>
 			{
+				scope.params.Day_Night = false;
 				scope.sky.theta = value;
 			});
 

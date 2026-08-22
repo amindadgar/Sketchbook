@@ -115,7 +115,23 @@ export class PartySession implements IUpdatable
 			let from = Array.isArray(message.p)
 				? new THREE.Vector3(message.p[0], message.p[1], message.p[2]) : undefined;
 
-			this.world.combat.takeRemoteHit(message.damage, message.id, from);
+			this.world.combat.takeRemoteHit(message.damage, message.id, from, message.w);
+		};
+
+		this.client.onDeath = (message) =>
+		{
+			let victim = this.players[message.id];
+			let killer = message.killer !== undefined ? this.players[message.killer] : undefined;
+			let killedByMe = message.killer === this.client.id;
+
+			this.world.notices.kill(
+				killedByMe ? this.world.localPlayer.name : (killer !== undefined ? killer.info.name : 'The scenery'),
+				killedByMe ? this.world.localPlayer.color : (killer !== undefined ? killer.info.color : '#9a9a9a'),
+				victim !== undefined ? victim.info.name : 'Someone',
+				victim !== undefined ? victim.info.color : '#9a9a9a',
+				(killedByMe || killer !== undefined) ? message.w : undefined);
+
+			if (killedByMe) this.world.combat.creditKill();
 		};
 
 		this.client.onChat = (message) =>
@@ -321,11 +337,27 @@ export class PartySession implements IUpdatable
 		this.client.send({ t: 'chat', text: text });
 	}
 
-	public publishDeath(killerId: number): void
+	public publishDeath(killerId: number, weaponId?: string): void
 	{
 		if (!this.active) return;
 
-		this.client.send({ t: 'death', killer: killerId });
+		this.client.send({ t: 'death', killer: killerId, w: weaponId });
+	}
+
+	/**
+	 * The room hears about a death from the relay, but the player who died is
+	 * excluded from that broadcast, so their own line is written here. Works
+	 * outside a party too, where it's the only line there is.
+	 */
+	public reportOwnDeath(killerId: number, weaponId?: string): void
+	{
+		let killer = killerId !== undefined ? this.players[killerId] : undefined;
+
+		this.world.notices.kill(
+			killer !== undefined ? killer.info.name : 'The scenery',
+			killer !== undefined ? killer.info.color : '#9a9a9a',
+			this.world.localPlayer.name, this.world.localPlayer.color,
+			killer !== undefined ? weaponId : undefined);
 	}
 
 	/**

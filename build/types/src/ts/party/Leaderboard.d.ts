@@ -11,6 +11,8 @@ export declare class Leaderboard {
     toggle(): void;
     hide(): void;
     show(): void;
+    /** The player's own level and today's three, above whichever board is shown. */
+    private drawProgress;
     private fill;
     /**
      * A relay older than the game answers a lap request with the kills board,

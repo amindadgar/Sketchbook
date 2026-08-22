@@ -41,3 +41,33 @@
 	/* Light, so the splits read against both the empty track and the coloured fill */
 	background: rgba(255, 255, 255, 0.8);
 }
+
+/* Nitro, under the speed. Slim, because it only has one number to say. */
+#boost {
+	position: fixed;
+	bottom: 60px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 240px;
+	height: 7px;
+	padding: 2px;
+	box-sizing: border-box;
+	background: rgba(0, 0, 0, 0.45);
+	border: 2px solid rgba(255, 255, 255, 0.6);
+	border-radius: 3px;
+	visibility: hidden;
+	pointer-events: none;
+	user-select: none;
+	z-index: 25;
+}
+
+#boost-fill {
+	height: 100%;
+	background: #35bfd0;
+	border-radius: 1px;
+	transition: background 0.15s linear;
+}
+
+#boost.spending #boost-fill {
+	background: #FFB900;
+}

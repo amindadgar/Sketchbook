@@ -166,37 +166,10 @@ body.touch #party-hud {
 	letter-spacing: 0.03em;
 }
 
-/* Health as a number rather than a bar: a phone has no room to spare and a
-   count reads faster than a length at that size. */
-#health-badge {
-	display: none;
-}
-
+/* The badge is slightly smaller where the screen is */
 body.touch #health-badge {
-	position: fixed;
-	top: 16px;
-	right: 62px;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: 5px 10px;
-	background: rgba(0, 0, 0, 0.45);
-	border-radius: 16px;
-	font-family: 'Solway', serif;
-	font-size: 16px;
-	font-weight: 700;
-	color: #fff;
-	pointer-events: none;
-	user-select: none;
-	z-index: 25;
-}
-
-#health-heart {
-	color: #e6394a;
-}
-
-body.touch #health-bar {
-	display: none;
+	padding: 4px 9px;
+	font-size: 15px;
 }
 
 /* The map folds away behind a button and comes back on a tap */
@@ -255,7 +228,7 @@ body.touch.map-open #minimap {
 body.touch #speed-badge {
 	position: fixed;
 	left: 18px;
-	bottom: 8px;
+	bottom: 26px;
 	width: 132px;
 	display: flex;
 	align-items: baseline;
@@ -279,9 +252,9 @@ body.touch #speed-badge {
 	color: rgba(255, 255, 255, 0.7);
 }
 
-/* Lifted to make room for the figure beneath it */
+/* Lifted to make room for the figure and the boost meter beneath it */
 body.touch #touch-stick {
-	bottom: 42px;
+	bottom: 56px;
 }
 
 body.touch #speedometer {
@@ -310,4 +283,43 @@ body.touch .race-row {
 
 body.touch #race-countdown {
 	font-size: 62px;
+}
+
+/* The boost meter goes under the speed figure, clear of the bottom edge: a
+   phone with a home indicator eats the last few pixels of the screen */
+body.touch #boost {
+	left: 18px;
+	bottom: 10px;
+	width: 132px;
+	transform: none;
+}
+
+/* Everything that lives in the middle of the screen has less of it to live in */
+body.touch #stunt-live {
+	top: 20%;
+}
+
+body.touch #stunt-what {
+	font-size: 24px;
+}
+
+body.touch #notices {
+	top: 48px;
+}
+
+body.touch .notice {
+	padding: 4px 11px;
+	font-size: 13px;
+}
+
+body.touch #kill-feed {
+	top: 132px;
+	font-size: 11px;
+}
+
+body.touch #leaderboard {
+	max-height: 84vh;
+	min-width: 260px;
+	padding: 14px 16px;
+	font-size: 13px;
 }

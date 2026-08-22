@@ -67,6 +67,24 @@ export class Effects implements IUpdatable
 		this.add(sprite, 1.8, 1.0, scale * 0.9);
 	}
 
+	/** A short lick of flame, for whatever is burning fuel to go faster. */
+	public addFlame(position: THREE.Vector3, scale: number): void
+	{
+		let sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+			map: Effects.getSmokeTexture(),
+			color: new THREE.Color(1, 0.55, 0.12),
+			blending: THREE.AdditiveBlending,
+			transparent: true,
+			depthWrite: false,
+			opacity: 0.9
+		}));
+
+		sprite.position.copy(position);
+		sprite.scale.setScalar(scale);
+
+		this.add(sprite, 0.28, 0.4, scale * 1.6);
+	}
+
 	public update(timeStep: number, unscaledTimeStep: number): void
 	{
 		for (let i = this.live.length - 1; i >= 0; i--)

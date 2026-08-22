@@ -11,4 +11,6 @@
 @import "modules/combat.css";
 @import "modules/race.css";
 @import "modules/social.css";
+@import "modules/notices.css";
+@import "modules/progress.css";
 @import "modules/touch.css";

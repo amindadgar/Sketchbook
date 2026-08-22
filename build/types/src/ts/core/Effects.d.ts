@@ -17,6 +17,8 @@ export declare class Effects implements IUpdatable {
     add(object: THREE.Object3D, life: number, rise?: number, spread?: number): void;
     /** A puff of exhaust smoke, drifting up and thinning as it goes. */
     addSmoke(position: THREE.Vector3, scale: number, darkness: number): void;
+    /** A short lick of flame, for whatever is burning fuel to go faster. */
+    addFlame(position: THREE.Vector3, scale: number): void;
     update(timeStep: number, unscaledTimeStep: number): void;
     private static getSmokeTexture;
 }

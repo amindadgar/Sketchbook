@@ -523,7 +523,10 @@ wss.on('connection', (ws) =>
 					}
 				}
 
-				broadcast(player.room, { t: 'death', id: player.id, killer: msg.killer }, player);
+				broadcast(player.room, {
+					t: 'death', id: player.id, killer: msg.killer,
+					w: WEAPONS.has(msg.w) ? msg.w : undefined
+				}, player);
 				break;
 			}
 		}
