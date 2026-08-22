@@ -35,7 +35,11 @@ export declare class PartyMenu {
     private static commitIdentity;
     private static serverUrl;
     private static bindSwatches;
+    /** One of a row is chosen at a time, and a locked one is never chosen. */
+    private static bindPicker;
+    private static unlockLabel;
     private static selectedColor;
+    private static selectedHat;
     /** Names end up in innerHTML, so they can't be trusted verbatim. */
     private static escape;
 }

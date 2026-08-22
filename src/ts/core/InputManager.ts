@@ -154,6 +154,9 @@ export class InputManager implements IUpdatable
 
 	public onKeyDown(event: KeyboardEvent): void
 	{
+		// Somebody is writing a message, so the keys are theirs, not the game's
+		if (this.world.chat.typing) return;
+
 		// Handled here rather than per receiver, so they work on foot, in a
 		// vehicle and in the free camera alike. Shift is left alone, Shift + C
 		// is already the free camera.
@@ -162,6 +165,18 @@ export class InputManager implements IUpdatable
 			if (event.code === 'KeyM')
 			{
 				this.world.toggleMusic();
+				return;
+			}
+
+			if (event.code === 'Enter')
+			{
+				this.world.chat.begin();
+				return;
+			}
+
+			if (event.code === 'KeyL')
+			{
+				this.world.toggleLeaderboard();
 				return;
 			}
 
@@ -180,6 +195,8 @@ export class InputManager implements IUpdatable
 
 	public onKeyUp(event: KeyboardEvent): void
 	{
+		if (this.world.chat.typing) return;
+
 		if (this.inputReceiver !== undefined)
 		{
 			this.inputReceiver.handleKeyboardEvent(event, event.code, false);

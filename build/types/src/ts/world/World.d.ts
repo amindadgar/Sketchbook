@@ -19,6 +19,8 @@ import { Minimap } from '../core/Minimap';
 import { TouchControls } from '../core/TouchControls';
 import { Effects } from '../core/Effects';
 import { RaceSystem } from '../race/RaceSystem';
+import { Chat } from '../party/Chat';
+import { Leaderboard } from '../party/Leaderboard';
 import { CombatSystem } from '../combat/CombatSystem';
 export declare class World {
     renderer: THREE.WebGLRenderer;
@@ -59,6 +61,8 @@ export declare class World {
     combat: CombatSystem;
     effects: Effects;
     race: RaceSystem;
+    chat: Chat;
+    leaderboard: Leaderboard;
     minimap: Minimap;
     touchControls: TouchControls;
     lastScenarioID: string;
@@ -122,6 +126,8 @@ export declare class World {
      */
     /** Bound to M. */
     toggleMusic(): void;
+    /** Bound to L. */
+    toggleLeaderboard(): void;
     /** Bound to C. */
     toggleCameraCentering(): void;
     applyMusicVolume(): void;

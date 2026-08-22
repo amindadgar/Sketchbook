@@ -25,7 +25,7 @@ export declare class RemotePlayer implements IUpdatable {
     private vehicleTargetQuaternion;
     private hasVehicleTarget;
     constructor(world: World, info: PlayerInfo);
-    setIdentity(name: string, color: string): void;
+    setIdentity(name: string, color: string, hat?: string): void;
     applyState(message: any): void;
     applyVehicleState(message: any): void;
     update(timeStep: number): void;

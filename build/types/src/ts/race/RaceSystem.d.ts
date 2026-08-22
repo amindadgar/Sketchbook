@@ -36,6 +36,8 @@ export declare class RaceSystem implements IUpdatable {
     /** True while the lights are still on, which is what holds the grid. */
     get holding(): boolean;
     get active(): boolean;
+    /** Which circuit is being driven, for the board that goes with it. */
+    get trackId(): string;
     /**
      * A scenario is a race when it hands a computer driver a path to follow.
      * Nothing is matched on names, so a new race added to the world file gets

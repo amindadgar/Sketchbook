@@ -28,6 +28,7 @@ import { ClosestObjectFinder } from '../core/ClosestObjectFinder';
 import { Object3D } from 'three';
 import { EntityType } from '../enums/EntityType';
 import { NameTag } from '../party/NameTag';
+import { buildHat } from '../party/Unlocks';
 import { WeaponSpec, buildWeaponModel } from '../combat/Weapons';
 
 export class Character extends THREE.Object3D implements IWorldEntity
@@ -87,6 +88,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	public static readonly MAX_HEALTH: number = 100;
 	/** How far a body has to come down to lie on the ground rather than over it. */
 	private static readonly FALLEN_DROP: number = 0.49;
+	/** World units from the neck joint to the top of the head. */
+	private static readonly HAT_HEIGHT: number = 0.22;
 
 	// Combat
 	public health: number = Character.MAX_HEALTH;
@@ -106,6 +109,9 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	private weaponModel: THREE.Object3D;
 	private headTexture: THREE.Texture;
 	private headCanvas: HTMLCanvasElement;
+	private headBone: THREE.Object3D;
+	private hat: THREE.Object3D;
+	private hatId: string;
 
 	/**
 	 * Where "three.js" is printed on the boxman's face texture, measured off the
@@ -298,7 +304,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	 * Names and colours the character. The tag is parented to the model container,
 	 * so it rides along into vehicles and hides itself in first person view.
 	 */
-	public setPlayerAppearance(name: string, color: string): void
+	public setPlayerAppearance(name: string, color: string, hat?: string): void
 	{
 		this.playerName = name;
 		this.playerColor = color;
@@ -316,6 +322,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		this.updateNameTagHeight();
 
 		this.stampNameOnHead(name);
+		this.wearHat(hat, color);
 		this.setTint(color);
 
 		// Recolour a vehicle already being driven
@@ -363,6 +370,47 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		ctx.restore();
 
 		this.headTexture.needsUpdate = true;
+	}
+
+	/**
+	 * Puts whatever they've earned on their head.
+	 *
+	 * Hung off the head bone rather than the model container, so it stays put
+	 * through the walk cycle instead of hovering where the head used to be.
+	 */
+	public wearHat(id: string, color: string): void
+	{
+		if (this.headBone === undefined)
+		{
+			this.headBone = this.modelContainer.getObjectByName('head');
+			if (this.headBone === undefined) return;
+		}
+
+		if (this.hat !== undefined)
+		{
+			this.headBone.remove(this.hat);
+			this.hat = undefined;
+		}
+
+		this.hatId = id;
+		this.hat = buildHat(id, color);
+
+		if (this.hat === undefined) return;
+
+		// The bone is the neck joint, a third of world scale, and pointing
+		// whichever way the rig felt like. So the hat is sized back up to world
+		// scale and put an armful of world-up above the joint, with up worked out
+		// in the bone's own frame. Doing it in the bone's frame is what makes the
+		// hat lean with the head instead of hovering level while it nods.
+		let scale = this.headBone.getWorldScale(new THREE.Vector3());
+		let inverse = 1 / (scale.x || 1);
+
+		let facing = this.headBone.getWorldQuaternion(new THREE.Quaternion());
+		let up = new THREE.Vector3(0, 1, 0).applyQuaternion(facing.inverse());
+
+		this.hat.scale.setScalar(inverse);
+		this.hat.position.copy(up.multiplyScalar(Character.HAT_HEIGHT * inverse));
+		this.headBone.add(this.hat);
 	}
 
 	/** Copies the loaded face texture onto a canvas the tag can be drawn into. */
@@ -607,7 +655,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 			// Whoever takes control is the local player, so they get the name and colour
 			this.world.localCharacter = this;
-			this.setPlayerAppearance(this.world.localPlayer.name, this.world.localPlayer.color);
+			this.setPlayerAppearance(this.world.localPlayer.name, this.world.localPlayer.color,
+				this.world.localPlayer.hat);
 		}
 		else
 		{

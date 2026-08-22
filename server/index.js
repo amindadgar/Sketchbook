@@ -56,6 +56,10 @@ const MATCH_TICK_MS = 1000;
 /** How often the deadline is repeated to the room, so nobody drifts. */
 const MATCH_SYNC_MS = 5000;
 
+const MAX_CHAT_LENGTH = 160;
+/** One line every second and a bit, so nobody can paper over the screen. */
+const CHAT_COOLDOWN_MS = 1200;
+
 /** @type {Map<string, {code: string, players: Set<object>, scenario: string}>} */
 const rooms = new Map();
 /** Every live connection, room or no room, so the sweep can see all of them. */
@@ -95,7 +99,7 @@ function broadcast(room, message, exclude)
 function publicInfo(player)
 {
 	return {
-		id: player.id, name: player.name, color: player.color,
+		id: player.id, name: player.name, color: player.color, hat: player.hat,
 		score: player.score, account: player.account
 	};
 }
@@ -244,6 +248,13 @@ function sanitizeColor(color)
 	return (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)) ? color : '#cccccc';
 }
 
+/** Just a shape check. The game falls back to a bare head for anything it
+ * doesn't recognise, so the list itself doesn't need to live here too. */
+function sanitizeHat(hat)
+{
+	return (typeof hat === 'string' && /^[a-z]{2,12}$/.test(hat)) ? hat : 'none';
+}
+
 function leaveRoom(player)
 {
 	const room = player.room;
@@ -320,13 +331,15 @@ wss.on('connection', (ws) =>
 		room: null,
 		name: 'Player',
 		color: '#cccccc',
+		hat: 'none',
 		score: 0,
 		isAlive: true,
 		lastActivity: Date.now(),
 		/** Last position from a movement update, for checking claimed hits. */
 		position: null,
 		damageWindow: [],
-		lastDeath: 0
+		lastDeath: 0,
+		lastChat: 0
 	};
 	connections.add(player);
 
@@ -356,6 +369,7 @@ wss.on('connection', (ws) =>
 			{
 				player.name = sanitizeName(msg.name);
 				player.color = sanitizeColor(msg.color);
+				player.hat = sanitizeHat(msg.hat);
 				adoptToken(player, msg.token);
 
 				const code = makeRoomCode();
@@ -379,6 +393,7 @@ wss.on('connection', (ws) =>
 			{
 				player.name = sanitizeName(msg.name);
 				player.color = sanitizeColor(msg.color);
+				player.hat = sanitizeHat(msg.hat);
 				adoptToken(player, msg.token);
 
 				const code = typeof msg.code === 'string' ? msg.code.toUpperCase().trim() : '';
@@ -403,6 +418,7 @@ wss.on('connection', (ws) =>
 			{
 				player.name = sanitizeName(msg.name);
 				player.color = sanitizeColor(msg.color);
+				player.hat = sanitizeHat(msg.hat);
 				if (player.room !== null)
 				{
 					broadcast(player.room, { t: 'identity', ...publicInfo(player) }, player);
@@ -457,6 +473,25 @@ wss.on('connection', (ws) =>
 
 				msg.id = player.id;
 				broadcast(player.room, msg, player);
+				break;
+			}
+
+			case 'chat':
+			{
+				if (player.room === null) break;
+
+				const now = Date.now();
+				if (now - player.lastChat < CHAT_COOLDOWN_MS) break;
+
+				// Collapsed to a single line and trimmed: it's drawn as text on
+				// the other end, but a wall of newlines is still a nuisance
+				const text = String(msg.text || '').replace(/\s+/g, ' ').trim().slice(0, MAX_CHAT_LENGTH);
+				if (text.length === 0) break;
+
+				player.lastChat = now;
+				broadcast(player.room, {
+					t: 'chat', id: player.id, name: player.name, color: player.color, text: text
+				});
 				break;
 			}
 

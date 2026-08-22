@@ -2,6 +2,7 @@ export interface PlayerInfo {
     id: number;
     name: string;
     color: string;
+    hat?: string;
     score?: number;
 }
 /**
@@ -27,6 +28,7 @@ export declare class NetworkClient {
     onHit: (message: any) => void;
     onScore: (id: number, score: number) => void;
     onMatch: (message: any) => void;
+    onChat: (message: any) => void;
     onError: (message: string) => void;
     onDisconnect: () => void;
     private socket;
@@ -43,8 +45,8 @@ export declare class NetworkClient {
     static saveUrl(url: string): void;
     /** Resolves once the socket is open, rejects with a readable reason. */
     connect(url: string): Promise<void>;
-    createRoom(name: string, color: string, scenario: string, token: string): void;
-    joinRoom(code: string, name: string, color: string, token: string): void;
+    createRoom(name: string, color: string, hat: string, scenario: string, token: string): void;
+    joinRoom(code: string, name: string, color: string, hat: string, token: string): void;
     send(message: any): void;
     disconnect(): void;
     private handleMessage;

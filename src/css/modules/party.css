@@ -335,3 +335,46 @@
 	color: rgba(255, 255, 255, 0.45);
 	text-align: center;
 }
+
+/* Hats, and the colours that have to be earned */
+.party-hats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 4px;
+}
+
+.party-hat {
+	padding: 6px 11px;
+	background: #f3f3f3;
+	border: 2px solid transparent;
+	border-radius: 4px;
+	font-family: 'Solway', serif;
+	font-size: 13px;
+	color: #444;
+	cursor: pointer;
+}
+
+.party-hat.selected {
+	border-color: #FFB900;
+	background: #fff6dd;
+}
+
+.party-hat.locked,
+.party-swatch.locked {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.party-swatch {
+	position: relative;
+}
+
+.party-lock {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	font-size: 11px;
+	line-height: 1;
+}

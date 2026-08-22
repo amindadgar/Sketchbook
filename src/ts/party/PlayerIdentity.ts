@@ -1,23 +1,26 @@
+import { COLOURS, findHat } from './Unlocks';
+
 /**
  * Who the local player is: the name shown above their character and the
  * colour their body and their car get tinted with.
  */
 export class PlayerIdentity
 {
-	public static readonly PALETTE: string[] = [
-		'#e6394a', '#f28f2c', '#f5d327', '#4cc95d',
-		'#35bfd0', '#3d7ff5', '#9b5cf0', '#f062b4',
-	];
+	/** Kept for anything that just wants a colour, unlocked or not. */
+	public static readonly PALETTE: string[] = COLOURS.map((entry) => entry.id);
 
 	private static readonly STORAGE_KEY: string = 'sketchbook.player';
 
 	public name: string;
 	public color: string;
+	/** Which hat, from the ones the account has earned. */
+	public hat: string = 'none';
 
-	constructor(name?: string, color?: string)
+	constructor(name?: string, color?: string, hat?: string)
 	{
 		this.name = PlayerIdentity.sanitizeName(name);
 		this.color = PlayerIdentity.sanitizeColor(color);
+		this.hat = findHat(hat).id;
 	}
 
 	/** Restores the last used name and colour, so a reload doesn't reset them. */
@@ -29,7 +32,7 @@ export class PlayerIdentity
 			if (raw !== null)
 			{
 				let data = JSON.parse(raw);
-				return new PlayerIdentity(data.name, data.color);
+				return new PlayerIdentity(data.name, data.color, data.hat);
 			}
 		}
 		catch (error)
@@ -64,7 +67,8 @@ export class PlayerIdentity
 		{
 			window.localStorage.setItem(PlayerIdentity.STORAGE_KEY, JSON.stringify({
 				name: this.name,
-				color: this.color
+				color: this.color,
+				hat: this.hat
 			}));
 		}
 		catch (error)
@@ -73,9 +77,10 @@ export class PlayerIdentity
 		}
 	}
 
-	public set(name: string, color: string): void
+	public set(name: string, color: string, hat?: string): void
 	{
 		this.name = PlayerIdentity.sanitizeName(name);
 		this.color = PlayerIdentity.sanitizeColor(color);
+		if (hat !== undefined) this.hat = findHat(hat).id;
 	}
 }

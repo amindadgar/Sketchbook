@@ -72,6 +72,12 @@ export class RaceSystem implements IUpdatable
 		return this.track !== undefined;
 	}
 
+	/** Which circuit is being driven, for the board that goes with it. */
+	public get trackId(): string
+	{
+		return this.track;
+	}
+
 	/**
 	 * A scenario is a race when it hands a computer driver a path to follow.
 	 * Nothing is matched on names, so a new race added to the world file gets

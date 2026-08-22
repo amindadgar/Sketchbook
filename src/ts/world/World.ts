@@ -42,6 +42,8 @@ import { TouchControls } from '../core/TouchControls';
 import { DeviceProfile } from '../core/DeviceProfile';
 import { Effects } from '../core/Effects';
 import { RaceSystem } from '../race/RaceSystem';
+import { Chat } from '../party/Chat';
+import { Leaderboard } from '../party/Leaderboard';
 import { CombatSystem } from '../combat/CombatSystem';
 
 export class World
@@ -84,6 +86,8 @@ export class World
 	public combat: CombatSystem;
 	public effects: Effects;
 	public race: RaceSystem;
+	public chat: Chat;
+	public leaderboard: Leaderboard;
 	public minimap: Minimap;
 	public touchControls: TouchControls;
 	public lastScenarioID: string;
@@ -192,6 +196,8 @@ export class World
 		this.party = new PartySession(this);
 		this.combat = new CombatSystem(this);
 		this.race = new RaceSystem(this);
+		this.chat = new Chat(this);
+		this.leaderboard = new Leaderboard(this);
 
 		// Initialization
 		this.inputManager = new InputManager(this, this.renderer.domElement);
@@ -266,6 +272,8 @@ export class World
 
 		// The touch buttons say something different in a car than on foot
 		if (this.touchControls !== undefined) this.touchControls.update();
+
+		this.chat.update(unscaledTimeStep);
 
 		// Physics debug
 		if (this.params.Debug_Physics) this.cannonDebugRenderer.update();
@@ -461,7 +469,7 @@ export class World
 	{
 		if (this.localCharacter !== undefined)
 		{
-			this.localCharacter.setPlayerAppearance(this.localPlayer.name, this.localPlayer.color);
+			this.localCharacter.setPlayerAppearance(this.localPlayer.name, this.localPlayer.color, this.localPlayer.hat);
 		}
 
 		// Solo has a scoreboard too, it just has one row on it
@@ -484,6 +492,12 @@ export class World
 	{
 		this.params.Mute_Music = !this.params.Mute_Music;
 		this.applyMusicVolume();
+	}
+
+	/** Bound to L. */
+	public toggleLeaderboard(): void
+	{
+		this.leaderboard.toggle();
 	}
 
 	/** Bound to C. */
@@ -1016,6 +1030,24 @@ export class World
 					<div class="scoreboard-title">Players</div>
 					<div id="match-clock"></div>
 					<div id="scoreboard-rows"></div>
+				</div>
+				<div id="chat">
+					<div id="chat-log"></div>
+					<input id="chat-input" maxlength="160" spellcheck="false" autocomplete="off"
+						placeholder="Say something, Enter to send">
+					<div id="chat-open">&#128172;</div>
+				</div>
+				<div id="death-notice">
+					<div id="death-title">You died</div>
+					<div id="death-watching"></div>
+					<div id="death-timer"></div>
+				</div>
+				<div id="leaderboard">
+					<div id="leaderboard-head">
+						<span id="leaderboard-title">Most kills</span>
+						<span id="leaderboard-close">&times;</span>
+					</div>
+					<div id="leaderboard-rows"></div>
 				</div>
 				<div id="match-result">
 					<div id="match-result-title">Round over</div>

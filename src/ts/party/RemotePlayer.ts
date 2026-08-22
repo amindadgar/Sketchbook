@@ -55,7 +55,7 @@ export class RemotePlayer implements IUpdatable
 			// Their client owns the simulation, this one only plays it back
 			this.character.setPhysicsEnabled(false);
 			this.character.charState = undefined;
-			this.character.setPlayerAppearance(this.info.name, this.info.color);
+			this.character.setPlayerAppearance(this.info.name, this.info.color, this.info.hat);
 			this.character.networkId = this.info.id;
 
 			if (this.hasTarget)
@@ -68,14 +68,15 @@ export class RemotePlayer implements IUpdatable
 		this.world.registerUpdatable(this);
 	}
 
-	public setIdentity(name: string, color: string): void
+	public setIdentity(name: string, color: string, hat?: string): void
 	{
 		this.info.name = name;
 		this.info.color = color;
+		this.info.hat = hat;
 
 		if (this.character !== undefined)
 		{
-			this.character.setPlayerAppearance(name, color);
+			this.character.setPlayerAppearance(name, color, hat);
 		}
 
 		if (this.vehicle !== undefined) this.vehicle.setPlayerTint(color);

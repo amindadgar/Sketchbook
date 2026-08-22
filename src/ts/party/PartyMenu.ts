@@ -3,6 +3,7 @@ import Swal from 'sweetalert2';
 import { PlayerIdentity } from './PlayerIdentity';
 import { NetworkClient } from './NetworkClient';
 import { Account } from './Account';
+import { COLOURS, HATS, isUnlocked, Unlock } from './Unlocks';
 import { TouchControls } from '../core/TouchControls';
 
 export interface PartyMenuOptions
@@ -52,11 +53,31 @@ export class PartyMenu
 
 	private static buildHtml(identity: PlayerIdentity): string
 	{
-		let swatches = PlayerIdentity.PALETTE.map((color) =>
+		let kills = Account.profile !== undefined ? Account.profile.kills : 0;
+
+		let swatches = COLOURS.map((entry) =>
 		{
-			let selected = color.toLowerCase() === identity.color.toLowerCase() ? ' selected' : '';
-			return '<button type="button" class="party-swatch' + selected + '"'
-				+ ' data-color="' + color + '" style="background: ' + color + ';"></button>';
+			let locked = !isUnlocked(entry, kills);
+			let selected = !locked && entry.id.toLowerCase() === identity.color.toLowerCase();
+
+			return '<button type="button" class="party-swatch'
+				+ (selected ? ' selected' : '') + (locked ? ' locked' : '') + '"'
+				+ (locked ? ' disabled' : '')
+				+ ' title="' + PartyMenu.escape(PartyMenu.unlockLabel(entry, locked)) + '"'
+				+ ' data-color="' + entry.id + '" style="background: ' + entry.id + ';">'
+				+ (locked ? '<span class="party-lock">&#128274;</span>' : '') + '</button>';
+		}).join('');
+
+		let hats = HATS.map((entry) =>
+		{
+			let locked = !isUnlocked(entry, kills);
+			let selected = !locked && entry.id === identity.hat;
+
+			return '<button type="button" class="party-hat'
+				+ (selected ? ' selected' : '') + (locked ? ' locked' : '') + '"'
+				+ (locked ? ' disabled' : '')
+				+ ' data-hat="' + entry.id + '">'
+				+ PartyMenu.escape(PartyMenu.unlockLabel(entry, locked)) + '</button>';
 		}).join('');
 
 		return '<p class="party-intro">Explore the world and hop into any vehicle.'
@@ -67,6 +88,8 @@ export class PartyMenu
 			+ ' value="' + PartyMenu.escape(identity.name) + '">'
 			+ '<label class="party-label">Your colour</label>'
 			+ '<div id="party-colors" class="party-colors">' + swatches + '</div>'
+			+ '<label class="party-label">Your hat</label>'
+			+ '<div id="party-hats" class="party-hats">' + hats + '</div>'
 			+ '<div class="party-divider"><span>account</span></div>'
 			+ '<div class="party-server-line">'
 			+ '<span class="party-server-label">Account</span>'
@@ -340,7 +363,7 @@ export class PartyMenu
 	private static commitIdentity(identity: PlayerIdentity): void
 	{
 		let nameInput = document.getElementById('party-name') as HTMLInputElement;
-		identity.set(nameInput.value, PartyMenu.selectedColor());
+		identity.set(nameInput.value, PartyMenu.selectedColor(), PartyMenu.selectedHat());
 		identity.save();
 	}
 
@@ -352,26 +375,44 @@ export class PartyMenu
 
 	private static bindSwatches(): void
 	{
-		let swatches = document.querySelectorAll('.party-swatch');
+		PartyMenu.bindPicker('.party-swatch');
+		PartyMenu.bindPicker('.party-hat');
+	}
 
-		for (let i = 0; i < swatches.length; i++)
+	/** One of a row is chosen at a time, and a locked one is never chosen. */
+	private static bindPicker(selector: string): void
+	{
+		let options = document.querySelectorAll(selector);
+
+		for (let i = 0; i < options.length; i++)
 		{
-			swatches[i].addEventListener('click', (event) =>
+			options[i].addEventListener('click', (event) =>
 			{
-				for (let j = 0; j < swatches.length; j++)
-				{
-					swatches[j].classList.remove('selected');
-				}
+				let picked = event.currentTarget as HTMLElement;
+				if (picked.classList.contains('locked')) return;
 
-				(event.currentTarget as HTMLElement).classList.add('selected');
+				for (let j = 0; j < options.length; j++) options[j].classList.remove('selected');
+
+				picked.classList.add('selected');
 			}, false);
 		}
+	}
+
+	private static unlockLabel(entry: Unlock, locked: boolean): string
+	{
+		return locked ? entry.label + ' \u00b7 ' + entry.kills + ' kills' : entry.label;
 	}
 
 	private static selectedColor(): string
 	{
 		let selected = document.querySelector('.party-swatch.selected') as HTMLElement;
 		return selected !== null ? selected.getAttribute('data-color') : undefined;
+	}
+
+	private static selectedHat(): string
+	{
+		let selected = document.querySelector('.party-hat.selected') as HTMLElement;
+		return selected !== null ? selected.getAttribute('data-hat') : 'none';
 	}
 
 	/** Names end up in innerHTML, so they can't be trusted verbatim. */

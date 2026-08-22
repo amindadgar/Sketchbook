@@ -63,6 +63,8 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     static readonly MAX_HEALTH: number;
     /** How far a body has to come down to lie on the ground rather than over it. */
     private static readonly FALLEN_DROP;
+    /** World units from the neck joint to the top of the head. */
+    private static readonly HAT_HEIGHT;
     health: number;
     weapon: WeaponSpec;
     ammo: number;
@@ -77,6 +79,9 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     private weaponModel;
     private headTexture;
     private headCanvas;
+    private headBone;
+    private hat;
+    private hatId;
     /**
      * Where "three.js" is printed on the boxman's face texture, measured off the
      * image itself. The text sits below the smiley and reads upside down in the
@@ -105,7 +110,7 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * Names and colours the character. The tag is parented to the model container,
      * so it rides along into vehicles and hides itself in first person view.
      */
-    setPlayerAppearance(name: string, color: string): void;
+    setPlayerAppearance(name: string, color: string, hat?: string): void;
     /**
      * Paints the player's name over the "three.js" the boxman is shipped wearing.
      *
@@ -115,6 +120,13 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * one head it belongs to.
      */
     private stampNameOnHead;
+    /**
+     * Puts whatever they've earned on their head.
+     *
+     * Hung off the head bone rather than the model container, so it stays put
+     * through the walk cycle instead of hovering where the head used to be.
+     */
+    wearHat(id: string, color: string): void;
     /** Copies the loaded face texture onto a canvas the tag can be drawn into. */
     private captureHeadTexture;
     /**

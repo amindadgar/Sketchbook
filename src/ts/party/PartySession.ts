@@ -90,7 +90,7 @@ export class PartySession implements IUpdatable
 		this.client.onIdentity = (info) =>
 		{
 			let player = this.players[info.id];
-			if (player !== undefined) player.setIdentity(info.name, info.color);
+			if (player !== undefined) player.setIdentity(info.name, info.color, info.hat);
 			this.refreshHud();
 		};
 
@@ -116,6 +116,11 @@ export class PartySession implements IUpdatable
 				? new THREE.Vector3(message.p[0], message.p[1], message.p[2]) : undefined;
 
 			this.world.combat.takeRemoteHit(message.damage, message.id, from);
+		};
+
+		this.client.onChat = (message) =>
+		{
+			this.world.chat.receive(message.name, message.color, message.text);
 		};
 
 		this.client.onMatch = (message) =>
@@ -177,7 +182,8 @@ export class PartySession implements IUpdatable
 		{
 			NetworkClient.saveUrl(url);
 			return this.awaitRoom(() =>
-				this.client.createRoom(identity.name, identity.color, this.world.lastScenarioID, Account.token));
+				this.client.createRoom(identity.name, identity.color, identity.hat,
+					this.world.lastScenarioID, Account.token));
 		});
 	}
 
@@ -186,7 +192,8 @@ export class PartySession implements IUpdatable
 		return this.client.connect(url).then(() =>
 		{
 			NetworkClient.saveUrl(url);
-			return this.awaitRoom(() => this.client.joinRoom(code, identity.name, identity.color, Account.token));
+			return this.awaitRoom(() =>
+			this.client.joinRoom(code, identity.name, identity.color, identity.hat, Account.token));
 		});
 	}
 
@@ -256,7 +263,7 @@ export class PartySession implements IUpdatable
 	{
 		if (!this.active) return;
 
-		this.client.send({ t: 'identity', name: identity.name, color: identity.color });
+		this.client.send({ t: 'identity', name: identity.name, color: identity.color, hat: identity.hat });
 	}
 
 	/**
@@ -305,6 +312,13 @@ export class PartySession implements IUpdatable
 			w: weaponId,
 			p: PartySession.round3([from.x, from.y, from.z])
 		});
+	}
+
+	public publishChat(text: string): void
+	{
+		if (!this.active) return;
+
+		this.client.send({ t: 'chat', text: text });
 	}
 
 	public publishDeath(killerId: number): void

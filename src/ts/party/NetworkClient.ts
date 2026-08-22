@@ -3,6 +3,7 @@ export interface PlayerInfo
 	id: number;
 	name: string;
 	color: string;
+	hat?: string;
 	score?: number;
 }
 
@@ -32,6 +33,7 @@ export class NetworkClient
 	public onHit: (message: any) => void;
 	public onScore: (id: number, score: number) => void;
 	public onMatch: (message: any) => void;
+	public onChat: (message: any) => void;
 	public onError: (message: string) => void;
 	public onDisconnect: () => void;
 
@@ -175,14 +177,14 @@ export class NetworkClient
 		});
 	}
 
-	public createRoom(name: string, color: string, scenario: string, token: string): void
+	public createRoom(name: string, color: string, hat: string, scenario: string, token: string): void
 	{
-		this.send({ t: 'create', name: name, color: color, scenario: scenario, token: token });
+		this.send({ t: 'create', name: name, color: color, hat: hat, scenario: scenario, token: token });
 	}
 
-	public joinRoom(code: string, name: string, color: string, token: string): void
+	public joinRoom(code: string, name: string, color: string, hat: string, token: string): void
 	{
-		this.send({ t: 'join', code: code, name: name, color: color, token: token });
+		this.send({ t: 'join', code: code, name: name, color: color, hat: hat, token: token });
 	}
 
 	public send(message: any): void
@@ -256,6 +258,10 @@ export class NetworkClient
 
 			case 'hit':
 				if (this.onHit !== undefined) this.onHit(message);
+				break;
+
+			case 'chat':
+				if (this.onChat !== undefined) this.onChat(message);
 				break;
 
 			case 'match':

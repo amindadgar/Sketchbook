@@ -12,6 +12,14 @@ export declare class UIManager {
      * so a burst reads as several hits instead of one long one.
      */
     static flashHitMarker(): void;
+    /**
+     * What is happening while the player is down. Undefined takes it away.
+     * The watched name comes off the network, so it goes in as text.
+     */
+    static setDeathNotice(seconds: number, watching?: string): void;
+    /** Names and messages come off the network, so both are written as text. */
+    static addChatLine(name: string, color: string, text: string, keep: number): void;
+    static setChatVisible(value: boolean): void;
     /** Time left in the round, above the scoreboard. Undefined hides it. */
     static setMatchClock(text: string): void;
     /** Names come off the network, so they're written as text, never as HTML. */

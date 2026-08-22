@@ -52,6 +52,7 @@ export declare class PartySession implements IUpdatable {
      * them to check there wasn't a wall in the way.
      */
     publishHit(targetId: number, damage: number, weaponId: string, from: THREE.Vector3): void;
+    publishChat(text: string): void;
     publishDeath(killerId: number): void;
     /**
      * Counts down between the server's updates, so the clock moves every frame

@@ -85,6 +85,66 @@ export class UIManager
 		marker.classList.add('struck');
 	}
 
+	// ------------------------------------------------------------------- death
+
+	/**
+	 * What is happening while the player is down. Undefined takes it away.
+	 * The watched name comes off the network, so it goes in as text.
+	 */
+	public static setDeathNotice(seconds: number, watching?: string): void
+	{
+		let notice = document.getElementById('death-notice');
+
+		if (seconds === undefined)
+		{
+			notice.style.display = 'none';
+			return;
+		}
+
+		document.getElementById('death-timer').textContent =
+			'Respawning in ' + Math.max(1, Math.ceil(seconds));
+
+		let watch = document.getElementById('death-watching');
+		while (watch.firstChild !== null) watch.removeChild(watch.firstChild);
+
+		if (watching !== undefined)
+		{
+			watch.appendChild(document.createTextNode('Watching ' + watching));
+		}
+
+		notice.style.display = 'block';
+	}
+
+	// -------------------------------------------------------------------- chat
+
+	/** Names and messages come off the network, so both are written as text. */
+	public static addChatLine(name: string, color: string, text: string, keep: number): void
+	{
+		let log = document.getElementById('chat-log');
+
+		let who = document.createElement('span');
+		who.className = 'chat-name';
+		who.style.color = color;
+		who.appendChild(document.createTextNode(name));
+
+		let said = document.createElement('span');
+		said.appendChild(document.createTextNode(text));
+
+		let line = document.createElement('div');
+		line.className = 'chat-line';
+		line.appendChild(who);
+		line.appendChild(said);
+
+		log.appendChild(line);
+
+		while (log.childElementCount > keep) log.removeChild(log.firstChild);
+	}
+
+	public static setChatVisible(value: boolean): void
+	{
+		document.getElementById('chat').style.display = value ? 'block' : 'none';
+	}
+
 	// ------------------------------------------------------------------ rounds
 
 	/** Time left in the round, above the scoreboard. Undefined hides it. */

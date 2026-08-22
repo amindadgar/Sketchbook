@@ -24,6 +24,8 @@ export declare class CombatSystem implements IUpdatable {
     private reloadTimer;
     private triggerWasDown;
     private deathTimer;
+    /** Who to watch while down, when the shot came from someone in the party. */
+    private lastKiller;
     private aiming;
     private respawnPoints;
     private gunBuffers;
@@ -89,6 +91,15 @@ export declare class CombatSystem implements IUpdatable {
     /** True when something solid stands between the shot and this player. */
     private behindCover;
     private applyDamage;
+    /**
+     * Watches somebody still standing rather than a body on the floor. The
+     * killer if they can be found, otherwise whoever is nearest, and nobody at
+     * all when playing alone, in which case the view stays where it fell.
+     *
+     * This runs after the camera has already been pointed at the corpse for the
+     * frame, so the override lands one frame late, which nobody can see.
+     */
+    private spectate;
     private respawn;
     private collectPickups;
     /** Shows somebody else's shot: their flash and their tracer. */

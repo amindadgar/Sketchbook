@@ -34,6 +34,8 @@ export class CombatSystem implements IUpdatable
 	private reloadTimer: number = 0;
 	private triggerWasDown: boolean = false;
 	private deathTimer: number = 0;
+	/** Who to watch while down, when the shot came from someone in the party. */
+	private lastKiller: number;
 	private aiming: boolean = false;
 	private respawnPoints: THREE.Vector3[] = [];
 	private gunBuffers: { [id: string]: AudioBuffer } = {};
@@ -155,6 +157,7 @@ export class CombatSystem implements IUpdatable
 		if (character.health <= 0)
 		{
 			this.deathTimer -= unscaledTimeStep;
+			this.spectate(character);
 			if (this.deathTimer <= 0) this.respawn(character);
 			UIManager.setCombatHud(0, undefined, 0, 0);
 			this.setAiming(false);
@@ -474,6 +477,7 @@ export class CombatSystem implements IUpdatable
 		if (target === this.world.localCharacter)
 		{
 			this.deathTimer = CombatSystem.RESPAWN_DELAY;
+			this.lastKiller = attackerId;
 			// Whatever was held at the moment of death stays held otherwise, and
 			// the body walks off under its own steam
 			target.resetControls();
@@ -482,8 +486,48 @@ export class CombatSystem implements IUpdatable
 		}
 	}
 
+	/**
+	 * Watches somebody still standing rather than a body on the floor. The
+	 * killer if they can be found, otherwise whoever is nearest, and nobody at
+	 * all when playing alone, in which case the view stays where it fell.
+	 *
+	 * This runs after the camera has already been pointed at the corpse for the
+	 * frame, so the override lands one frame late, which nobody can see.
+	 */
+	private spectate(character: Character): void
+	{
+		let watched: Character;
+		let nearest = Number.POSITIVE_INFINITY;
+
+		for (const other of this.world.characters)
+		{
+			if (other === character || other.health <= 0) continue;
+
+			if (other.networkId !== undefined && other.networkId === this.lastKiller)
+			{
+				watched = other;
+				break;
+			}
+
+			let distance = other.position.distanceToSquared(character.position);
+			if (distance >= nearest) continue;
+
+			nearest = distance;
+			watched = other;
+		}
+
+		UIManager.setDeathNotice(this.deathTimer, watched !== undefined ? watched.playerName : undefined);
+
+		if (watched === undefined) return;
+
+		watched.getWorldPosition(this.world.cameraOperator.target);
+	}
+
 	private respawn(character: Character): void
 	{
+		UIManager.setDeathNotice(undefined);
+		this.lastKiller = undefined;
+
 		character.health = Character.MAX_HEALTH;
 		character.ammo = 0;
 
