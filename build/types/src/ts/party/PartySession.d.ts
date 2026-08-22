@@ -12,6 +12,11 @@ export declare class PartySession implements IUpdatable {
     private static readonly SEND_INTERVAL;
     client: NetworkClient;
     active: boolean;
+    /** Round state, mirrored from the server and counted down between updates. */
+    private matchPhase;
+    private matchRemaining;
+    private matchStarted;
+    private shownSeconds;
     private world;
     private players;
     private sendTimer;
@@ -48,6 +53,12 @@ export declare class PartySession implements IUpdatable {
      */
     publishHit(targetId: number, damage: number, weaponId: string, from: THREE.Vector3): void;
     publishDeath(killerId: number): void;
+    /**
+     * Counts down between the server's updates, so the clock moves every frame
+     * rather than once every five seconds, and gets corrected when one arrives.
+     */
+    private tickMatchClock;
+    private static mmss;
     /** Works out of a party too, where it's just you and your score. */
     refreshScoreboard(): void;
     update(timeStep: number, unscaledTimeStep: number): void;

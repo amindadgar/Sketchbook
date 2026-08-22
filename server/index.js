@@ -48,6 +48,14 @@ const DAMAGE_WINDOW_MS = 1000;
 // Long enough to cover the respawn, so one death can't be reported twice
 const DEATH_COOLDOWN_MS = 2500;
 
+// A party runs in rounds rather than forever, so the scoreboard means
+// something and there's a reason to come back for the next one.
+const MATCH_LENGTH_MS = Number(process.env.MATCH_MS) || 5 * 60 * 1000;
+const INTERMISSION_MS = Number(process.env.INTERMISSION_MS) || 12 * 1000;
+const MATCH_TICK_MS = 1000;
+/** How often the deadline is repeated to the room, so nobody drifts. */
+const MATCH_SYNC_MS = 5000;
+
 /** @type {Map<string, {code: string, players: Set<object>, scenario: string}>} */
 const rooms = new Map();
 /** Every live connection, room or no room, so the sweep can see all of them. */
@@ -170,6 +178,60 @@ function hitIsPlausible(player, msg, now)
 	return null;
 }
 
+function standings(room)
+{
+	return Array.from(room.players)
+		.map((player) => ({ name: player.name, color: player.color, score: player.score }))
+		.sort((a, b) => b.score - a.score);
+}
+
+function matchMessage(room, now)
+{
+	return {
+		t: 'match',
+		phase: room.phase,
+		remaining: Math.max(0, Math.round((room.endsAt - now) / 1000)),
+		results: room.phase === 'over' ? standings(room) : undefined
+	};
+}
+
+/** Runs the clock for every room: ends rounds, and starts the next one. */
+function tickMatches()
+{
+	const now = Date.now();
+
+	for (const room of rooms.values())
+	{
+		if (now >= room.endsAt)
+		{
+			if (room.phase === 'running')
+			{
+				room.phase = 'over';
+				room.endsAt = now + INTERMISSION_MS;
+				console.log('room %s: round over', room.code);
+			}
+			else
+			{
+				for (const player of room.players) player.score = 0;
+
+				room.phase = 'running';
+				room.endsAt = now + MATCH_LENGTH_MS;
+				console.log('room %s: new round', room.code);
+			}
+
+			room.lastSync = now;
+			broadcast(room, matchMessage(room, now));
+			continue;
+		}
+
+		if (now - room.lastSync >= MATCH_SYNC_MS)
+		{
+			room.lastSync = now;
+			broadcast(room, matchMessage(room, now));
+		}
+	}
+}
+
 function sanitizeName(name)
 {
 	if (typeof name !== 'string') return 'Player';
@@ -219,6 +281,9 @@ function joinRoom(player, room)
 
 	tally(db.recordPlayed, player.userId);
 	broadcast(room, { t: 'join', ...publicInfo(player) }, player);
+
+	// So a late arrival sees the right clock rather than waiting for the next sync
+	send(player, matchMessage(room, Date.now()));
 
 	console.log('player %d (%s) joined room %s, %d in room', player.id, player.name, room.code, room.players.size);
 }
@@ -300,7 +365,11 @@ wss.on('connection', (ws) =>
 					return;
 				}
 
-				const room = { code, players: new Set(), scenario: msg.scenario || null };
+				const now = Date.now();
+				const room = {
+					code, players: new Set(), scenario: msg.scenario || null,
+					phase: 'running', endsAt: now + MATCH_LENGTH_MS, lastSync: now
+				};
 				rooms.set(code, room);
 				joinRoom(player, room);
 				break;
@@ -455,6 +524,8 @@ function drop(player, reason)
 	}
 }
 
+const matchClock = setInterval(tickMatches, MATCH_TICK_MS);
+
 const sweep = setInterval(() =>
 {
 	const now = Date.now();
@@ -482,6 +553,7 @@ const sweep = setInterval(() =>
 wss.on('close', () =>
 {
 	clearInterval(sweep);
+	clearInterval(matchClock);
 });
 
 db.connect()

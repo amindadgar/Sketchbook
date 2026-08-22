@@ -85,6 +85,61 @@ export class UIManager
 		marker.classList.add('struck');
 	}
 
+	// ------------------------------------------------------------------ rounds
+
+	/** Time left in the round, above the scoreboard. Undefined hides it. */
+	public static setMatchClock(text: string): void
+	{
+		let clock = document.getElementById('match-clock');
+
+		clock.style.display = text === undefined ? 'none' : 'block';
+		if (text !== undefined) clock.textContent = text;
+	}
+
+	/** Names come off the network, so they're written as text, never as HTML. */
+	public static setMatchResult(rows: { name: string, color: string, score: number }[]): void
+	{
+		let panel = document.getElementById('match-result');
+
+		if (rows === undefined)
+		{
+			panel.style.display = 'none';
+			return;
+		}
+
+		let list = document.getElementById('match-result-rows');
+		while (list.firstChild !== null) list.removeChild(list.firstChild);
+
+		rows.forEach((entry, index) =>
+		{
+			let place = document.createElement('span');
+			place.className = 'match-result-place';
+			place.appendChild(document.createTextNode(String(index + 1)));
+
+			let dot = document.createElement('span');
+			dot.className = 'scoreboard-dot';
+			dot.style.background = entry.color;
+
+			let name = document.createElement('span');
+			name.className = 'match-result-name';
+			name.appendChild(document.createTextNode(entry.name));
+
+			let score = document.createElement('span');
+			score.className = 'match-result-score';
+			score.appendChild(document.createTextNode(String(entry.score)));
+
+			let row = document.createElement('div');
+			row.className = 'match-result-row';
+			row.appendChild(place);
+			row.appendChild(dot);
+			row.appendChild(name);
+			row.appendChild(score);
+			list.appendChild(row);
+		});
+
+		panel.style.display = 'block';
+	}
+
 	// ------------------------------------------------------------------- racing
 
 	public static setRaceVisible(value: boolean): void

@@ -12,6 +12,14 @@ export declare class UIManager {
      * so a burst reads as several hits instead of one long one.
      */
     static flashHitMarker(): void;
+    /** Time left in the round, above the scoreboard. Undefined hides it. */
+    static setMatchClock(text: string): void;
+    /** Names come off the network, so they're written as text, never as HTML. */
+    static setMatchResult(rows: {
+        name: string;
+        color: string;
+        score: number;
+    }[]): void;
     static setRaceVisible(value: boolean): void;
     static setRaceHud(lap: number, laps: number, place: number, field: number, time: string, best: string): void;
     /** The starting lights, and 'GO'. Undefined takes them away. */

@@ -26,6 +26,7 @@ export declare class NetworkClient {
     onShot: (message: any) => void;
     onHit: (message: any) => void;
     onScore: (id: number, score: number) => void;
+    onMatch: (message: any) => void;
     onError: (message: string) => void;
     onDisconnect: () => void;
     private socket;

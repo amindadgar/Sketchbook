@@ -24,6 +24,12 @@ export class PartySession implements IUpdatable
 	public client: NetworkClient = new NetworkClient();
 	public active: boolean = false;
 
+	/** Round state, mirrored from the server and counted down between updates. */
+	private matchPhase: string;
+	private matchRemaining: number = 0;
+	private matchStarted: boolean = false;
+	private shownSeconds: number = -1;
+
 	private world: World;
 	private players: { [id: number]: RemotePlayer } = {};
 	private sendTimer: number = 0;
@@ -110,6 +116,28 @@ export class PartySession implements IUpdatable
 				? new THREE.Vector3(message.p[0], message.p[1], message.p[2]) : undefined;
 
 			this.world.combat.takeRemoteHit(message.damage, message.id, from);
+		};
+
+		this.client.onMatch = (message) =>
+		{
+			this.matchPhase = message.phase;
+			this.matchRemaining = message.remaining;
+
+			UIManager.setMatchResult(message.phase === 'over' ? message.results : undefined);
+
+			// Everyone starts the next round level, and the server has already
+			// zeroed its own copy of the scores
+			if (message.phase === 'running' && this.matchStarted)
+			{
+				this.localScore = 0;
+				for (const id in this.players)
+				{
+					if (this.players.hasOwnProperty(id)) this.players[id].info.score = 0;
+				}
+				this.refreshScoreboard();
+			}
+
+			this.matchStarted = true;
 		};
 
 		this.client.onScore = (id, score) =>
@@ -203,6 +231,12 @@ export class PartySession implements IUpdatable
 
 	public leave(): void
 	{
+		this.matchPhase = undefined;
+		this.matchStarted = false;
+		this.shownSeconds = -1;
+		UIManager.setMatchClock(undefined);
+		UIManager.setMatchResult(undefined);
+
 		if (!this.active && !this.client.connected) return;
 
 		this.active = false;
@@ -280,6 +314,31 @@ export class PartySession implements IUpdatable
 		this.client.send({ t: 'death', killer: killerId });
 	}
 
+	/**
+	 * Counts down between the server's updates, so the clock moves every frame
+	 * rather than once every five seconds, and gets corrected when one arrives.
+	 */
+	private tickMatchClock(unscaledTimeStep: number): void
+	{
+		if (this.matchPhase === undefined) return;
+
+		this.matchRemaining = Math.max(0, this.matchRemaining - unscaledTimeStep);
+
+		let seconds = Math.ceil(this.matchRemaining);
+		if (seconds === this.shownSeconds) return;
+		this.shownSeconds = seconds;
+
+		UIManager.setMatchClock(this.matchPhase === 'over'
+			? 'NEXT ROUND' : PartySession.mmss(seconds));
+	}
+
+	private static mmss(seconds: number): string
+	{
+		let minutes = Math.floor(seconds / 60);
+		let rest = seconds % 60;
+		return minutes + ':' + (rest < 10 ? '0' : '') + rest;
+	}
+
 	/** Works out of a party too, where it's just you and your score. */
 	public refreshScoreboard(): void
 	{
@@ -303,6 +362,8 @@ export class PartySession implements IUpdatable
 	public update(timeStep: number, unscaledTimeStep: number): void
 	{
 		if (!this.active || !this.client.connected) return;
+
+		this.tickMatchClock(unscaledTimeStep);
 
 		this.sendTimer += unscaledTimeStep;
 		if (this.sendTimer < PartySession.SEND_INTERVAL) return;

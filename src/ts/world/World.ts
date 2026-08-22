@@ -1014,7 +1014,13 @@ export class World
 				<div id="speed-badge"><span id="speed-number">0</span><span id="speed-unit">km/h</span></div>
 				<div id="scoreboard">
 					<div class="scoreboard-title">Players</div>
+					<div id="match-clock"></div>
 					<div id="scoreboard-rows"></div>
+				</div>
+				<div id="match-result">
+					<div id="match-result-title">Round over</div>
+					<div id="match-result-rows"></div>
+					<div id="match-result-next">Next round starting</div>
 				</div>
 				<div id="combat-hud">
 					<div id="health-bar"><div id="health-fill"></div></div>

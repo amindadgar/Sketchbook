@@ -264,3 +264,74 @@
 	text-align: left;
 	color: #6b5a24;
 }
+
+/* Round clock, sitting in the scoreboard between the title and the players */
+#match-clock {
+	display: none;
+	margin: 2px 0 6px 0;
+	font-family: 'Solway', serif;
+	font-size: 20px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+	color: #FFB900;
+	text-align: center;
+}
+
+/* Where the round finished, for the few seconds before the next one */
+#match-result {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	display: none;
+	min-width: 260px;
+	padding: 20px 24px;
+	background: rgba(0, 0, 0, 0.75);
+	border-radius: 10px;
+	font-family: 'Solway', serif;
+	color: #fff;
+	pointer-events: none;
+	user-select: none;
+	z-index: 40;
+}
+
+#match-result-title {
+	margin-bottom: 12px;
+	font-family: 'Alfa Slab One', serif;
+	font-size: 26px;
+	color: #FFB900;
+	text-align: center;
+}
+
+.match-result-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 0;
+	font-size: 15px;
+}
+
+.match-result-place {
+	width: 18px;
+	color: rgba(255, 255, 255, 0.5);
+	text-align: right;
+}
+
+.match-result-name {
+	flex: 1;
+}
+
+.match-result-score {
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+#match-result-next {
+	margin-top: 12px;
+	font-size: 12px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.45);
+	text-align: center;
+}
