@@ -212,7 +212,10 @@ export class Car extends Vehicle implements IControllable
 	private updateBoost(timeStep: number): void
 	{
 		let wanted = this.actions.boost.isPressed && this.boostLeft > 0
-			&& this.controllingCharacter !== undefined;
+			&& this.controllingCharacter !== undefined
+			// The brakes hold the grid, but a body force would drive straight
+			// through them and turn the boost button into a jump start
+			&& !(this.world !== undefined && this.world.race.holding);
 
 		if (wanted && !this.boosting && this.world !== undefined) this.world.sfx.whoosh();
 		this.boosting = wanted;
