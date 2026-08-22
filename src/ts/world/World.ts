@@ -254,6 +254,9 @@ export class World
 
 		this.updateSpeedometer();
 
+		// The touch buttons say something different in a car than on foot
+		if (this.touchControls !== undefined) this.touchControls.update();
+
 		// Physics debug
 		if (this.params.Debug_Physics) this.cannonDebugRenderer.update();
 	}

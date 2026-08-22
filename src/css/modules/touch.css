@@ -69,6 +69,15 @@ body.touch #canvas {
 	background: rgba(255, 185, 0, 0.55);
 }
 
+/* The odd one out at the bottom of an aircraft's set, spanning the pair of
+   columns rather than leaving a hole beside it */
+.touch-button.wide {
+	grid-column: 1 / -1;
+	width: auto;
+	height: 44px;
+	border-radius: 22px;
+}
+
 #touch-fire {
 	background: rgba(230, 57, 74, 0.45);
 }

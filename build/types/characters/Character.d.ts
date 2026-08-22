@@ -73,6 +73,16 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     private physicsEnabled;
     private originalColors;
     private weaponModel;
+    private headTexture;
+    private headCanvas;
+    /**
+     * Where "three.js" is printed on the boxman's face texture, measured off the
+     * image itself. The text sits below the smiley and reads upside down in the
+     * atlas, which is how it comes out the right way up on the model.
+     */
+    private static readonly HEAD_LABEL;
+    /** The cream the face plate is painted, sampled either side of the text. */
+    private static readonly HEAD_PLATE;
     constructor(gltf: any);
     setAnimations(animations: []): void;
     setArcadeVelocityInfluence(x: number, y?: number, z?: number): void;
@@ -94,6 +104,17 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * so it rides along into vehicles and hides itself in first person view.
      */
     setPlayerAppearance(name: string, color: string): void;
+    /**
+     * Paints the player's name over the "three.js" the boxman is shipped wearing.
+     *
+     * The face texture is redrawn into a canvas and handed back to the same
+     * three.js texture, so every setting the loader put on it survives. Each
+     * character parses its own copy of the model, so this only ever repaints the
+     * one head it belongs to.
+     */
+    private stampNameOnHead;
+    /** Copies the loaded face texture onto a canvas the tag can be drawn into. */
+    private captureHeadTexture;
     /**
      * Model container sits 0.57 below the character origin, so that's the baseline.
      * Sitting lifts the character, so the tag comes down to hug the vehicle roof.

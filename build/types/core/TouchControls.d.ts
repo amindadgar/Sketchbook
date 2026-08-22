@@ -9,6 +9,14 @@ import { World } from '../world/World';
  * class at all.
  */
 export declare class TouchControls {
+    /**
+     * What the buttons say and do depends on what the player is currently
+     * driving, so ENTER becomes EXIT and a helicopter gets a collective rather
+     * than a trigger. The grid is anchored to the bottom right corner and fills
+     * row by row, so the last entries keep their place as the set grows: put the
+     * buttons that mean the same thing everywhere at the end.
+     */
+    private static readonly LAYOUTS;
     private static readonly STICK_RADIUS;
     private static readonly DEAD_ZONE;
     /** Past this the stick counts as pushed all the way, which is sprint. */
@@ -17,6 +25,8 @@ export declare class TouchControls {
     private world;
     private root;
     private knob;
+    private buttonBar;
+    private context;
     private pressed;
     private stickTouch;
     private stickOrigin;
@@ -30,7 +40,13 @@ export declare class TouchControls {
      */
     private static lockLandscape;
     private build;
+    /** Held rather than tapped: firing, braking and climbing all want holding. */
     private addButton;
+    /** Called every frame by the world; swapping the buttons is the rare case. */
+    update(): void;
+    private readContext;
+    private applyContext;
+    private releaseAll;
     private onStickStart;
     private onStickMove;
     private onStickEnd;

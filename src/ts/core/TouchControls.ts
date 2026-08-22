@@ -1,4 +1,19 @@
 import { World } from '../world/World';
+import { EntityType } from '../enums/EntityType';
+import { SeatType } from '../enums/SeatType';
+
+/** One on screen button: a label and the input it stands in for. */
+interface TouchButtonSpec
+{
+	id: string;
+	label: string;
+	/** Keyboard code to synthesise, for everything the engine binds to a key. */
+	key?: string;
+	/** Mouse button index instead, for firing and aiming. */
+	mouse?: number;
+	/** Spans the pair of columns, for the odd one out at the bottom of a set. */
+	wide?: boolean;
+}
 
 /**
  * Touch controls, built only when the device actually has a coarse pointer.
@@ -11,6 +26,48 @@ import { World } from '../world/World';
  */
 export class TouchControls
 {
+	/**
+	 * What the buttons say and do depends on what the player is currently
+	 * driving, so ENTER becomes EXIT and a helicopter gets a collective rather
+	 * than a trigger. The grid is anchored to the bottom right corner and fills
+	 * row by row, so the last entries keep their place as the set grows: put the
+	 * buttons that mean the same thing everywhere at the end.
+	 */
+	private static readonly LAYOUTS: { [context: string]: TouchButtonSpec[] } = {
+		'foot': [
+			{ id: 'touch-jump', label: 'JUMP', key: 'Space' },
+			{ id: 'touch-enter', label: 'ENTER', key: 'KeyF' },
+		],
+		'foot-armed': [
+			{ id: 'touch-aim', label: 'AIM', mouse: 2 },
+			{ id: 'touch-fire', label: 'FIRE', mouse: 0 },
+			{ id: 'touch-jump', label: 'JUMP', key: 'Space' },
+			{ id: 'touch-enter', label: 'ENTER', key: 'KeyF' },
+		],
+		'car': [
+			{ id: 'touch-brake', label: 'BRAKE', key: 'Space' },
+			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF' },
+		],
+		'helicopter': [
+			{ id: 'touch-yaw-left', label: 'YAW L', key: 'KeyQ' },
+			{ id: 'touch-yaw-right', label: 'YAW R', key: 'KeyE' },
+			{ id: 'touch-up', label: 'UP', key: 'ShiftLeft' },
+			{ id: 'touch-down', label: 'DOWN', key: 'Space' },
+			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF', wide: true },
+		],
+		'airplane': [
+			{ id: 'touch-yaw-left', label: 'YAW L', key: 'KeyQ' },
+			{ id: 'touch-yaw-right', label: 'YAW R', key: 'KeyE' },
+			{ id: 'touch-up', label: 'THRTL', key: 'ShiftLeft' },
+			{ id: 'touch-brake', label: 'BRAKE', key: 'Space' },
+			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF', wide: true },
+		],
+		// A passenger steers nothing, so the only thing left to offer is the door
+		'passenger': [
+			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF' },
+		],
+	};
+
 	private static readonly STICK_RADIUS: number = 56;
 	private static readonly DEAD_ZONE: number = 0.22;
 	/** Past this the stick counts as pushed all the way, which is sprint. */
@@ -26,6 +83,8 @@ export class TouchControls
 	private world: World;
 	private root: HTMLElement;
 	private knob: HTMLElement;
+	private buttonBar: HTMLElement;
+	private context: string;
 
 	private pressed: { [code: string]: boolean } = {};
 	private stickTouch: number = null;
@@ -40,6 +99,13 @@ export class TouchControls
 		document.body.classList.add('touch');
 		this.root = this.build();
 		TouchControls.lockLandscape();
+
+		// One thumb is on the stick and the other is on the buttons, which leaves
+		// nobody to drag the camera around. So it follows by itself here, and the
+		// drag becomes a way to look away from where you're going rather than the
+		// only way to face it.
+		this.world.params.Center_Camera = true;
+		this.world.cameraOperator.autoCenter = true;
 
 		// The look region is the whole screen; buttons above it stop their own
 		// touches from reaching it, so dragging anywhere else turns the camera
@@ -90,15 +156,11 @@ export class TouchControls
 		pad.addEventListener('touchend', (event) => this.onStickEnd(event), { passive: false });
 		pad.addEventListener('touchcancel', (event) => this.onStickEnd(event), { passive: false });
 
-		let buttons = document.createElement('div');
-		buttons.id = 'touch-buttons';
-		root.appendChild(buttons);
+		this.buttonBar = document.createElement('div');
+		this.buttonBar.id = 'touch-buttons';
+		root.appendChild(this.buttonBar);
 
-		// Held buttons rather than taps: firing and aiming both want holding
-		this.addButton(buttons, 'touch-aim', 'AIM', () => this.mouse(2, true), () => this.mouse(2, false));
-		this.addButton(buttons, 'touch-fire', 'FIRE', () => this.mouse(0, true), () => this.mouse(0, false));
-		this.addButton(buttons, 'touch-jump', 'JUMP', () => this.press('Space', true), () => this.press('Space', false));
-		this.addButton(buttons, 'touch-enter', 'ENTER', () => this.press('KeyF', true), () => this.press('KeyF', false));
+		this.applyContext('foot');
 
 		document.getElementById('ui-container').appendChild(root);
 
@@ -114,20 +176,26 @@ export class TouchControls
 		return root;
 	}
 
-	private addButton(parent: HTMLElement, id: string, label: string,
-		down: () => void, up: () => void): void
+	/** Held rather than tapped: firing, braking and climbing all want holding. */
+	private addButton(spec: TouchButtonSpec): void
 	{
 		let button = document.createElement('div');
-		button.id = id;
-		button.className = 'touch-button';
-		button.textContent = label;
+		button.id = spec.id;
+		button.className = 'touch-button' + (spec.wide === true ? ' wide' : '');
+		button.textContent = spec.label;
+
+		let send = (down: boolean) =>
+		{
+			if (spec.mouse !== undefined) this.mouse(spec.mouse, down);
+			else this.press(spec.key, down);
+		};
 
 		button.addEventListener('touchstart', (event) =>
 		{
 			event.preventDefault();
 			event.stopPropagation();
 			button.classList.add('held');
-			down();
+			send(true);
 		}, { passive: false });
 
 		let release = (event: Event) =>
@@ -135,13 +203,69 @@ export class TouchControls
 			event.preventDefault();
 			event.stopPropagation();
 			button.classList.remove('held');
-			up();
+			send(false);
 		};
 
 		button.addEventListener('touchend', release, { passive: false });
 		button.addEventListener('touchcancel', release, { passive: false });
 
-		parent.appendChild(button);
+		this.buttonBar.appendChild(button);
+	}
+
+	// ---------------------------------------------------------------- context
+
+	/** Called every frame by the world; swapping the buttons is the rare case. */
+	public update(): void
+	{
+		let context = this.readContext();
+		if (context !== this.context) this.applyContext(context);
+	}
+
+	private readContext(): string
+	{
+		let character = this.world.localCharacter;
+		if (character === undefined) return 'foot';
+
+		let seat = character.occupyingSeat;
+		if (seat !== null)
+		{
+			// The seat rather than controlledObject, which only appears once the
+			// climbing in animation has finished and would flicker the set until then
+			if (seat.type !== SeatType.Driver) return 'passenger';
+
+			switch ((seat.vehicle as any).entityType)
+			{
+				case EntityType.Car: return 'car';
+				case EntityType.Helicopter: return 'helicopter';
+				case EntityType.Airplane: return 'airplane';
+				default: return 'passenger';
+			}
+		}
+
+		// A trigger with nothing behind it is just something else to mis-tap
+		return character.weapon !== undefined ? 'foot-armed' : 'foot';
+	}
+
+	private applyContext(context: string): void
+	{
+		// A button held as the set changes never gets its own touchend, since the
+		// element it belongs to is about to be gone. Let go of everything first.
+		this.releaseAll();
+
+		this.context = context;
+		this.buttonBar.innerHTML = '';
+		TouchControls.LAYOUTS[context].forEach((spec) => this.addButton(spec));
+	}
+
+	private releaseAll(): void
+	{
+		for (const code in this.pressed)
+		{
+			if (this.pressed[code] === true) this.press(code, false);
+		}
+
+		this.mouse(0, false);
+		this.mouse(2, false);
 	}
 
 	// ------------------------------------------------------------------ stick
@@ -191,7 +315,10 @@ export class TouchControls
 		this.press('KeyS', y > TouchControls.DEAD_ZONE);
 		this.press('KeyA', x < -TouchControls.DEAD_ZONE);
 		this.press('KeyD', x > TouchControls.DEAD_ZONE);
-		this.press('ShiftLeft', pull > TouchControls.SPRINT_AT);
+		// Shift is sprint on foot but the collective in a helicopter and the
+		// throttle in an aeroplane, so a hard shove of the stick must not send it
+		let onFoot = this.context === 'foot' || this.context === 'foot-armed';
+		this.press('ShiftLeft', onFoot && pull > TouchControls.SPRINT_AT);
 	}
 
 	private onStickEnd(event: TouchEvent): void
@@ -237,6 +364,7 @@ export class TouchControls
 		if (touch === null) return;
 
 		this.world.cameraOperator.move(touch.clientX - this.lookAt.x, touch.clientY - this.lookAt.y);
+		this.world.cameraOperator.noteManualLook();
 		this.lookAt = { x: touch.clientX, y: touch.clientY };
 	}
 

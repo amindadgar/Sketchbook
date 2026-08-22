@@ -142,9 +142,13 @@ export class CombatSystem implements IUpdatable
 			&& character.occupyingSeat === null);
 		this.updateTrigger(character, unscaledTimeStep);
 
+		// The gun is stowed while driving, so the readout goes with it rather than
+		// sitting over the windscreen advertising a trigger that does nothing
+		let inHand = character.weapon !== undefined && character.occupyingSeat === null;
+
 		UIManager.setCombatHud(
 			character.health / Character.MAX_HEALTH,
-			character.weapon !== undefined ? character.weapon.name : undefined,
+			inHand ? character.weapon.name : undefined,
 			character.ammo,
 			character.reserve
 		);

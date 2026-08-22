@@ -102,6 +102,17 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	private physicsEnabled: boolean = true;
 	private originalColors: { [uuid: string]: THREE.Color } = {};
 	private weaponModel: THREE.Object3D;
+	private headTexture: THREE.Texture;
+	private headCanvas: HTMLCanvasElement;
+
+	/**
+	 * Where "three.js" is printed on the boxman's face texture, measured off the
+	 * image itself. The text sits below the smiley and reads upside down in the
+	 * atlas, which is how it comes out the right way up on the model.
+	 */
+	private static readonly HEAD_LABEL = { x: 6, y: 470, w: 158, h: 38 };
+	/** The cream the face plate is painted, sampled either side of the text. */
+	private static readonly HEAD_PLATE: string = 'rgb(252, 252, 244)';
 
 	constructor(gltf: any)
 	{
@@ -302,6 +313,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 		this.updateNameTagHeight();
 
+		this.stampNameOnHead(name);
 		this.setTint(color);
 
 		// Recolour a vehicle already being driven
@@ -309,6 +321,78 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		{
 			(this.controlledObject as unknown as Vehicle).setPlayerTint(color);
 		}
+	}
+
+	/**
+	 * Paints the player's name over the "three.js" the boxman is shipped wearing.
+	 *
+	 * The face texture is redrawn into a canvas and handed back to the same
+	 * three.js texture, so every setting the loader put on it survives. Each
+	 * character parses its own copy of the model, so this only ever repaints the
+	 * one head it belongs to.
+	 */
+	private stampNameOnHead(name: string): void
+	{
+		if (this.headCanvas === undefined && !this.captureHeadTexture()) return;
+
+		const label = Character.HEAD_LABEL;
+		let ctx = this.headCanvas.getContext('2d');
+
+		// Back to bare plate, then the name where the printing used to be
+		ctx.fillStyle = Character.HEAD_PLATE;
+		ctx.fillRect(label.x, label.y, label.w, label.h);
+
+		ctx.save();
+		ctx.translate(label.x + label.w / 2, label.y + label.h / 2);
+		ctx.rotate(Math.PI);
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillStyle = '#2c2c2c';
+
+		let size = 22;
+		do
+		{
+			ctx.font = '700 ' + size + 'px Solway, Trebuchet MS, sans-serif';
+			size--;
+		}
+		while (size > 8 && ctx.measureText(name).width > label.w - 12);
+
+		ctx.fillText(name, 0, 0);
+		ctx.restore();
+
+		this.headTexture.needsUpdate = true;
+	}
+
+	/** Copies the loaded face texture onto a canvas the tag can be drawn into. */
+	private captureHeadTexture(): boolean
+	{
+		let texture: THREE.Texture;
+		this.materials.forEach((mat: any) =>
+		{
+			if (texture === undefined && mat.map !== undefined && mat.map !== null
+				&& mat.map.image !== undefined && mat.map.image !== null)
+			{
+				texture = mat.map;
+			}
+		});
+
+		if (texture === undefined) return false;
+
+		let image = texture.image;
+		if (!(image.width > 0) || !(image.height > 0)) return false;
+
+		let canvas = document.createElement('canvas');
+		canvas.width = image.width;
+		canvas.height = image.height;
+		canvas.getContext('2d').drawImage(image, 0, 0);
+
+		// Same texture object, new source, so wrapping, flipY and encoding all stay
+		// exactly as the glTF loader set them up
+		texture.image = canvas;
+		this.headTexture = texture;
+		this.headCanvas = canvas;
+
+		return true;
 	}
 
 	/**

@@ -42,6 +42,23 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 	private static readonly BASE_FOV: number = 80;
 	private static scratch: THREE.Vector3 = new THREE.Vector3();
 
+	/** How long the camera leaves the view alone after the player drags it. */
+	private static readonly MANUAL_LOOK_GRACE: number = 1.4;
+	/** Below this the subject counts as parked, and the view is the player's. */
+	private static readonly MOVING_AT: number = 0.6;
+	/**
+	 * How fast the view is allowed to swing round on its own, in degrees a
+	 * second. On foot the character turns to face wherever the camera does, so
+	 * the two pull on each other and an unbounded correction spins the screen
+	 * far faster than anyone can read. A vehicle steers under its own power and
+	 * only needs the ceiling for a spin.
+	 */
+	private static readonly SWING_ON_FOOT: number = 110;
+	private static readonly SWING_DRIVING: number = 240;
+	/** Matches the old 10% a frame at 60fps, but no longer tied to the frame rate. */
+	private static readonly SWING_RESPONSE: number = 6.3;
+	private manualLookTimer: number = 0;
+
 	public characterCaller: Character;
 
 	constructor(world: World, camera: THREE.Camera, sensitivityX: number = 1, sensitivityY: number = sensitivityX * 0.8)
@@ -87,6 +104,17 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		}
 	}
 
+	/**
+	 * Says the player just turned the camera themselves, which holds the
+	 * automatic centring off for a moment so it doesn't drag the view straight
+	 * back. Touch only: a mouse never sits perfectly still, so calling this from
+	 * move() would leave the desktop toggle with nothing to do.
+	 */
+	public noteManualLook(): void
+	{
+		this.manualLookTimer = CameraOperator.MANUAL_LOOK_GRACE;
+	}
+
 	public move(deltaX: number, deltaY: number): void
 	{
 		this.theta -= deltaX * (this.sensitivity.x / 2);
@@ -95,8 +123,10 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		this.phi = Math.min(85, Math.max(-85, this.phi));
 	}
 
-	public update(timeScale: number): void
+	public update(timeScale: number, unscaledTimeStep: number): void
 	{
+		if (this.manualLookTimer > 0) this.manualLookTimer -= unscaledTimeStep;
+
 		if (this.followMode === true)
 		{
 			this.camera.position.y = THREE.MathUtils.clamp(this.camera.position.y, this.target.y, Number.POSITIVE_INFINITY);
@@ -108,7 +138,7 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		}
 		else 
 		{
-			if (this.autoCenter === true) this.centerBehindSubject();
+			if (this.autoCenter === true && this.manualLookTimer <= 0) this.centerBehindSubject(unscaledTimeStep);
 
 			this.aimBlend = THREE.MathUtils.lerp(this.aimBlend, this.aiming ? 1 : 0, 0.18);
 			this.applyAimFov();
@@ -137,11 +167,6 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		}
 	}
 
-	/**
-	 * Swings the orbit angle around to sit behind whatever the player is steering,
-	 * their character on foot or their vehicle while driving. Pitch is left alone,
-	 * so whatever camera height they picked survives being centred.
-	 */
 	/** Narrows the view while aiming, which reads as zoom without moving the camera. */
 	private applyAimFov(): void
 	{
@@ -155,7 +180,12 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		camera.updateProjectionMatrix();
 	}
 
-	private centerBehindSubject(): void
+	/**
+	 * Swings the orbit angle around to sit behind whatever the player is steering,
+	 * their character on foot or their vehicle while driving. Pitch is left alone,
+	 * so whatever camera height they picked survives being centred.
+	 */
+	private centerBehindSubject(timeStep: number): void
 	{
 		// In free camera this operator is the input receiver and the target is the
 		// camera itself, so there's nothing meaningful to sit behind
@@ -164,10 +194,30 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		let character = this.world.localCharacter;
 		if (character === undefined) return;
 
+		let onFoot = character.occupyingSeat === null;
 		let subject: THREE.Object3D = character;
-		if (character.occupyingSeat !== null)
+		let body = character.characterCapsule.body;
+		if (!onFoot)
 		{
 			subject = character.occupyingSeat.vehicle as unknown as THREE.Object3D;
+			body = (character.occupyingSeat.vehicle as any).collision;
+		}
+
+		// Standing or parked, there's nowhere in particular to point, and pulling
+		// the camera back every time it's nudged makes looking around impossible
+		let velocity = body.velocity;
+		let speed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+		if (speed < CameraOperator.MOVING_AT) return;
+
+		// On foot the character faces wherever the camera does, so the two chase
+		// each other. Walking forward that settles, and a sideways push turns you,
+		// which is what the stick is for. Walking backwards is walking at the
+		// camera, and swinging round behind would aim it at the player again and
+		// spin them on the spot, so that one direction is left alone.
+		if (onFoot)
+		{
+			let facing = this.theta * Math.PI / 180;
+			if (velocity.x * -Math.sin(facing) + velocity.z * -Math.cos(facing) < 0) return;
 		}
 
 		let subjectQuaternion = new THREE.Quaternion();
@@ -179,7 +229,13 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 
 		// Shortest way round, so it never swings the long way past 180 degrees
 		let delta = ((((targetTheta - this.theta) % 360) + 540) % 360) - 180;
-		this.theta += delta * 0.1;
+
+		// Eased rather than stepped, and capped, so a phone rendering at half the
+		// frame rate of a desktop still swings the camera at the same speed
+		let step = delta * (1 - Math.exp(-CameraOperator.SWING_RESPONSE * timeStep));
+		let limit = (onFoot ? CameraOperator.SWING_ON_FOOT : CameraOperator.SWING_DRIVING) * timeStep;
+
+		this.theta += THREE.MathUtils.clamp(step, -limit, limit);
 	}
 
 	public handleKeyboardEvent(event: KeyboardEvent, code: string, pressed: boolean): void
