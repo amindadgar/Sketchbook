@@ -4,6 +4,7 @@ import { World } from './World';
 import { EntityType } from '../enums/EntityType';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { default as CSM } from 'three-csm';
+import { DeviceProfile } from '../core/DeviceProfile';
 
 export class Sky extends THREE.Object3D implements IUpdatable
 {
@@ -92,7 +93,7 @@ export class Sky extends THREE.Object3D implements IUpdatable
 			far: 250,	// maxFar
 			lightIntensity: 2.5,
 			cascades: 3,
-			shadowMapSize: 2048,
+			shadowMapSize: DeviceProfile.shadowMapSize(),
 			camera: world.camera,
 			parent: world.graphicsWorld,
 			mode: 'custom',

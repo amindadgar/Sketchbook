@@ -1,6 +1,7 @@
 import { World } from '../world/World';
 import { EntityType } from '../enums/EntityType';
 import { SeatType } from '../enums/SeatType';
+import { DeviceProfile } from './DeviceProfile';
 
 /** One on screen button: a label and the input it stands in for. */
 interface TouchButtonSpec
@@ -75,9 +76,7 @@ export class TouchControls
 
 	public static isTouchDevice(): boolean
 	{
-		// Asks what the primary pointer is like, rather than whether a touch
-		// screen exists at all, so a touch laptop keeps its mouse controls
-		return window.matchMedia !== undefined && window.matchMedia('(pointer: coarse)').matches;
+		return DeviceProfile.isTouch();
 	}
 
 	private world: World;

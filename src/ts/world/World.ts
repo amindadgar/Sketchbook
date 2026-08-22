@@ -39,6 +39,7 @@ import { PartyMenu } from '../party/PartyMenu';
 import { PartySession } from '../party/PartySession';
 import { Minimap } from '../core/Minimap';
 import { TouchControls } from '../core/TouchControls';
+import { DeviceProfile } from '../core/DeviceProfile';
 import { CombatSystem } from '../combat/CombatSystem';
 
 export class World
@@ -120,12 +121,13 @@ export class World
 
 		// Renderer
 		this.renderer = new THREE.WebGLRenderer();
-		this.renderer.setPixelRatio(window.devicePixelRatio);
+		this.renderer.setPixelRatio(DeviceProfile.pixelRatio());
 		this.renderer.setSize(window.innerWidth, window.innerHeight);
 		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 		this.renderer.toneMappingExposure = 1.0;
 		this.renderer.shadowMap.enabled = true;
-		this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+		// Soft shadows cost several taps a fragment, which a phone can't spare
+		this.renderer.shadowMap.type = DeviceProfile.isTouch() ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 
 		this.generateHTML();
 
