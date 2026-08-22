@@ -12,19 +12,27 @@ export class FollowPath extends FollowTarget implements ICharacterAI
 	public nodeRadius: number;
 	public reverse: boolean = false;
 
+	/** Read by the race system to work out who is where. */
+	public targetNode: PathNode;
+	/** How many times this driver has been round, for the running order. */
+	public lapsDone: number = 0;
+
 	private staleTimer: number = 0;
-	private targetNode: PathNode;
+	private firstNode: PathNode;
 
 	constructor(firstNode: PathNode, nodeRadius: number)
 	{
 		super(firstNode.object, 0);
 		this.nodeRadius = nodeRadius;
 		this.targetNode = firstNode;
+		this.firstNode = firstNode;
 	}
 
 	public update(timeStep: number): void
 	{
 		super.update(timeStep);
+
+		if (this.paused) return;
 
 		// Todo only compute once in followTarget
 		let source = new THREE.Vector3();
@@ -72,6 +80,9 @@ export class FollowPath extends FollowTarget implements ICharacterAI
 			{
 				super.setTarget(this.targetNode.nextNode.object);
 				this.targetNode = this.targetNode.nextNode;
+
+				// Back at the node it started from, so that's another lap
+				if (this.targetNode === this.firstNode) this.lapsDone++;
 			}
 		}
 	}

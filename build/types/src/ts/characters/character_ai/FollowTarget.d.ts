@@ -4,6 +4,8 @@ import { Character } from '../Character';
 export declare class FollowTarget implements ICharacterAI {
     character: Character;
     isTargetReached: boolean;
+    /** Held on the grid until the race starts. */
+    paused: boolean;
     target: THREE.Object3D;
     private stopDistance;
     constructor(target: THREE.Object3D, stopDistance?: number);

@@ -41,6 +41,7 @@ import { Minimap } from '../core/Minimap';
 import { TouchControls } from '../core/TouchControls';
 import { DeviceProfile } from '../core/DeviceProfile';
 import { Effects } from '../core/Effects';
+import { RaceSystem } from '../race/RaceSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 
 export class World
@@ -82,6 +83,7 @@ export class World
 	public party: PartySession;
 	public combat: CombatSystem;
 	public effects: Effects;
+	public race: RaceSystem;
 	public minimap: Minimap;
 	public touchControls: TouchControls;
 	public lastScenarioID: string;
@@ -189,6 +191,7 @@ export class World
 		// Multiplayer, idle until a party is actually started
 		this.party = new PartySession(this);
 		this.combat = new CombatSystem(this);
+		this.race = new RaceSystem(this);
 
 		// Initialization
 		this.inputManager = new InputManager(this, this.renderer.domElement);
@@ -816,9 +819,16 @@ export class World
 
 		// Launch default scenario
 		if (!loadingManager) loadingManager = new LoadingManager(this);
+		this.race.stop();
+
 		for (const scenario of this.scenarios) {
 			if (scenario.id === scenarioID || scenario.spawnAlways) {
 				scenario.launch(loadingManager, this);
+
+				// Arms it. The lights don't start until the world is actually
+				// running, which is a while yet: models to load, and a briefing
+				// the player reads at their own pace
+				if (scenario.racePath !== undefined) this.race.begin(scenario);
 			}
 		}
 
@@ -1018,6 +1028,18 @@ export class World
 				<div id="party-hud">
 					<div id="party-code">PARTY <span id="party-code-value"></span></div>
 					<div id="party-players"></div>
+				</div>
+				<div id="race-hud">
+					<div class="race-row"><span class="race-label">LAP</span><span id="race-lap">1 / 3</span></div>
+					<div class="race-row"><span class="race-label">POS</span><span id="race-place">1 / 1</span></div>
+					<div id="race-time">0:00.00</div>
+					<div class="race-row"><span class="race-label">BEST</span><span id="race-best">--:--</span></div>
+				</div>
+				<div id="race-countdown"></div>
+				<div id="race-result">
+					<div id="race-result-place"></div>
+					<div class="race-result-row"><span>Total</span><span id="race-result-total"></span></div>
+					<div class="race-result-row"><span>Best lap</span><span id="race-result-best"></span></div>
 				</div>
 				<div id="speedometer">
 					<div id="speedometer-track">

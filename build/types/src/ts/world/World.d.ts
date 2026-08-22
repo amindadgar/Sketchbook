@@ -18,6 +18,7 @@ import { PartySession } from '../party/PartySession';
 import { Minimap } from '../core/Minimap';
 import { TouchControls } from '../core/TouchControls';
 import { Effects } from '../core/Effects';
+import { RaceSystem } from '../race/RaceSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 export declare class World {
     renderer: THREE.WebGLRenderer;
@@ -57,6 +58,7 @@ export declare class World {
     party: PartySession;
     combat: CombatSystem;
     effects: Effects;
+    race: RaceSystem;
     minimap: Minimap;
     touchControls: TouchControls;
     lastScenarioID: string;

@@ -12,6 +12,12 @@ export declare class UIManager {
      * so a burst reads as several hits instead of one long one.
      */
     static flashHitMarker(): void;
+    static setRaceVisible(value: boolean): void;
+    static setRaceHud(lap: number, laps: number, place: number, field: number, time: string, best: string): void;
+    /** The starting lights, and 'GO'. Undefined takes them away. */
+    static setRaceCountdown(text: string): void;
+    static setRaceResult(place: number, field?: number, total?: string, best?: string): void;
+    private static ordinal;
     static toggleSettings(): void;
     static setPartyVisible(value: boolean): void;
     /** Names come off the network, so they're written as text nodes, never as HTML. */

@@ -13,6 +13,12 @@ export class Scenario
 	public world: World;
 	public descriptionTitle: string;
 	public descriptionContent: string;
+	/**
+	 * The path node the computer drivers are pointed at, when there are any.
+	 * That ring of nodes is the track, so its presence is what makes a scenario
+	 * a race rather than anything written down about its name.
+	 */
+	public racePath: string;
 	
 	private rootNode: THREE.Object3D;
 	private spawnPoints: ISpawnPoint[] = [];
@@ -79,6 +85,7 @@ export class Scenario
 							if (child.userData.driver === 'ai' && child.userData.hasOwnProperty('first_node'))
 							{
 								sp.firstAINode = child.userData.first_node;
+								this.racePath = child.userData.first_node;
 							}
 						}
 

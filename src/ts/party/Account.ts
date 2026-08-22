@@ -92,6 +92,29 @@ export class Account
 		});
 	}
 
+	/** A new personal best, for the per track boards. Ignored when not signed in. */
+	public static submitLap(server: string, track: string, milliseconds: number): Promise<void>
+	{
+		if (Account.token === undefined) return Promise.reject(new Error('Not signed in.'));
+
+		return fetch(Account.httpBase(server) + '/race/lap', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + Account.token },
+			body: JSON.stringify({ track: track, ms: milliseconds })
+		})
+		.then((response) => Account.unwrap(response))
+		.then(() => undefined);
+	}
+
+	public static leaderboard(server: string, track?: string): Promise<any[]>
+	{
+		let query = track === undefined ? '' : '?track=' + encodeURIComponent(track);
+
+		return fetch(Account.httpBase(server) + '/leaderboard' + query)
+			.then((response) => Account.unwrap(response))
+			.then((body) => body.players || []);
+	}
+
 	private static post(server: string, path: string, username: string, password: string): Promise<AccountProfile>
 	{
 		return fetch(Account.httpBase(server) + path, {

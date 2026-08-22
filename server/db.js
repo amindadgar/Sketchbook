@@ -18,6 +18,14 @@ CREATE TABLE IF NOT EXISTS users (
 	created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS laps (
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	track      TEXT NOT NULL,
+	best_ms    INTEGER NOT NULL,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+	PRIMARY KEY (user_id, track)
+);
+
 CREATE TABLE IF NOT EXISTS stats (
 	user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 	kills      INTEGER NOT NULL DEFAULT 0,
@@ -119,7 +127,7 @@ async function recordPlayed(userId)
 		`UPDATE stats SET played = played + 1, updated_at = now() WHERE user_id = $1`, [userId]);
 }
 
-/** Ordered by kills, which is the only ranking the game currently produces. */
+/** Ordered by kills, for the board with no track chosen. */
 async function leaderboard(limit)
 {
 	const result = await pool.query(
@@ -131,7 +139,30 @@ async function leaderboard(limit)
 	return result.rows;
 }
 
+/** Only ever moves down: a slower lap than the one on record is not news. */
+async function recordLap(userId, track, milliseconds)
+{
+	await pool.query(
+		`INSERT INTO laps (user_id, track, best_ms) VALUES ($1, $2, $3)
+		 ON CONFLICT (user_id, track) DO UPDATE
+		 SET best_ms = LEAST(laps.best_ms, EXCLUDED.best_ms), updated_at = now()`,
+		[userId, track, milliseconds]);
+}
+
+async function lapBoard(track, limit)
+{
+	const result = await pool.query(
+		`SELECT u.username, l.best_ms
+		 FROM laps l JOIN users u ON u.id = l.user_id
+		 WHERE l.track = $1
+		 ORDER BY l.best_ms ASC, u.username ASC
+		 LIMIT $2`, [track, Math.min(limit || 20, 100)]);
+
+	return result.rows;
+}
+
 module.exports = {
 	available, connect, createUser, findUser, getProfile,
-	recordKill, recordDeath, recordPlayed, leaderboard
+	recordKill, recordDeath, recordPlayed, leaderboard,
+	recordLap, lapBoard
 };

@@ -147,13 +147,16 @@ function readBody(request)
 /** Returns true when the request was an accounts one and has been answered. */
 async function handle(request, response, url)
 {
+	// The caller splits the query off before matching, so it's parsed back here
+	const query = new URLSearchParams((request.url || '').split('?')[1] || '');
+
 	if (request.method === 'OPTIONS')
 	{
 		send(response, 204, {});
 		return true;
 	}
 
-	if (!url.startsWith('/auth/') && url !== '/leaderboard') return false;
+	if (!url.startsWith('/auth/') && url !== '/leaderboard' && url !== '/race/lap') return false;
 
 	if (!db.available())
 	{
@@ -204,8 +207,38 @@ async function handle(request, response, url)
 			return true;
 		}
 
+		if (url === '/race/lap' && request.method === 'POST')
+		{
+			const claims = identify(request);
+			if (claims === null) { send(response, 401, { error: 'Not signed in.' }); return true; }
+
+			const body = await readBody(request);
+			const track = typeof body.track === 'string' ? body.track.slice(0, 40) : '';
+			const ms = Number(body.ms);
+
+			// A lap nobody could drive is a lap nobody drove
+			if (track.length === 0 || !Number.isFinite(ms) || ms < 3000 || ms > 30 * 60 * 1000)
+			{
+				send(response, 400, { error: 'That is not a lap time.' });
+				return true;
+			}
+
+			await db.recordLap(claims.uid, track, Math.round(ms));
+			send(response, 200, { ok: true });
+			return true;
+		}
+
 		if (url === '/leaderboard' && request.method === 'GET')
 		{
+			// ?track= asks for lap times on one circuit instead of kills overall
+			const track = query.get('track');
+
+			if (track)
+			{
+				send(response, 200, { track: track, players: await db.lapBoard(track, 20) });
+				return true;
+			}
+
 			send(response, 200, { players: await db.leaderboard(20) });
 			return true;
 		}

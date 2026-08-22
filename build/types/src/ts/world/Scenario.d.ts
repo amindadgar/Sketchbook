@@ -9,6 +9,12 @@ export declare class Scenario {
     world: World;
     descriptionTitle: string;
     descriptionContent: string;
+    /**
+     * The path node the computer drivers are pointed at, when there are any.
+     * That ring of nodes is the track, so its presence is what makes a scenario
+     * a race rather than anything written down about its name.
+     */
+    racePath: string;
     private rootNode;
     private spawnPoints;
     private invisible;

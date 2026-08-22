@@ -10,6 +10,8 @@ export class FollowTarget implements ICharacterAI
 {
 	public character: Character;
 	public isTargetReached: boolean;
+	/** Held on the grid until the race starts. */
+	public paused: boolean = false;
 
 	public target: THREE.Object3D;
 	private stopDistance: number;
@@ -27,6 +29,14 @@ export class FollowTarget implements ICharacterAI
 
 	public update(timeStep: number): void
 	{
+		if (this.paused)
+		{
+			this.character.controlledObject?.triggerAction('throttle', false);
+			this.character.controlledObject?.triggerAction('reverse', false);
+			this.character.controlledObject?.triggerAction('brake', true);
+			return;
+		}
+
 		if (this.character.controlledObject !== undefined)
 		{
 			let source = new THREE.Vector3();

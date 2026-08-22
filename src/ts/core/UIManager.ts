@@ -85,6 +85,69 @@ export class UIManager
 		marker.classList.add('struck');
 	}
 
+	// ------------------------------------------------------------------- racing
+
+	public static setRaceVisible(value: boolean): void
+	{
+		document.getElementById('race-hud').style.display = value ? 'block' : 'none';
+	}
+
+	public static setRaceHud(lap: number, laps: number, place: number, field: number,
+		time: string, best: string): void
+	{
+		document.getElementById('race-lap').textContent = lap + ' / ' + laps;
+		document.getElementById('race-place').textContent = place + ' / ' + field;
+		document.getElementById('race-time').textContent = time;
+		document.getElementById('race-best').textContent = best;
+	}
+
+	/** The starting lights, and 'GO'. Undefined takes them away. */
+	public static setRaceCountdown(text: string): void
+	{
+		let element = document.getElementById('race-countdown');
+
+		if (text === undefined)
+		{
+			element.style.display = 'none';
+			return;
+		}
+
+		if (element.textContent !== text)
+		{
+			element.textContent = text;
+			// Restarted so each number of the countdown gets its own beat
+			element.classList.remove('tick');
+			void element.offsetWidth;
+			element.classList.add('tick');
+		}
+
+		element.style.display = 'block';
+	}
+
+	public static setRaceResult(place: number, field?: number, total?: string, best?: string): void
+	{
+		let panel = document.getElementById('race-result');
+
+		if (place === undefined)
+		{
+			panel.style.display = 'none';
+			return;
+		}
+
+		document.getElementById('race-result-place').textContent = UIManager.ordinal(place) + ' of ' + field;
+		document.getElementById('race-result-total').textContent = total;
+		document.getElementById('race-result-best').textContent = best;
+		panel.style.display = 'block';
+	}
+
+	private static ordinal(value: number): string
+	{
+		if (value === 1) return '1st';
+		if (value === 2) return '2nd';
+		if (value === 3) return '3rd';
+		return value + 'th';
+	}
+
 	public static toggleSettings(): void
 	{
 		let panel = document.getElementById('dat-gui-container');

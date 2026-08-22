@@ -289,3 +289,25 @@ body.touch #speedometer {
 	   here would lose to. The figure under the stick replaces this entirely. */
 	display: none !important;
 }
+
+/* The lap board shares the top left with the map button, so it moves across */
+body.touch #race-hud {
+	top: 8px;
+	left: 130px;
+	min-width: 0;
+	padding: 6px 9px;
+}
+
+body.touch #race-time {
+	margin: 2px 0 0 0;
+	font-size: 19px;
+}
+
+body.touch .race-row {
+	font-size: 11px;
+	gap: 10px;
+}
+
+body.touch #race-countdown {
+	font-size: 62px;
+}
