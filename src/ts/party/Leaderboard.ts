@@ -62,8 +62,20 @@ export class Leaderboard
 		[
 			String(index + 1),
 			String(entry.username),
-			laps ? RaceSystem.clock(entry.best_ms / 1000) : String(entry.kills)
+			Leaderboard.figure(entry, laps)
 		]));
+	}
+
+	/**
+	 * A relay older than the game answers a lap request with the kills board,
+	 * which has no times in it. Better a dash than three NaNs.
+	 */
+	private static figure(entry: any, laps: boolean): string
+	{
+		let value = laps ? entry.best_ms : entry.kills;
+		if (typeof value !== 'number') return '--';
+
+		return laps ? RaceSystem.clock(value / 1000) : String(value);
 	}
 
 	/** Everything here came off the network, so all of it is written as text. */
