@@ -916,6 +916,10 @@ export class World
 			+ '<span class="ctrl-desc">Mute music</span></div>';
 		html += '<div class="ctrl-row"><span class="ctrl-key">C</span>'
 			+ '<span class="ctrl-desc">Center camera</span></div>';
+		html += '<div class="ctrl-row"><span class="ctrl-key">L</span>'
+			+ '<span class="ctrl-desc">Leaderboard</span></div>';
+		html += '<div class="ctrl-row"><span class="ctrl-key">Enter</span>'
+			+ '<span class="ctrl-desc">Party chat</span></div>';
 
 		document.getElementById('controls').innerHTML = html;
 	}
