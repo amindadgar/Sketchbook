@@ -194,6 +194,9 @@ function matchMessage(room, now)
 	return {
 		t: 'match',
 		phase: room.phase,
+		// Which round this is, so a client can tell the five second sync of a
+		// round already in progress from the start of the next one
+		round: room.round,
 		remaining: Math.max(0, Math.round((room.endsAt - now) / 1000)),
 		results: room.phase === 'over' ? standings(room) : undefined
 	};
@@ -219,8 +222,9 @@ function tickMatches()
 				for (const player of room.players) player.score = 0;
 
 				room.phase = 'running';
+				room.round++;
 				room.endsAt = now + MATCH_LENGTH_MS;
-				console.log('room %s: new round', room.code);
+				console.log('room %s: round %d', room.code, room.round);
 			}
 
 			room.lastSync = now;
@@ -382,7 +386,7 @@ wss.on('connection', (ws) =>
 				const now = Date.now();
 				const room = {
 					code, players: new Set(), scenario: msg.scenario || null,
-					phase: 'running', endsAt: now + MATCH_LENGTH_MS, lastSync: now
+					phase: 'running', round: 1, endsAt: now + MATCH_LENGTH_MS, lastSync: now
 				};
 				rooms.set(code, room);
 				joinRoom(player, room);

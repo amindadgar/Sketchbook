@@ -161,6 +161,8 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 
 	public onInputChange(): void
 	{
+		if (this.actions.recover !== undefined && this.actions.recover.justPressed) this.recover();
+
 		if (this.actions.seat_switch.justPressed && this.controllingCharacter?.occupyingSeat?.connectedSeats.length > 0)
 		{
 			this.controllingCharacter.modelContainer.visible = true;
@@ -338,6 +340,31 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 				this.rayCastVehicle.applyEngineForce(force, wheel.rayCastWheelInfoIndex);
 			}
 		});
+	}
+
+	/**
+	 * Sets a stuck vehicle back on its wheels where it stands.
+	 *
+	 * A car that stops upside down rights itself already, but one wedged nose
+	 * first into a barrier is the right way up and going nowhere, and there was
+	 * no way out of that short of restarting the whole scenario. The heading is
+	 * kept and everything else about the rotation is thrown away.
+	 */
+	public recover(): void
+	{
+		let forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.quaternion);
+		let heading = Math.atan2(forward.x, forward.z);
+		let upright = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, heading, 0));
+
+		this.collision.quaternion.set(upright.x, upright.y, upright.z, upright.w);
+		this.collision.position.y += 1.2;
+		this.collision.velocity.set(0, 0, 0);
+		this.collision.angularVelocity.set(0, 0, 0);
+
+		// The visuals read the interpolated pair, so without these the car snaps
+		// back to where it was for a frame before catching up
+		this.collision.interpolatedQuaternion.copy(this.collision.quaternion);
+		this.collision.interpolatedPosition.copy(this.collision.position);
 	}
 
 	/**

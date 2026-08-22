@@ -46,6 +46,7 @@ import { Chat } from '../party/Chat';
 import { Leaderboard } from '../party/Leaderboard';
 import { Notices } from '../core/Notices';
 import { Sfx } from '../core/Sfx';
+import { Onboarding } from '../core/Onboarding';
 import { Progress } from '../progress/Progress';
 import { StuntSystem } from '../stunts/StuntSystem';
 import { CombatSystem } from '../combat/CombatSystem';
@@ -94,6 +95,7 @@ export class World
 	public leaderboard: Leaderboard;
 	public notices: Notices;
 	public sfx: Sfx;
+	public intro: Onboarding;
 	public progress: Progress;
 	public stunts: StuntSystem;
 	private headlightsOn: boolean = false;
@@ -208,6 +210,7 @@ export class World
 		this.race = new RaceSystem(this);
 		this.notices = new Notices(this);
 		this.sfx = new Sfx(this);
+		this.intro = new Onboarding(this);
 		this.progress = new Progress(this);
 		this.stunts = new StuntSystem(this);
 		this.chat = new Chat(this);
@@ -242,6 +245,7 @@ export class World
 						this.applyLocalIdentity();
 						this.resumeAudio();
 						UIManager.setUserInterfaceVisible(true);
+						this.intro.begin();
 					},
 					onHost: (url) => this.party.host(url, this.localPlayer),
 					onJoin: (url, code) => this.party.join(url, code, this.localPlayer)
@@ -288,6 +292,7 @@ export class World
 		if (this.touchControls !== undefined) this.touchControls.update();
 
 		this.chat.update(unscaledTimeStep);
+		this.intro.update(unscaledTimeStep);
 		this.updateProgress(unscaledTimeStep);
 		this.progress.update(unscaledTimeStep);
 		this.updateHeadlights();
@@ -1122,6 +1127,7 @@ export class World
 						placeholder="Say something, Enter to send">
 					<div id="chat-open">&#128172;</div>
 				</div>
+				<div id="intro"></div>
 				<div id="stunt-live">
 					<div id="stunt-what"></div>
 					<div id="stunt-air"></div>

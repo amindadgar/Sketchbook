@@ -127,6 +127,8 @@ export class Progress
 	/** A high water mark rather than a total, for the "go this fast" sort. */
 	public noteSpeed(metresPerSecond: number): void
 	{
+		this.rollOverIfNewDay();
+
 		if ((this.state.counters['topSpeed'] || 0) >= metresPerSecond) return;
 
 		this.state.counters['topSpeed'] = metresPerSecond;

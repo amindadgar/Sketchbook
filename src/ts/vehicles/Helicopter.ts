@@ -38,6 +38,7 @@ export class Helicopter extends Vehicle implements IControllable, IWorldEntity
 			'exitVehicle': new KeyBinding('KeyF'),
 			'seat_switch': new KeyBinding('KeyX'),
 			'view': new KeyBinding('KeyV'),
+			'recover': new KeyBinding('KeyR'),
 		};
 	}
 

@@ -540,6 +540,13 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	{
 		if (this.health <= 0) return;
 
+		// Ahead of the vehicle, which binds R on its own to right itself
+		if (code === 'KeyR' && pressed === true && event.shiftKey === true)
+		{
+			this.world.restartScenario();
+			return;
+		}
+
 		if (this.controlledObject !== undefined)
 		{
 			this.controlledObject.handleKeyboardEvent(event, code, pressed);

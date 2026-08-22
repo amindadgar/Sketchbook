@@ -87,6 +87,7 @@ export class Car extends Vehicle implements IControllable
 			'seat_switch': new KeyBinding('KeyX'),
 			'view': new KeyBinding('KeyV'),
 			'boost': new KeyBinding('ShiftLeft'),
+			'recover': new KeyBinding('KeyR'),
 		};
 
 		this.steeringSimulator = new SpringSimulator(60, 10, 0.6);
@@ -417,6 +418,10 @@ export class Car extends Vehicle implements IControllable
 			{
 				keys: ['Space'],
 				desc: 'Handbrake'
+			},
+			{
+				keys: ['R'],
+				desc: 'Flip the car back over'
 			},
 			{
 				keys: ['V'],

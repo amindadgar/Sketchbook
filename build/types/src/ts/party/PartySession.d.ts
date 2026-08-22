@@ -15,7 +15,7 @@ export declare class PartySession implements IUpdatable {
     /** Round state, mirrored from the server and counted down between updates. */
     private matchPhase;
     private matchRemaining;
-    private matchStarted;
+    private matchRound;
     private shownSeconds;
     private world;
     private players;

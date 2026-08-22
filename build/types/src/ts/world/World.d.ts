@@ -23,6 +23,7 @@ import { Chat } from '../party/Chat';
 import { Leaderboard } from '../party/Leaderboard';
 import { Notices } from '../core/Notices';
 import { Sfx } from '../core/Sfx';
+import { Onboarding } from '../core/Onboarding';
 import { Progress } from '../progress/Progress';
 import { StuntSystem } from '../stunts/StuntSystem';
 import { CombatSystem } from '../combat/CombatSystem';
@@ -69,6 +70,7 @@ export declare class World {
     leaderboard: Leaderboard;
     notices: Notices;
     sfx: Sfx;
+    intro: Onboarding;
     progress: Progress;
     stunts: StuntSystem;
     private headlightsOn;

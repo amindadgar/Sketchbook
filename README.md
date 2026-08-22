@@ -24,7 +24,11 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 * **Combat** — four weapons, health, kills, recoil, hit markers and a scoreboard
 * **Races** — the three circuits the world always had, now with laps, times and a running order
 * **Driving with consequences** — a handbrake that steps the back out, downforce, crash damage and smoke
-* **Chat, leaderboards and unlockable colours and hats**
+* **Nitro** — three and a half seconds of it, and a stunt park to spend it in
+* **Stunt scoring** — airtime, flips, barrel rolls and spins, chained for a multiplier
+* **Levels and daily challenges** — three a day, the same three for everyone
+* **A day that passes** — the sun crosses in seven minutes, and the cars have headlights
+* **Chat, kill feed, killstreaks, leaderboards and unlockable colours and hats**
 * **A minimap**, a speedometer, and settings folded behind a gear
 * **Free roam (everything)** — a scenario with a car, a helicopter and an aeroplane all in reach
 * **A world that downloads in 6MB** rather than 26, at the same picture
@@ -46,6 +50,13 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 	* Cars, airplanes and helicopters
 	* All three within reach in the Free roam (everything) scenario
 	* Handbrake drift, speed sensitive downforce, crash damage and smoke
+	* Nitro, and R to set a stuck one back on its wheels
+* Stunts
+	* Airtime, flips, barrel rolls and spins, measured off the physics body
+	* A chain multiplier for landing them back to back, and a personal best
+* Progress
+	* Experience and a level from kills, laps, races and stunts
+	* Three daily challenges drawn from a pool by the date
 * Racing
 	* Laps, lap times, best laps and a live running order against the AI drivers
 	* Three circuits, timed from the same path the drivers follow
@@ -64,10 +75,12 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 	* Weapon pickups floating in a halo, GTA style
 	* Aim down sights, recoil, hit markers, health, kills and a scoreboard
 	* Server side checks on claimed hits, and line of sight checked by the target
-* Progress
-	* Kills counted against an account
+* Accounts
+	* Kills counted against a name that persists
 	* Four colours and three hats unlocked by them
 	* Leaderboards for kills and for lap times
+* World
+	* A day and night cycle, with headlights after dark
 * HUD
 	* Round minimap with party markers
 	* Speedometer, lap board, round clock
@@ -88,7 +101,9 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 | --- | --- |
 | `W` / `S` | Accelerate, brake and reverse |
 | `A` / `D` | Steer |
+| `Shift` | Nitro |
 | `Space` | Handbrake |
+| `R` | Set the car back on its wheels |
 | `V` | Switch to first person |
 | `X` | Switch seats |
 | `F` | Leave the vehicle |
@@ -129,8 +144,8 @@ while sitting in the car it just opened is no use to anybody:
 | Where | Buttons |
 | --- | --- |
 | On foot | JUMP, ENTER, and FIRE and AIM once armed |
-| Car | BRAKE, EXIT |
-| Helicopter | YAW L, YAW R, UP, DOWN, EXIT |
+| Car | BOOST, BRAKE, FLIP, EXIT |
+| Helicopter | FLIP, YAW L, YAW R, UP, DOWN, EXIT |
 | Aeroplane | YAW L, YAW R, THRTL, BRAKE, EXIT |
 | Passenger | EXIT |
 
@@ -153,9 +168,13 @@ stick and the buttons would be on top of each other, so it says so and waits.
 The manifest asks for a landscape lock too, which browsers honour once the game
 has been added to a home screen.
 
-Health is a number rather than a bar on a phone, speed is a figure under the
-stick rather than a bar across the middle, and the map folds away behind a
-button: a glance is worth a corner, a permanent map isn't.
+Speed is a figure under the stick rather than a bar across the middle, with the
+nitro meter under it, and the map folds away behind a button: a glance is worth
+a corner, a permanent map isn't. Health is a number beside the gear on every
+device, not just this one.
+
+A card on the first run says the four things worth knowing, since the keyboard
+hints down the left hand side aren't there to read.
 
 **Add to Home Screen** works, and the welcome screen says so on a phone that
 hasn't done it yet. There's a web manifest, icons and a service worker that
@@ -378,6 +397,10 @@ magazine are both empty the gun is dropped and you're looking for another column
 Holding right mouse narrows the view, slides the camera over your shoulder so you
 aren't standing where the crosshair is, and cuts spread to a third.
 
+Kills are announced at three, five, seven and ten in a row, and each one hands
+over a magazine of spare rounds. That is help rather than a head start: a streak
+that armed the leader properly would end the round rather than liven it up.
+
 Every shot kicks the view up, from two thirds of a degree for the automatic to
 three and a half for the shotgun, and gives all of it back over the next
 fraction of a second, so a burst walks up the target and settles where it
@@ -390,6 +413,55 @@ kill scores a point on the scoreboard at the top right.
 Cars hurt too. An impact above six metres a second along the contact normal
 takes health off whoever is driving and wears the vehicle down, and a wreck
 below half condition smokes, harder the worse it is.
+
+## Stunts
+
+This map is a stunt park: a mega ramp, a loop, and half the scenery worth
+jumping off. Anything with the wheels off the ground for longer than a bump is
+scored on landing, provided the landing is on the wheels.
+
+| | Worth |
+| --- | --- |
+| Airtime | 60 a second |
+| Front or back flip | 300 each |
+| Barrel roll | 300 each |
+| 360 | 150 each |
+| Height gained | 12 a metre |
+
+Land another one within four and a half seconds and the chain multiplies, up to
+five times. Bail and it resets. Rotation is integrated along the car's own axes
+rather than compared between quaternions, which is what makes a barrel roll a
+barrel roll whichever way the car happens to be pointing when it takes off.
+
+Stunt points are worth experience, and the best run is remembered per browser.
+
+## Levels and challenges
+
+`L` shows your level, today's three challenges and whichever board fits where
+you are. Experience comes from kills, laps, races finished and stunt points, and
+levels widen as they go: a hundred to reach two, four hundred to reach three.
+
+Three challenges a day, drawn from a pool of twelve by a hash of the date, so
+everyone gets the same three and refreshing the page doesn't reshuffle them. No
+two watch the same counter, since finishing one would otherwise finish both.
+
+All of it is counted in the browser. The relay already counts kills against an
+account, and a second, differently trusted tally of the same thing living beside
+it would only ever disagree with it.
+
+## Day and night
+
+The sun crosses in seven minutes by default, settable in the settings panel, and
+moving either sun slider by hand takes it off the clock. It stops just short of
+the horizon: the sky is an atmospheric scattering shader with nothing behind it,
+so there are no stars to look at and a game nobody can see is worse than a short
+night. What sells the dark is the exposure coming down with the sun, which takes
+the sky with it.
+
+Cars grow headlights after dusk. Two sprites each, which cost nothing and follow
+the car for free, plus one real spotlight on whichever car the player is in:
+eight spotlights would rebuild every shader in the scene and buy very little at
+the speed a car goes past.
 
 ## Racing
 

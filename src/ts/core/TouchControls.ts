@@ -48,9 +48,11 @@ export class TouchControls
 		'car': [
 			{ id: 'touch-boost', label: 'BOOST', key: 'ShiftLeft' },
 			{ id: 'touch-brake', label: 'BRAKE', key: 'Space' },
-			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF', wide: true },
+			{ id: 'touch-recover', label: 'FLIP', key: 'KeyR' },
+			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF' },
 		],
 		'helicopter': [
+			{ id: 'touch-recover', label: 'FLIP', key: 'KeyR' },
 			{ id: 'touch-yaw-left', label: 'YAW L', key: 'KeyQ' },
 			{ id: 'touch-yaw-right', label: 'YAW R', key: 'KeyE' },
 			{ id: 'touch-up', label: 'UP', key: 'ShiftLeft' },

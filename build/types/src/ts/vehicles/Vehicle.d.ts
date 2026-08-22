@@ -72,6 +72,15 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     setSteeringValue(val: number): void;
     applyEngineForce(force: number): void;
     /**
+     * Sets a stuck vehicle back on its wheels where it stands.
+     *
+     * A car that stops upside down rights itself already, but one wedged nose
+     * first into a barrier is the right way up and going nowhere, and there was
+     * no way out of that short of restarting the whole scenario. The heading is
+     * kept and everything else about the rotation is thrown away.
+     */
+    recover(): void;
+    /**
      * A pair of lamps at the front, lit after dark. Sprites rather than lights:
      * they're parented to the vehicle so they follow it for nothing, and the
      * point is that a car is visible in the dark, not that it lights the road.

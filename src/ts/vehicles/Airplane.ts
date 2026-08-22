@@ -58,6 +58,7 @@ export class Airplane extends Vehicle implements IControllable, IWorldEntity
 			'exitVehicle': new KeyBinding('KeyF'),
 			'seat_switch': new KeyBinding('KeyX'),
 			'view': new KeyBinding('KeyV'),
+			'recover': new KeyBinding('KeyR'),
 		};
 
 		this.steeringSimulator = new SpringSimulator(60, 10, 0.6); 

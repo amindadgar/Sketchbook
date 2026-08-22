@@ -27,7 +27,7 @@ export class PartySession implements IUpdatable
 	/** Round state, mirrored from the server and counted down between updates. */
 	private matchPhase: string;
 	private matchRemaining: number = 0;
-	private matchStarted: boolean = false;
+	private matchRound: number;
 	private shownSeconds: number = -1;
 
 	private world: World;
@@ -146,9 +146,10 @@ export class PartySession implements IUpdatable
 
 			UIManager.setMatchResult(message.phase === 'over' ? message.results : undefined);
 
-			// Everyone starts the next round level, and the server has already
-			// zeroed its own copy of the scores
-			if (message.phase === 'running' && this.matchStarted)
+			// Only when the round number moves on. The deadline is repeated every
+			// few seconds to keep the clock honest, and treating those as the
+			// start of a round wiped the scoreboard while people were playing.
+			if (this.matchRound !== undefined && message.round !== this.matchRound)
 			{
 				this.localScore = 0;
 				for (const id in this.players)
@@ -158,7 +159,7 @@ export class PartySession implements IUpdatable
 				this.refreshScoreboard();
 			}
 
-			this.matchStarted = true;
+			this.matchRound = message.round;
 		};
 
 		this.client.onScore = (id, score) =>
@@ -255,7 +256,7 @@ export class PartySession implements IUpdatable
 	public leave(): void
 	{
 		this.matchPhase = undefined;
-		this.matchStarted = false;
+		this.matchRound = undefined;
 		this.shownSeconds = -1;
 		UIManager.setMatchClock(undefined);
 		UIManager.setMatchResult(undefined);
