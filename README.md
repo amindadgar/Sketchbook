@@ -19,7 +19,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 
 ## What this fork adds
 
-* **Audio** — positional engine sound pitched by revs, and a music track
+* **Audio** — positional engine sound pitched by revs, and an outrun music track
 * **Party mode** — room codes over a small WebSocket relay, up to 8 players, in five minute rounds
 * **Combat** — four weapons, health, kills, recoil, hit markers and a scoreboard
 * **Races** — the three circuits the world always had, now with laps, times and a running order
@@ -247,10 +247,9 @@ Currently deployed at:
 | Game | https://game-amin.up.railway.app |
 | Party server | `wss://game-amin-party.up.railway.app` |
 
-Pushing to master does **not** redeploy. Railway can only watch a repo that has
-its [GitHub App](https://github.com/apps/railway) installed, and this one
-doesn't, so deploys have to be triggered by hand from the dashboard. Installing
-the app on the repo is what makes pushes deploy themselves.
+Pushing to master redeploys both services: Railway watches the repo through its
+[GitHub App](https://github.com/apps/railway) and builds each push from the
+Dockerfiles above.
 
 ## Party mode
 
@@ -545,7 +544,7 @@ replacing the file, with no code change:
 | --- | --- |
 | `world.glb`, `car.glb`, `heli.glb`, `airplane.glb`, `boxman.glb` | Scenes and models, exported from `src/blend` |
 | `car.wav`, `heli.wav`, `airplane.wav` | Engine loops |
-| `music.mp3` | Music, streamed rather than decoded into memory |
+| `music.mp3` | Music, streamed rather than decoded into memory. "Voltaic" by Kevin MacLeod, CC BY 4.0, see Credits |
 | `gun_*.wav` | Weapon reports |
 
 `world.glb` is 6MB, down from the 26MB the fork inherited. Almost all of that
@@ -602,3 +601,8 @@ Sketchbook is by [swift502](https://github.com/swift502), with contributions fro
 [aleqsunder](https://github.com/aleqsunder), [barhatsor](https://github.com/barhatsor)
 and [danshuri](https://github.com/danshuri). The [original live demo](https://jblaha.art/sketchbook/latest)
 is still up, without any of the additions listed above.
+
+The music is "Voltaic" by Kevin MacLeod ([incompetech.com](https://incompetech.com)), licensed
+under [Creative Commons: By Attribution 4.0](https://creativecommons.org/licenses/by/4.0/). It
+was re-encoded at 128 kbps and brought down in level to sit under the engines, and it is
+credited on the welcome screen as well.

@@ -31,7 +31,11 @@ export class PartyMenu
 			buttonsStyling: false,
 			allowOutsideClick: false,
 			allowEscapeKey: false,
-			footer: '<a href="https://github.com/amindadgar/Sketchbook" target="_blank">GitHub page</a>',
+			// The music is CC BY, so its credit goes where players can see it
+			footer: '<a href="https://github.com/amindadgar/Sketchbook" target="_blank">GitHub page</a>'
+				+ '<span class="music-credit">Music: <a href="https://incompetech.com" target="_blank">'
+				+ '"Voltaic" Kevin MacLeod (incompetech.com)</a>, licensed under '
+				+ '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a></span>',
 			onBeforeOpen: () =>
 			{
 				PartyMenu.bindSwatches();
