@@ -294,10 +294,17 @@ bit, and the log fades out on its own.
 
 **Free roam (everything)** is the scenario to use with friends. It starts
 everyone at the airfield with a car, a helicopter and an aeroplane all within
-about thirty metres, so nobody has to walk across the map to fly. The race and
-stunt scenarios were built for one player and have a single spawn point, so a
-party shares the car in them: whoever the relay seats first drives, and everyone
-else is moved into the passenger seats, or beside the car once those are full.
+about thirty metres, so nobody has to walk across the map to fly.
+
+The race and stunt scenarios were built for one player, with a single car to
+start in, but in a party everyone gets a car of their own. In a race the grid
+is shared out: the player's spot, then the computer drivers' cars nearest first,
+in the order people joined, and the computer only drives the cars nobody has.
+Someone who joins mid race takes the next place on the grid and the computer
+driver in it gets out. On the stunt ramps, and past the end of a grid, spare
+cars are parked in rows behind the start wherever there's level ground for one,
+and every client works out the same spots from the map. If there's no room for
+another car, you start on foot beside the first one and can ride along.
 
 One person to a seat. Pressing `F` at a car someone is already driving puts you
 in beside them rather than on top of them, and two people going for the same

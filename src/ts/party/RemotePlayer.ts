@@ -267,8 +267,13 @@ export class RemotePlayer implements IUpdatable
 		let vehicle = this.findVehicle(wantedId);
 		let target = vehicle !== undefined ? vehicle.seats[wantedIndex] : undefined;
 
-		// Not spawned here yet; the next report tries again
-		if (target === undefined) return;
+		// Not spawned here yet, or their own spare party car this client hasn't
+		// made; the next report tries again
+		if (target === undefined)
+		{
+			if (vehicle === undefined) this.world.spawnPartyVehicle(wantedId);
+			return;
+		}
 
 		// Someone else is in it, here or by the relay's word. They stay on foot,
 		// at the spot they reported, rather than being stacked into it.
@@ -288,6 +293,9 @@ export class RemotePlayer implements IUpdatable
 
 	private canTake(seat: VehicleSeat): boolean
 	{
+		// A computer driver holding their place on the grid moves out for them
+		this.world.party.evictAi(seat);
+
 		if (seat.occupiedBy !== null && seat.occupiedBy !== this.character) return false;
 
 		let holder = this.world.party.seatHolder(seat);

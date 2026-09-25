@@ -89,8 +89,12 @@ export class PartySession implements IUpdatable
 			players.forEach((info) => this.addPlayer(info));
 			this.refreshHud();
 
+			// A race or stunt run gives everyone a car of their own, and which one
+			// depends on who is in the party, so joining one already going means
+			// starting it afresh here even when it's the one already loaded
 			let scenario = message.scenario;
-			if (scenario !== null && scenario !== undefined && scenario !== this.world.lastScenarioID)
+			if (scenario !== null && scenario !== undefined
+				&& (scenario !== this.world.lastScenarioID || this.world.scenarioHasPartyGrid(scenario)))
 			{
 				this.applyScenario(scenario);
 			}
@@ -550,6 +554,42 @@ export class PartySession implements IUpdatable
 		return vehicle !== undefined ? vehicle.seats[Number(key.substring(split + 1))] : undefined;
 	}
 
+	/** Everyone in the party, this player included. */
+	public memberIds(): number[]
+	{
+		let ids = [this.client.id];
+
+		for (const id in this.players)
+		{
+			if (this.players.hasOwnProperty(id)) ids.push(Number(id));
+		}
+
+		return ids;
+	}
+
+	/**
+	 * A computer driver sitting where a party member wants to be gives the car
+	 * up. They're placeholders on a race grid, and each client has its own,
+	 * so the car goes to the person rather than being argued over.
+	 */
+	public evictAi(seat: VehicleSeat): void
+	{
+		let occupant = seat.occupiedBy;
+		if (occupant === null || occupant === this.world.localCharacter || occupant.behaviour === undefined) return;
+
+		let vehicle = seat.vehicle as unknown as Vehicle;
+		if (vehicle.controllingCharacter === occupant)
+		{
+			vehicle.controllingCharacter = undefined;
+			vehicle.resetControls();
+		}
+
+		occupant.controlledObject = undefined;
+		occupant.leaveSeat();
+
+		if (this.world.characters.indexOf(occupant) >= 0) this.world.remove(occupant);
+	}
+
 	/** One member's seat as the relay announced it: taken, moved, or given up. */
 	private recordSeat(message: any): void
 	{
@@ -578,9 +618,17 @@ export class PartySession implements IUpdatable
 			// next reconcile claims it again if it's still wanted.
 			this.claimedKey = key;
 		}
-		else if (key === null && this.players[id] !== undefined)
+		else if (key === null)
 		{
-			this.players[id].seatReleased();
+			if (this.players[id] !== undefined) this.players[id].seatReleased();
+		}
+		else
+		{
+			// Their own car from a race grid, which this client may still have a
+			// computer driver in, or never have made if they joined later
+			let seat = this.seatOf(id);
+			if (seat !== undefined) this.evictAi(seat);
+			else this.world.spawnPartyVehicle(message.v);
 		}
 	}
 
@@ -670,8 +718,10 @@ export class PartySession implements IUpdatable
 
 			if (vehicle === undefined)
 			{
-				// Still loading here; kept for when it turns up
+				// Still loading here, or a spare party car this client hasn't made
+				// yet; kept for when it turns up
 				this.pendingVehicles[message.v] = { message: message, sender: message.id, at: PartySession.now() };
+				this.world.spawnPartyVehicle(message.v);
 				return;
 			}
 		}
@@ -724,7 +774,11 @@ export class PartySession implements IUpdatable
 			}
 
 			let vehicle = this.findVehicle(id);
-			if (vehicle === undefined) continue;
+			if (vehicle === undefined)
+			{
+				this.world.spawnPartyVehicle(id);
+				continue;
+			}
 
 			delete this.pendingVehicles[id];
 

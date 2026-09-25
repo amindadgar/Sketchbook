@@ -93,6 +93,8 @@ export class World
 	 * belongs to a world that no longer exists and is thrown away.
 	 */
 	public scenarioGeneration: number = 0;
+	/** The scenario last launched, rather than the ones that always spawn alongside it. */
+	private activeScenario: Scenario;
 	public party: PartySession;
 	public combat: CombatSystem;
 	public effects: Effects;
@@ -948,8 +950,11 @@ export class World
 		}
 		this.race.stop();
 
+		this.activeScenario = undefined;
+
 		for (const scenario of this.scenarios) {
 			if (scenario.id === scenarioID || scenario.spawnAlways) {
+				if (scenario.id === scenarioID) this.activeScenario = scenario;
 				scenario.launch(loadingManager, this);
 
 				// Arms it. The lights don't start until the world is actually
@@ -961,6 +966,22 @@ export class World
 
 		// Everyone in a party has to be in the same scenario, or vehicle ids don't line up
 		if (this.party !== undefined) this.party.onScenarioLaunched(scenarioID);
+	}
+
+	/**
+	 * A party member's spare car that this client doesn't have, because they
+	 * joined after it launched. Anything else by that name is left alone.
+	 */
+	public spawnPartyVehicle(name: string): void
+	{
+		if (this.activeScenario !== undefined) this.activeScenario.spawnPartyExtra(name, this);
+	}
+
+	/** Whether a scenario starts players in a car, and so gives a party one each. */
+	public scenarioHasPartyGrid(scenarioID: string): boolean
+	{
+		let scenario = this.scenarios.find((candidate) => candidate.id === scenarioID);
+		return scenario !== undefined && scenario.playerVehicleSpawn() !== undefined;
 	}
 
 	/**

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { ISpawnPoint } from '../interfaces/ISpawnPoint';
 import { World } from '../world/World';
 import { Helicopter } from '../vehicles/Helicopter';
@@ -17,6 +18,9 @@ export class VehicleSpawnPoint implements ISpawnPoint
 	public driver: string;
 	public firstAINode: string;
 
+	/** For a vehicle added in the middle of a game, where there's no loading screen to go through. */
+	private static loader: GLTFLoader = new GLTFLoader();
+
 	private object: THREE.Object3D;
 
 	constructor(object: THREE.Object3D)
@@ -24,13 +28,42 @@ export class VehicleSpawnPoint implements ISpawnPoint
 		this.object = object;
 	}
 
-	public spawn(loadingManager: LoadingManager, world: World): void
+	/** What the vehicle is known by across a party: the spawn point's name. */
+	public get name(): string
+	{
+		return this.object.name;
+	}
+
+	public getWorldPosition(target: THREE.Vector3): THREE.Vector3
+	{
+		return this.object.getWorldPosition(target);
+	}
+
+	public getWorldQuaternion(target: THREE.Quaternion): THREE.Quaternion
+	{
+		return this.object.getWorldQuaternion(target);
+	}
+
+	/**
+	 * 'driver' overrides the one the world file gives, for this launch only:
+	 * null for an empty car, which is how a party takes over the seats the
+	 * computer drivers would otherwise have. Without a loading manager the
+	 * model is fetched quietly, for a car turning up mid game.
+	 */
+	public spawn(loadingManager: LoadingManager, world: World, driver?: string): void
 	{
 		// Anything arriving after another launch has begun belongs to a world
 		// that's gone, and adding it would put two vehicles under one id
 		let generation = world.scenarioGeneration;
+		let seatedDriver = driver !== undefined ? driver : this.driver;
 
-		loadingManager.loadGLTF('build/assets/' + this.type + '.glb', (model: any) =>
+		let load = (path: string, done: (gltf: any) => void) =>
+		{
+			if (loadingManager !== undefined) loadingManager.loadGLTF(path, done);
+			else VehicleSpawnPoint.loader.load(path, done);
+		};
+
+		load('build/assets/' + this.type + '.glb', (model: any) =>
 		{
 			if (world.scenarioGeneration !== generation) return;
 
@@ -46,9 +79,9 @@ export class VehicleSpawnPoint implements ISpawnPoint
 			vehicle.collision.quaternion.copy(Utils.cannonQuat(worldQuat));
 			world.add(vehicle);
 
-			if (this.driver !== undefined)
+			if (seatedDriver !== undefined && seatedDriver !== null)
 			{
-				loadingManager.loadGLTF('build/assets/boxman.glb', (charModel) =>
+				load('build/assets/boxman.glb', (charModel) =>
 				{
 					if (world.scenarioGeneration !== generation) return;
 
@@ -56,11 +89,11 @@ export class VehicleSpawnPoint implements ISpawnPoint
 					world.add(character);
 					character.teleportToVehicle(vehicle, vehicle.seats[0]);
 
-					if (this.driver === 'player')
+					if (seatedDriver === 'player')
 					{
 						character.takeControl();
 					}
-					else if (this.driver === 'ai')
+					else if (seatedDriver === 'ai')
 					{
 						if (this.firstAINode !== undefined)
 						{
