@@ -41,6 +41,10 @@ export class ExitingVehicle extends ExitingStateBase
 		{
 			this.detachCharacterFromVehicle();
 
+			// Out of the seat as soon as out of the car, including while the door
+			// is shut behind, or everyone else goes on seeing them sitting in it
+			this.character.leaveSeat();
+
 			// Not every vehicle has doors, and the checks further down this same
 			// block already know that
 			if (this.seat.door !== undefined) this.seat.door.physicsEnabled = true;
@@ -48,17 +52,14 @@ export class ExitingVehicle extends ExitingStateBase
 			if (!this.character.rayHasHit)
 			{
 				this.character.setState(new Falling(this.character));
-				this.character.leaveSeat();
 			}
 			else if ((this.vehicle as unknown as Vehicle).collision.velocity.length() > 1)
 			{
 				this.character.setState(new DropRolling(this.character));
-				this.character.leaveSeat();
 			}
 			else if (this.anyDirection() || this.seat.door === undefined)
 			{
 				this.character.setState(new Idle(this.character));
-				this.character.leaveSeat();
 			}
 			else
 			{

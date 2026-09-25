@@ -175,7 +175,9 @@ export class Car extends Vehicle implements IControllable
 
 		this.updateEngineSound(
 			0.6 + revs * 1.2,
-			this.controllingCharacter === undefined ? 0 : (0.25 + revs * 0.75) * (throttling ? 1 : 0.4)
+			// Driven from another client there's no throttle to read, so it's
+			// pitched and voiced from the speed alone rather than left silent
+			!this.hasDriver() ? 0 : (0.25 + revs * 0.75) * (throttling || this.isRemoteDriven() ? 1 : 0.4)
 		);
 
 		// Steering
@@ -183,9 +185,13 @@ export class Car extends Vehicle implements IControllable
 		this.setSteeringValue(this.steeringSimulator.position);
 		if (this.steeringWheel !== undefined) this.steeringWheel.rotation.z = -this.steeringSimulator.position * 2;
 
-		if (this.rayCastVehicle.numWheelsOnGround < 3 && Math.abs(this.collision.velocity.length()) < 0.5)	
-		{	
-			this.collision.quaternion.copy(this.collision.initQuaternion);	
+		// Not for one driven from another client, whose driver's own copy does
+		// this if it needs doing: here it would snap the car to its spawn
+		// rotation every time it caught air
+		if (this.rayCastVehicle.numWheelsOnGround < 3 && Math.abs(this.collision.velocity.length()) < 0.5
+			&& !this.isRemoteDriven())
+		{
+			this.collision.quaternion.copy(this.collision.initQuaternion);
 		}
 
 		// Getting out

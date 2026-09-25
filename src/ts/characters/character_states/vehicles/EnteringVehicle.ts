@@ -19,7 +19,7 @@ export class EnteringVehicle extends CharacterStateBase
 {
 	private vehicle: IControllable;
 	private animData: any;
-	private seat: VehicleSeat;
+	public readonly seat: VehicleSeat;
 
 	private initialPositionOffset: THREE.Vector3 = new THREE.Vector3();
 	private startPosition: THREE.Vector3 = new THREE.Vector3();
@@ -48,8 +48,7 @@ export class EnteringVehicle extends CharacterStateBase
 
 		this.startPosition.copy(entryPoint.position);
 		this.startPosition.y += 0.53;
-		this.endPosition.copy(seat.seatPointObject.position);
-		this.endPosition.y += 0.6;
+		seat.getSitPosition(this.endPosition);
 		this.initialPositionOffset.copy(this.startPosition).sub(this.character.position);
 
 		this.startRotation.copy(this.character.quaternion);
@@ -65,6 +64,15 @@ export class EnteringVehicle extends CharacterStateBase
 
 		if (this.animationEnded(timeStep))
 		{
+			// Checked again at the last moment: the seat was free when the walk
+			// to the door began, but a player on another screen can sit down in
+			// it while this one is still climbing in
+			if (!this.character.canUseSeat(this.seat))
+			{
+				this.character.forceLeaveVehicle();
+				return;
+			}
+
 			this.character.occupySeat(this.seat);
 			this.character.setPosition(this.endPosition.x, this.endPosition.y, this.endPosition.z);
 

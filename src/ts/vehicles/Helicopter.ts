@@ -55,8 +55,8 @@ export class Helicopter extends Vehicle implements IControllable, IWorldEntity
 	{
 		super.update(timeStep);
 		
-		// Rotors visuals
-		if (this.controllingCharacter !== undefined)
+		// Rotors visuals. A pilot on another client counts, or their rotors stop
+		if (this.hasDriver())
 		{
 			if (this.enginePower < 1) this.enginePower += timeStep * 0.2;
 			if (this.enginePower > 1) this.enginePower = 1;
@@ -94,6 +94,10 @@ export class Helicopter extends Vehicle implements IControllable, IWorldEntity
 
 	public physicsPreStep(body: CANNON.Body, heli: Helicopter): void
 	{
+		// Flown from another client: these forces write velocity outright, and
+		// would fight the reports that steer it here
+		if (this.isRemoteDriven()) return;
+
 		let quat = Utils.threeQuat(body.quaternion);
 		let right = new THREE.Vector3(1, 0, 0).applyQuaternion(quat);
 		let globalUp = new THREE.Vector3(0, 1, 0);

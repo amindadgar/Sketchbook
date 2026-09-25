@@ -45,10 +45,8 @@ export class SwitchingSeats extends CharacterStateBase
 			this.playAnimation('sitting_shift_right', 0.1);
 		}
 
-		this.startPosition.copy(fromSeat.seatPointObject.position);
-		this.startPosition.y += 0.6;
-		this.endPosition.copy(toSeat.seatPointObject.position);
-		this.endPosition.y += 0.6;
+		fromSeat.getSitPosition(this.startPosition);
+		toSeat.getSitPosition(this.endPosition);
 
 		this.startRotation.copy(fromSeat.seatPointObject.quaternion);
 		this.endRotation.copy(toSeat.seatPointObject.quaternion);

@@ -2,6 +2,8 @@ import Swal from 'sweetalert2';
 
 import { World } from '../world/World';
 import { Vehicle } from '../vehicles/Vehicle';
+import { VehicleSeat } from '../vehicles/VehicleSeat';
+import { SeatType } from '../enums/SeatType';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { NetworkClient, PlayerInfo } from './NetworkClient';
 import { RemotePlayer } from './RemotePlayer';
@@ -9,6 +11,7 @@ import { PlayerIdentity } from './PlayerIdentity';
 import { Account } from './Account';
 import { UIManager } from '../core/UIManager';
 import * as THREE from 'three';
+import * as CANNON from 'cannon';
 
 /**
  * Holds a party together: keeps the connection, mirrors everyone else into the
@@ -20,6 +23,15 @@ export class PartySession implements IUpdatable
 	public updateOrder: number = 20;
 
 	private static readonly SEND_INTERVAL: number = 1 / 20;
+	/**
+	 * A car let go of keeps being reported, less often, until it comes to rest.
+	 * Left to each client's own physics a car still rolling down a hill ends up
+	 * somewhere different on every screen. The cap is only a backstop.
+	 */
+	private static readonly COAST_INTERVAL: number = 1 / 10;
+	private static readonly COAST_TIME: number = 30;
+	/** How long a report for a vehicle that hasn't spawned here yet is kept for it. */
+	private static readonly PENDING_TIME: number = 15;
 
 	public client: NetworkClient = new NetworkClient();
 	public active: boolean = false;
@@ -38,22 +50,64 @@ export class PartySession implements IUpdatable
 	private pendingTimer: number;
 	private notice: string;
 	private localScore: number = 0;
+	/** What the relay said it can do beyond the original protocol. Empty for an older relay. */
+	private features: string[] = [];
+
+	/**
+	 * Who holds which seat, as the relay last said: 'vehicle#seat' to the id of
+	 * the member holding it. The relay decides, first claim first, because two
+	 * clients each checking their own copy of a car would both see it empty
+	 * and both climb into the same seat.
+	 */
+	private seatHolders: { [key: string]: number } = {};
+	/** The same the other way round, each member's claim. */
+	private memberSeats: { [id: number]: string } = {};
+	/** The claim this client last sent, null for none. */
+	private claimedKey: string = null;
+
+	/** Vehicle id to the member whose reports it last followed. */
+	private lastDrivers: { [vehicleId: string]: number } = {};
+	/** The vehicle the local player drove as of the last frame. */
+	private drivenVehicle: Vehicle;
+	/** Vehicles the local player let go of, still reported while they come to rest. */
+	private coasting: { vehicle: Vehicle, until: number, timer: number, still: number }[] = [];
+	/** Reports for vehicles that haven't spawned here yet. */
+	private pendingVehicles: { [vehicleId: string]: { message: any, sender: number, at: number } } = {};
 
 	constructor(world: World)
 	{
 		this.world = world;
 		this.world.registerUpdatable(this);
 
-		this.client.onJoined = (code, id, players, scenario) =>
+		this.client.onJoined = (message) =>
 		{
 			this.active = true;
+			this.features = Array.isArray(message.features) ? message.features : [];
+			this.clearSharedState();
 
+			let players: PlayerInfo[] = Array.isArray(message.players) ? message.players : [];
 			players.forEach((info) => this.addPlayer(info));
 			this.refreshHud();
 
+			let scenario = message.scenario;
 			if (scenario !== null && scenario !== undefined && scenario !== this.world.lastScenarioID)
 			{
 				this.applyScenario(scenario);
+			}
+
+			// After any launch, which starts all of this afresh
+			if (Array.isArray(message.seats)) message.seats.forEach((seat) => this.recordSeat(seat));
+
+			// Where the room has moved the cars to, applied as each one spawns
+			if (Array.isArray(message.vehicles))
+			{
+				message.vehicles.forEach((entry) =>
+				{
+					if (entry !== null && typeof entry.v === 'string')
+					{
+						this.pendingVehicles[entry.v] = { message: Object.assign({}, entry, { f: 1 }), sender: undefined, at: PartySession.now() };
+					}
+				});
 			}
 
 			this.settle();
@@ -67,6 +121,8 @@ export class PartySession implements IUpdatable
 
 		this.client.onPlayerLeave = (id) =>
 		{
+			this.recordSeat({ id: id, v: null });
+
 			if (this.players[id] !== undefined)
 			{
 				this.players[id].dispose();
@@ -83,8 +139,7 @@ export class PartySession implements IUpdatable
 
 		this.client.onVehicleState = (message) =>
 		{
-			let player = this.players[message.id];
-			if (player !== undefined) player.applyVehicleState(message);
+			this.receiveVehicle(message);
 		};
 
 		this.client.onIdentity = (info) =>
@@ -94,28 +149,65 @@ export class PartySession implements IUpdatable
 			this.refreshHud();
 		};
 
-		this.client.onScenario = (id) =>
+		this.client.onScenario = (message) =>
 		{
-			this.applyScenario(id);
+			if (typeof message.id !== 'string') return;
+
+			// A newer relay sends a change back to whoever made it as well, and
+			// everyone applies changes in the order it saw them. Our own comes
+			// back already applied, unless someone else's landed in between.
+			if (message.by !== undefined && message.by === this.client.id)
+			{
+				if (this.world.lastScenarioID !== message.id) this.applyScenario(message.id);
+				else this.clearSharedState();
+				return;
+			}
+
+			this.applyScenario(message.id);
+		};
+
+		this.client.onSeat = (message) =>
+		{
+			this.recordSeat(message);
 		};
 
 		this.client.onShot = (message) =>
 		{
-			this.world.combat.showRemoteShot(
-				new THREE.Vector3(message.p[0], message.p[1], message.p[2]),
-				new THREE.Vector3(message.d[0], message.d[1], message.d[2]),
-				message.w);
+			let from = PartySession.readVector(message.p);
+			let direction = PartySession.readVector(message.d);
+			if (from === undefined || direction === undefined) return;
+
+			let ends: THREE.Vector3[];
+			if (Array.isArray(message.e))
+			{
+				ends = message.e.map((point) => PartySession.readVector(point)).filter((point) => point !== undefined);
+			}
+
+			let shooter = this.players[message.id];
+
+			this.world.combat.showRemoteShot(from, direction, message.w,
+				shooter !== undefined ? shooter.character : undefined, ends);
 		};
 
 		this.client.onHit = (message) =>
 		{
-			// Relayed to the whole room, but only the player it names is hit
+			// A newer relay only sends it to the player it names; an older one
+			// sends it to the whole room
 			if (message.target !== this.client.id) return;
+			if (typeof message.damage !== 'number' || !isFinite(message.damage)) return;
 
-			let from = Array.isArray(message.p)
-				? new THREE.Vector3(message.p[0], message.p[1], message.p[2]) : undefined;
+			this.world.combat.takeRemoteHit(message.damage, message.id, PartySession.readVector(message.p), message.w,
+				typeof message.l === 'number' ? message.l : undefined);
+		};
 
-			this.world.combat.takeRemoteHit(message.damage, message.id, from, message.w);
+		this.client.onHurt = (message) =>
+		{
+			this.world.combat.confirmHit(message.dead === true);
+		};
+
+		this.client.onPickup = (message) =>
+		{
+			if (typeof message.i === 'number') this.world.combat.remotePickup(message.i);
 		};
 
 		this.client.onDeath = (message) =>
@@ -123,6 +215,9 @@ export class PartySession implements IUpdatable
 			let victim = this.players[message.id];
 			let killer = message.killer !== undefined ? this.players[message.killer] : undefined;
 			let killedByMe = message.killer === this.client.id;
+
+			// Down straight away, rather than at their next movement update
+			if (victim !== undefined && victim.character !== undefined) victim.character.health = 0;
 
 			this.world.notices.kill(
 				killedByMe ? this.world.localPlayer.name : (killer !== undefined ? killer.info.name : 'The scenery'),
@@ -264,6 +359,7 @@ export class PartySession implements IUpdatable
 		if (!this.active && !this.client.connected) return;
 
 		this.active = false;
+		this.features = [];
 		this.client.disconnect();
 
 		for (const id in this.players)
@@ -272,6 +368,12 @@ export class PartySession implements IUpdatable
 		}
 		this.players = {};
 
+		// Whatever other people were driving goes back to this world's own physics
+		this.world.vehicles.forEach((vehicle) => vehicle.clearRemoteTarget());
+		this.clearSharedState();
+
+		// The party's score has nothing to do with playing alone
+		this.localScore = 0;
 		this.refreshHud();
 	}
 
@@ -283,6 +385,12 @@ export class PartySession implements IUpdatable
 		this.client.send({ t: 'identity', name: identity.name, color: identity.color, hat: identity.hat });
 	}
 
+	/** Whether the relay supports something beyond the original protocol. */
+	public hasFeature(name: string): boolean
+	{
+		return this.active && this.features.indexOf(name) >= 0;
+	}
+
 	/**
 	 * Called after any scenario launch. Launching wipes every entity, remote
 	 * characters included, so they have to be rebuilt either way. Whoever
@@ -292,6 +400,9 @@ export class PartySession implements IUpdatable
 	{
 		if (!this.active) return;
 
+		// Every seat and every car is new
+		this.clearSharedState();
+
 		if (!this.applyingRemoteScenario)
 		{
 			this.client.send({ t: 'scenario', id: scenarioID });
@@ -300,7 +411,11 @@ export class PartySession implements IUpdatable
 		this.rebuildPlayers();
 	}
 
-	public publishShot(from: THREE.Vector3, direction: THREE.Vector3, weaponId: string): void
+	/**
+	 * The muzzle, the aim, and where each pellet actually ended, so everyone
+	 * else draws the shot that was fired rather than working out their own.
+	 */
+	public publishShot(from: THREE.Vector3, direction: THREE.Vector3, weaponId: string, endpoints: THREE.Vector3[]): void
 	{
 		if (!this.active) return;
 
@@ -308,7 +423,8 @@ export class PartySession implements IUpdatable
 			t: 'shot',
 			p: PartySession.round3([from.x, from.y, from.z]),
 			d: PartySession.round3([direction.x, direction.y, direction.z]),
-			w: weaponId
+			w: weaponId,
+			e: endpoints.slice(0, 8).map((point) => PartySession.round3([point.x, point.y, point.z]))
 		});
 	}
 
@@ -316,19 +432,39 @@ export class PartySession implements IUpdatable
 	 * Their client owns their health, so a hit is a request, not a verdict.
 	 * The weapon and the place it was fired from travel with it: the relay uses
 	 * them to check the claim is possible, and the client being shot at uses
-	 * them to check there wasn't a wall in the way.
+	 * them to check there wasn't a wall in the way. The life it was aimed at
+	 * comes too, so a hit on someone who has since respawned can be told apart.
 	 */
-	public publishHit(targetId: number, damage: number, weaponId: string, from: THREE.Vector3): void
+	public publishHit(targetId: number, damage: number, weaponId: string, from: THREE.Vector3, targetLife?: number): void
 	{
 		if (!this.active) return;
 
-		this.client.send({
+		let message: any = {
 			t: 'hit',
 			target: targetId,
 			damage: damage,
 			w: weaponId,
 			p: PartySession.round3([from.x, from.y, from.z])
-		});
+		};
+
+		if (typeof targetLife === 'number') message.l = targetLife;
+
+		this.client.send(message);
+	}
+
+	/** Tells a shooter their hit counted, which is what lights their hit marker. */
+	public publishHurt(attackerId: number, damage: number, dead: boolean): void
+	{
+		if (!this.active || attackerId === undefined) return;
+
+		this.client.send({ t: 'hurt', to: attackerId, damage: damage, dead: dead });
+	}
+
+	public publishPickup(index: number): void
+	{
+		if (!this.active) return;
+
+		this.client.send({ t: 'pickup', i: index });
 	}
 
 	public publishChat(text: string): void
@@ -360,6 +496,373 @@ export class PartySession implements IUpdatable
 			this.world.localPlayer.name, this.world.localPlayer.color,
 			killer !== undefined ? weaponId : undefined);
 	}
+
+	// ------------------------------------------------------------------- seats
+
+	/** The key a seat is claimed under, or undefined for a vehicle with no id. */
+	public static seatKey(seat: VehicleSeat): string
+	{
+		let vehicle = seat.vehicle as unknown as Vehicle;
+		let id = vehicle.getNetworkId();
+		if (id === undefined) return undefined;
+
+		return id + '#' + vehicle.seats.indexOf(seat);
+	}
+
+	/** The id of the member holding a seat, or undefined. */
+	public seatHolder(seat: VehicleSeat): number
+	{
+		if (!this.hasFeature('seats')) return undefined;
+
+		let key = PartySession.seatKey(seat);
+		return key !== undefined ? this.seatHolders[key] : undefined;
+	}
+
+	/** Another member has claimed it. */
+	public isSeatHeldByOther(seat: VehicleSeat): boolean
+	{
+		let holder = this.seatHolder(seat);
+		return holder !== undefined && holder !== this.client.id;
+	}
+
+	/**
+	 * The relay has given this seat to the local player. Always true outside a
+	 * party, or against a relay too old to hand seats out, where the local
+	 * checks are all there is.
+	 */
+	public isSeatConfirmed(seat: VehicleSeat): boolean
+	{
+		if (!this.hasFeature('seats')) return true;
+
+		let key = PartySession.seatKey(seat);
+		return key === undefined || this.seatHolders[key] === this.client.id;
+	}
+
+	/** Whichever seat a member has claimed, if it exists in this world. */
+	public seatOf(id: number): VehicleSeat
+	{
+		let key = this.memberSeats[id];
+		if (key === undefined) return undefined;
+
+		let split = key.lastIndexOf('#');
+		let vehicle = this.findVehicle(key.substring(0, split));
+
+		return vehicle !== undefined ? vehicle.seats[Number(key.substring(split + 1))] : undefined;
+	}
+
+	/** One member's seat as the relay announced it: taken, moved, or given up. */
+	private recordSeat(message: any): void
+	{
+		let id = message.id;
+		if (typeof id !== 'number') return;
+
+		let previous = this.memberSeats[id];
+		if (previous !== undefined)
+		{
+			if (this.seatHolders[previous] === id) delete this.seatHolders[previous];
+			delete this.memberSeats[id];
+		}
+
+		let key: string = null;
+		if (typeof message.v === 'string' && typeof message.s === 'number')
+		{
+			key = message.v + '#' + message.s;
+			this.seatHolders[key] = id;
+			this.memberSeats[id] = key;
+		}
+
+		if (id === this.client.id)
+		{
+			// The relay's word on our own claim wins. When it has let one go for
+			// us, having heard nothing while this tab was in the background, the
+			// next reconcile claims it again if it's still wanted.
+			this.claimedKey = key;
+		}
+		else if (key === null && this.players[id] !== undefined)
+		{
+			this.players[id].seatReleased();
+		}
+	}
+
+	/**
+	 * Keeps the relay's idea of the local player's seat in step with the seat
+	 * they're in, climbing into or walking toward, and backs off one the
+	 * relay has given to someone else. Every frame, since a claim made at the
+	 * moment F is pressed is what stops two people walking to the same door.
+	 */
+	private reconcileSeat(): void
+	{
+		let character = this.world.localCharacter;
+		let wanted = (character !== undefined && character.world !== undefined) ? character.getSeatOfInterest() : null;
+		let key = wanted !== null ? PartySession.seatKey(wanted) : null;
+		if (key === undefined) key = null;
+
+		if (key !== null)
+		{
+			let holder = this.seatHolders[key];
+			if (holder !== undefined && holder !== this.client.id)
+			{
+				character.yieldSeat(wanted);
+				return;
+			}
+		}
+
+		if (key === this.claimedKey) return;
+		this.claimedKey = key;
+
+		if (key === null)
+		{
+			this.client.send({ t: 'claim', v: null, s: -1 });
+		}
+		else
+		{
+			let vehicle = wanted.vehicle as unknown as Vehicle;
+			this.client.send({ t: 'claim', v: vehicle.getNetworkId(), s: vehicle.seats.indexOf(wanted) });
+		}
+	}
+
+	// ---------------------------------------------------------------- vehicles
+
+	/**
+	 * Only the driver's client simulates a vehicle for real; everyone else's is
+	 * steered after its reports. A report counts only from whoever holds that
+	 * vehicle's driver's seat, or, with nobody in it, from whoever drove it
+	 * last and is still reporting it rolling to a stop. Anything else, like a
+	 * second client that thinks it's driving the same car, is ignored rather
+	 * than left to fight over it. And never while anyone here is at the wheel.
+	 */
+	private acceptsVehicleFrom(vehicle: Vehicle, sender: number): boolean
+	{
+		if (vehicle.controllingCharacter !== undefined) return false;
+
+		let id = vehicle.getNetworkId();
+
+		if (this.hasFeature('seats'))
+		{
+			let driver: number;
+
+			vehicle.seats.forEach((seat, index) =>
+			{
+				let holder = this.seatHolders[id + '#' + index];
+				if (seat.type === SeatType.Driver && holder !== undefined) driver = holder;
+			});
+
+			if (driver !== undefined) return driver === sender;
+		}
+		else
+		{
+			// No claims to go on, so whoever is sitting at the wheel here
+			let player = this.players[sender];
+			let seat = (player !== undefined && player.character !== undefined) ? player.character.occupyingSeat : null;
+			if (seat !== null && seat.type === SeatType.Driver && (seat.vehicle as unknown as Vehicle) === vehicle) return true;
+		}
+
+		return this.lastDrivers[id] === undefined || this.lastDrivers[id] === sender;
+	}
+
+	private receiveVehicle(message: any): void
+	{
+		let vehicle: Vehicle;
+
+		if (typeof message.v === 'string')
+		{
+			vehicle = this.findVehicle(message.v);
+
+			if (vehicle === undefined)
+			{
+				// Still loading here; kept for when it turns up
+				this.pendingVehicles[message.v] = { message: message, sender: message.id, at: PartySession.now() };
+				return;
+			}
+		}
+		else
+		{
+			// An older client doesn't name the vehicle, so it's whatever they sit in
+			let player = this.players[message.id];
+			let seat = (player !== undefined && player.character !== undefined) ? player.character.occupyingSeat : null;
+			if (seat === null || seat.type !== SeatType.Driver) return;
+			vehicle = seat.vehicle as unknown as Vehicle;
+		}
+
+		if (!this.acceptsVehicleFrom(vehicle, message.id)) return;
+
+		let id = vehicle.getNetworkId();
+		if (id !== undefined) this.lastDrivers[id] = message.id;
+
+		this.steerVehicle(vehicle, message);
+	}
+
+	private steerVehicle(vehicle: Vehicle, message: any): void
+	{
+		let position = PartySession.readVector(message.p);
+		if (position === undefined || !Array.isArray(message.q) || message.q.length < 4) return;
+
+		let quaternion = new THREE.Quaternion(message.q[0], message.q[1], message.q[2], message.q[3]);
+		if (!isFinite(quaternion.x) || !isFinite(quaternion.y) || !isFinite(quaternion.z) || !isFinite(quaternion.w)) return;
+		if (quaternion.lengthSq() < 0.5) return;
+
+		let velocity = PartySession.readVector(message.lv) || new THREE.Vector3();
+		let angularVelocity = PartySession.readVector(message.av) || new THREE.Vector3();
+
+		vehicle.setRemoteTarget(position, quaternion, velocity, angularVelocity, message.f === 1 || message.f === true);
+	}
+
+	/** Reports that arrived before their vehicle did, applied once it has. */
+	private applyPendingVehicles(): void
+	{
+		let now = PartySession.now();
+
+		for (const id in this.pendingVehicles)
+		{
+			if (!this.pendingVehicles.hasOwnProperty(id)) continue;
+
+			let entry = this.pendingVehicles[id];
+			if (now - entry.at > PartySession.PENDING_TIME)
+			{
+				delete this.pendingVehicles[id];
+				continue;
+			}
+
+			let vehicle = this.findVehicle(id);
+			if (vehicle === undefined) continue;
+
+			delete this.pendingVehicles[id];
+
+			// From the room's memory rather than anyone in particular
+			if (entry.sender === undefined)
+			{
+				if (vehicle.controllingCharacter === undefined) this.steerVehicle(vehicle, entry.message);
+				continue;
+			}
+
+			if (!this.acceptsVehicleFrom(vehicle, entry.sender)) continue;
+
+			this.lastDrivers[id] = entry.sender;
+			this.steerVehicle(vehicle, entry.message);
+		}
+	}
+
+	/** Notices the local player letting go of a vehicle, which then coasts under our reports. */
+	private trackDrivenVehicle(): void
+	{
+		let character = this.world.localCharacter;
+		let driving: Vehicle;
+
+		if (character !== undefined && character.controlledObject !== undefined)
+		{
+			let vehicle = character.controlledObject as unknown as Vehicle;
+			if (vehicle.controllingCharacter === character && vehicle.collision !== undefined) driving = vehicle;
+		}
+
+		if (driving === this.drivenVehicle) return;
+
+		if (this.drivenVehicle !== undefined && this.drivenVehicle.world !== undefined)
+		{
+			this.coasting.push({ vehicle: this.drivenVehicle, until: PartySession.now() + PartySession.COAST_TIME, timer: 0, still: 0 });
+		}
+
+		this.drivenVehicle = driving;
+		if (driving !== undefined) this.coasting = this.coasting.filter((entry) => entry.vehicle !== driving);
+	}
+
+	/**
+	 * Keeps reporting a car after getting out, until it comes to rest, then
+	 * says where it stopped. Otherwise everyone else's copy
+	 * is left wherever it was when the driver let go, and parked cars drift
+	 * apart between screens for good.
+	 */
+	private publishCoasting(timeStep: number): void
+	{
+		let now = PartySession.now();
+
+		for (let i = this.coasting.length - 1; i >= 0; i--)
+		{
+			let entry = this.coasting[i];
+			let vehicle = entry.vehicle;
+
+			// Gone, driven by someone here, or claimed by someone else now
+			if (vehicle.world === undefined || vehicle.controllingCharacter !== undefined || this.driverSeatHeldByOther(vehicle))
+			{
+				this.coasting.splice(i, 1);
+				continue;
+			}
+
+			entry.timer -= timeStep;
+			if (entry.timer > 0) continue;
+			entry.timer = PartySession.COAST_INTERVAL;
+
+			let body = vehicle.collision;
+			let resting = body.sleepState === CANNON.Body.SLEEPING
+				|| (body.velocity.length() < 0.05 && body.angularVelocity.length() < 0.05);
+
+			// Still for half a second, not just at the bottom of one bounce
+			entry.still = resting ? entry.still + 1 : 0;
+
+			if (entry.still >= 5 || now >= entry.until)
+			{
+				this.publishVehicle(vehicle, true);
+				this.coasting.splice(i, 1);
+			}
+			else
+			{
+				this.publishVehicle(vehicle, false);
+			}
+		}
+	}
+
+	private driverSeatHeldByOther(vehicle: Vehicle): boolean
+	{
+		for (const seat of vehicle.seats)
+		{
+			if (seat.type === SeatType.Driver && this.isSeatHeldByOther(seat)) return true;
+		}
+
+		return false;
+	}
+
+	private publishVehicle(vehicle: Vehicle, final: boolean): void
+	{
+		let id = vehicle.getNetworkId();
+		if (id === undefined) return;
+
+		let body = vehicle.collision;
+		let message: any = {
+			t: 'vehicle',
+			v: id,
+			p: PartySession.round3([body.position.x, body.position.y, body.position.z]),
+			q: PartySession.round3([body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w]),
+			lv: PartySession.round3([body.velocity.x, body.velocity.y, body.velocity.z]),
+			av: PartySession.round3([body.angularVelocity.x, body.angularVelocity.y, body.angularVelocity.z])
+		};
+
+		if (final) message.f = 1;
+
+		this.client.send(message);
+	}
+
+	private findVehicle(id: string): Vehicle
+	{
+		for (const vehicle of this.world.vehicles)
+		{
+			if (vehicle.getNetworkId() === id) return vehicle;
+		}
+
+		return undefined;
+	}
+
+	/** Seats, who drove what, and anything waiting on a vehicle: none of it survives a launch. */
+	private clearSharedState(): void
+	{
+		this.seatHolders = {};
+		this.memberSeats = {};
+		this.claimedKey = null;
+		this.lastDrivers = {};
+		this.pendingVehicles = {};
+		this.coasting = [];
+		this.drivenVehicle = undefined;
+	}
+
+	// ------------------------------------------------------------------- clock
 
 	/**
 	 * Counts down between the server's updates, so the clock moves every frame
@@ -412,52 +915,64 @@ export class PartySession implements IUpdatable
 
 		this.tickMatchClock(unscaledTimeStep);
 
-		this.sendTimer += unscaledTimeStep;
-		if (this.sendTimer < PartySession.SEND_INTERVAL) return;
-		this.sendTimer = 0;
+		if (this.hasFeature('seats')) this.reconcileSeat();
+		this.trackDrivenVehicle();
+		this.applyPendingVehicles();
 
-		this.publishLocalState();
+		this.sendTimer += unscaledTimeStep;
+		if (this.sendTimer >= PartySession.SEND_INTERVAL)
+		{
+			// Keeps to the cadence rather than drifting by whatever the frame overshot
+			this.sendTimer = Math.min(this.sendTimer - PartySession.SEND_INTERVAL, PartySession.SEND_INTERVAL);
+			this.publishLocalState();
+		}
+
+		this.publishCoasting(unscaledTimeStep);
 	}
 
+	/**
+	 * World position and rotation. Opening a car door parents the character to
+	 * the car, and from then until they're out again its own position is only
+	 * where in the car it is; published as it was, everyone else saw them
+	 * vanish to the middle of the map, under the ground.
+	 */
 	private publishLocalState(): void
 	{
 		let character = this.world.localCharacter;
-		if (character === undefined) return;
+		if (character === undefined || character.world === undefined) return;
 
 		// Kept current here rather than at join: the character is replaced on every
 		// scenario change, and hits are addressed by this
 		character.networkId = this.client.id;
 
+		let position = character.getWorldPosition(new THREE.Vector3());
+		let quaternion = character.getWorldQuaternion(new THREE.Quaternion());
+
 		let seat = character.occupyingSeat;
 		let vehicle = seat !== null ? (seat.vehicle as unknown as Vehicle) : undefined;
-		let vehicleId = (vehicle !== undefined && vehicle.spawnPoint !== undefined) ? vehicle.spawnPoint.name : null;
+		let vehicleId = vehicle !== undefined ? vehicle.getNetworkId() : undefined;
+		if (vehicleId === undefined) vehicleId = null;
 
 		this.client.send({
 			t: 'state',
-			p: PartySession.round3([character.position.x, character.position.y, character.position.z]),
-			q: PartySession.round3([character.quaternion.x, character.quaternion.y, character.quaternion.z, character.quaternion.w]),
+			p: PartySession.round3([position.x, position.y, position.z]),
+			q: PartySession.round3([quaternion.x, quaternion.y, quaternion.z, quaternion.w]),
 			a: character.currentAnimation,
 			v: vehicleId,
-			s: vehicle !== undefined ? vehicle.seats.indexOf(seat) : -1
+			s: vehicleId !== null ? vehicle.seats.indexOf(seat) : -1,
+			h: Math.round(character.health),
+			w: character.weapon !== undefined ? character.weapon.id : null,
+			l: this.world.combat.life
 		});
 
 		// Only the driver is authoritative for where the vehicle is
-		if (vehicle !== undefined && vehicle.controllingCharacter === character)
-		{
-			let body = vehicle.collision;
-
-			this.client.send({
-				t: 'vehicle',
-				p: PartySession.round3([body.position.x, body.position.y, body.position.z]),
-				q: PartySession.round3([body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w])
-			});
-		}
+		if (this.drivenVehicle !== undefined) this.publishVehicle(this.drivenVehicle, false);
 	}
 
 	private applyScenario(id: string): void
 	{
 		this.applyingRemoteScenario = true;
-		this.world.launchScenario(id);
+		this.world.launchScenario(id, undefined, true);
 		this.applyingRemoteScenario = false;
 	}
 
@@ -511,6 +1026,23 @@ export class PartySession implements IUpdatable
 		UIManager.setPartyDetails(this.client.code, names, colors);
 
 		this.refreshScoreboard();
+	}
+
+	/** Three finite numbers as a vector, or undefined. */
+	private static readVector(value: any): THREE.Vector3
+	{
+		if (!Array.isArray(value) || value.length < 3) return undefined;
+
+		let x = value[0], y = value[1], z = value[2];
+		if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') return undefined;
+		if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return undefined;
+
+		return new THREE.Vector3(x, y, z);
+	}
+
+	private static now(): number
+	{
+		return performance.now() / 1000;
 	}
 
 	private static round3(values: number[]): number[]

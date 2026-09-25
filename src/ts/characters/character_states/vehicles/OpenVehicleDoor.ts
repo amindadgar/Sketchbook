@@ -13,7 +13,7 @@ import { SpringSimulator } from '../../../physics/spring_simulation/SpringSimula
 
 export class OpenVehicleDoor extends CharacterStateBase
 {
-	private seat: VehicleSeat;
+	public readonly seat: VehicleSeat;
 	private entryPoint: THREE.Object3D;
 	private hasOpenedDoor: boolean = false;
 
@@ -72,7 +72,8 @@ export class OpenVehicleDoor extends CharacterStateBase
 
 		if (this.animationEnded(timeStep))
 		{
-			if (this.anyDirection())
+			// Backed out, or somebody else got in while the door was opening
+			if (this.anyDirection() || !this.character.canUseSeat(this.seat))
 			{
 				this.character.vehicleEntryInstance = null;
 				this.character.world.graphicsWorld.attach(this.character);

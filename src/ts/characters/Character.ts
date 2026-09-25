@@ -12,6 +12,7 @@ import { ExitingVehicle } from './character_states/vehicles/ExitingVehicle';
 import { OpenVehicleDoor as OpenVehicleDoor } from './character_states/vehicles/OpenVehicleDoor';
 import { Driving } from './character_states/vehicles/Driving';
 import { ExitingAirplane } from './character_states/vehicles/ExitingAirplane';
+import { Sitting } from './character_states/vehicles/Sitting';
 import { ICharacterAI } from '../interfaces/ICharacterAI';
 import { World } from '../world/World';
 import { IControllable } from '../interfaces/IControllable';
@@ -98,6 +99,12 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	public reserve: number = 0;
 	/** Set for anyone in a party, so hits can be addressed to their client. */
 	public networkId: number;
+	/**
+	 * Which life a remote player is on, as they last reported it. A hit carries
+	 * it back to them, so one aimed at the body they just left doesn't land on
+	 * the one that respawned.
+	 */
+	public networkLife: number;
 
 	// Party
 	public playerName: string;
@@ -497,10 +504,18 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		if (this.weaponModel !== undefined)
 		{
 			let muzzle = this.weaponModel.getObjectByName('muzzle');
-			if (muzzle !== undefined) return muzzle.getWorldPosition(target);
+			if (muzzle !== undefined)
+			{
+				// A gun picked up this frame hasn't had a matrix yet, and without
+				// the parents its first shot comes out of the middle of the map
+				muzzle.updateWorldMatrix(true, false);
+				return target.setFromMatrixPosition(muzzle.matrixWorld);
+			}
 		}
 
-		return this.getWorldPosition(target).setY(this.position.y + 0.6);
+		this.getWorldPosition(target);
+		target.y += 0.6;
+		return target;
 	}
 
 	public setTint(color: string): void
@@ -540,10 +555,11 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	{
 		if (this.health <= 0) return;
 
-		// Ahead of the vehicle, which binds R on its own to right itself
+		// Ahead of the vehicle, which binds R on its own to right itself. A held
+		// key repeats, and each repeat used to start the whole scenario again.
 		if (code === 'KeyR' && pressed === true && event.shiftKey === true)
 		{
-			this.world.restartScenario();
+			if (!event.repeat) this.world.requestRespawn();
 			return;
 		}
 
@@ -562,7 +578,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			}
 			else if (code === 'KeyR' && pressed === true && event.shiftKey === true)
 			{
-				this.world.restartScenario();
+				if (!event.repeat) this.world.requestRespawn();
 			}
 			else
 			{
@@ -710,6 +726,9 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			this.characterCapsule.body.interpolatedPosition.copy(Utils.cannonVector(newPos));
 		}
 
+		// Stowed in a vehicle, rather than poking out through the door
+		if (this.weaponModel !== undefined) this.weaponModel.visible = !this.isBusyWithVehicle();
+
 		this.updateDeathPose(timeStep);
 		this.updateMatrixWorld();
 	}
@@ -735,12 +754,27 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 		// Taken off whatever the run cycle just wrote rather than eased on its own:
 		// that runs first and rewrites the height every frame, so anything easing
-		// towards a target here would start again from scratch each time
+		// towards a target here would start again from scratch each time. Nothing
+		// rewrites it for a character played back from the network, whose physics
+		// is off, so there the base is zero, or the body would sink a little
+		// further through the ground every frame it lay there.
+		let base = this.physicsEnabled ? this.tiltContainer.position.y : 0;
 		let laid = this.tiltContainer.rotation.x / (-Math.PI / 2);
-		this.tiltContainer.position.y -= laid * Character.FALLEN_DROP;
+		this.tiltContainer.position.y = base - laid * Character.FALLEN_DROP;
 
 		// Close enough that the next frame of running would snap it back anyway
-		if (!fallen && Math.abs(this.tiltContainer.rotation.x) < 0.001) this.tiltContainer.rotation.x = 0;
+		if (!fallen && Math.abs(this.tiltContainer.rotation.x) < 0.001)
+		{
+			this.tiltContainer.rotation.x = 0;
+			if (!this.physicsEnabled) this.tiltContainer.position.y = 0;
+		}
+	}
+
+	/** Straight back up, for a respawn that shouldn't be seen climbing off the floor. */
+	public resetDeathPose(): void
+	{
+		this.tiltContainer.rotation.x = 0;
+		this.tiltContainer.position.y = 0;
 	}
 
 	public inputReceiverInit(): void
@@ -796,9 +830,13 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		}
 		else
 		{
-			// Look in camera's direction
-			this.viewVector = new THREE.Vector3().subVectors(this.position, this.world.camera.position);
-			this.getWorldPosition(this.world.cameraOperator.target);
+			// Look in camera's direction. World space, since opening a car door
+			// parents the character to the car and its own position goes local.
+			let here = this.getWorldPosition(new THREE.Vector3());
+			this.viewVector = new THREE.Vector3().subVectors(here, this.world.camera.position);
+
+			// While dead the camera is on whoever is being watched instead
+			if (this.health > 0) this.world.cameraOperator.target.copy(here);
 		}
 		
 	}
@@ -904,79 +942,259 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 	public findVehicleToEnter(wantsToDrive: boolean): void
 	{
-		// reusable world position variable
+		let here = this.getWorldPosition(new THREE.Vector3());
+
+		// Nearest first, so a full car doesn't stop anyone getting into the one beside it
+		let nearby = this.world.vehicles
+			.map((vehicle) => ({ vehicle: vehicle, distance: vehicle.position.distanceTo(here) }))
+			.filter((entry) => entry.distance < 10)
+			.sort((a, b) => a.distance - b.distance);
+
+		for (const entry of nearby)
+		{
+			let choice = this.chooseSeat(entry.vehicle, wantsToDrive, here);
+			if (choice === undefined) continue;
+
+			let entryPointFinder = new ClosestObjectFinder<Object3D>(here);
+			let worldPos = new THREE.Vector3();
+
+			for (const point of choice.seat.entryPoints)
+			{
+				point.getWorldPosition(worldPos);
+				entryPointFinder.consider(point, worldPos);
+			}
+
+			if (entryPointFinder.closestObject === undefined) continue;
+
+			let vehicleEntryInstance = new VehicleEntryInstance(this);
+			vehicleEntryInstance.wantsToDrive = choice.drive;
+			vehicleEntryInstance.targetSeat = choice.seat;
+			vehicleEntryInstance.entryPoint = entryPointFinder.closestObject;
+
+			this.triggerAction('up', true);
+			this.vehicleEntryInstance = vehicleEntryInstance;
+			return;
+		}
+
+		if (nearby.length > 0 && this.world.localCharacter === this) this.world.notices.say('Vehicle full');
+	}
+
+	/**
+	 * The closest seat in a vehicle worth walking to, and whether to slide over
+	 * and drive once there.
+	 *
+	 * Asking to drive considers the driver's seat and any passenger seat that
+	 * slides across into it, but only while that driver's seat is free: sliding
+	 * over into it is exactly how two people used to end up sitting in one seat.
+	 * With somebody already driving it falls back to riding along, which is also
+	 * the only way in there is from a phone, where F is the one button.
+	 */
+	private chooseSeat(vehicle: Vehicle, wantsToDrive: boolean, from: THREE.Vector3): { seat: VehicleSeat, drive: boolean }
+	{
 		let worldPos = new THREE.Vector3();
 
-		// Find best vehicle
-		let vehicleFinder = new ClosestObjectFinder<Vehicle>(this.position, 10);
-		this.world.vehicles.forEach((vehicle) =>
+		if (wantsToDrive)
 		{
-			vehicleFinder.consider(vehicle, vehicle.position);
-		});
+			let driverFinder = new ClosestObjectFinder<VehicleSeat>(from);
 
-		if (vehicleFinder.closestObject !== undefined)
-		{
-			let vehicle = vehicleFinder.closestObject;
-			let vehicleEntryInstance = new VehicleEntryInstance(this);
-			vehicleEntryInstance.wantsToDrive = wantsToDrive;
-
-			// Find best seat
-			let seatFinder = new ClosestObjectFinder<VehicleSeat>(this.position);
 			for (const seat of vehicle.seats)
 			{
-				if (wantsToDrive)
+				if (!this.canUseSeat(seat)) continue;
+
+				if (seat.type === SeatType.Driver)
 				{
-					// Consider driver seats
-					if (seat.type === SeatType.Driver)
+					seat.seatPointObject.getWorldPosition(worldPos);
+					driverFinder.consider(seat, worldPos);
+				}
+				else if (seat.type === SeatType.Passenger)
+				{
+					for (const connSeat of seat.connectedSeats)
 					{
-						seat.seatPointObject.getWorldPosition(worldPos);
-						seatFinder.consider(seat, worldPos);
-					}
-					// Consider passenger seats connected to driver seats
-					else if (seat.type === SeatType.Passenger)
-					{
-						for (const connSeat of seat.connectedSeats)
+						if (connSeat.type === SeatType.Driver && this.canUseSeat(connSeat))
 						{
-							if (connSeat.type === SeatType.Driver)
-							{
-								seat.seatPointObject.getWorldPosition(worldPos);
-								seatFinder.consider(seat, worldPos);
-								break;
-							}
+							seat.seatPointObject.getWorldPosition(worldPos);
+							driverFinder.consider(seat, worldPos);
+							break;
 						}
 					}
 				}
-				else
-				{
-					// Consider passenger seats
-					if (seat.type === SeatType.Passenger)
-					{
-						seat.seatPointObject.getWorldPosition(worldPos);
-						seatFinder.consider(seat, worldPos);
-					}
-				}
 			}
 
-			if (seatFinder.closestObject !== undefined)
+			if (driverFinder.closestObject !== undefined) return { seat: driverFinder.closestObject, drive: true };
+		}
+
+		let passengerFinder = new ClosestObjectFinder<VehicleSeat>(from);
+
+		for (const seat of vehicle.seats)
+		{
+			if (seat.type === SeatType.Passenger && this.canUseSeat(seat))
 			{
-				let targetSeat = seatFinder.closestObject;
-				vehicleEntryInstance.targetSeat = targetSeat;
-
-				let entryPointFinder = new ClosestObjectFinder<Object3D>(this.position);
-
-				for (const point of targetSeat.entryPoints) {
-					point.getWorldPosition(worldPos);
-					entryPointFinder.consider(point, worldPos);
-				}
-
-				if (entryPointFinder.closestObject !== undefined)
-				{
-					vehicleEntryInstance.entryPoint = entryPointFinder.closestObject;
-					this.triggerAction('up', true);
-					this.vehicleEntryInstance = vehicleEntryInstance;
-				}
+				seat.seatPointObject.getWorldPosition(worldPos);
+				passengerFinder.consider(seat, worldPos);
 			}
 		}
+
+		if (passengerFinder.closestObject !== undefined) return { seat: passengerFinder.closestObject, drive: false };
+
+		return undefined;
+	}
+
+	/**
+	 * Free for this character: nobody else is in it here, and no other member
+	 * of the party has claimed it. The claim covers the part a local check can't
+	 * see, somebody on another screen who is still walking up to the door.
+	 */
+	public canUseSeat(seat: VehicleSeat): boolean
+	{
+		if (seat.occupiedBy !== null && seat.occupiedBy !== this) return false;
+
+		let party = this.world !== undefined ? this.world.party : undefined;
+		return party === undefined || !party.isSeatHeldByOther(seat);
+	}
+
+	/** The seat this character is in, getting into, or walking up to. */
+	public getSeatOfInterest(): VehicleSeat
+	{
+		if (this.occupyingSeat !== null) return this.occupyingSeat;
+
+		if (this.charState instanceof OpenVehicleDoor || this.charState instanceof EnteringVehicle)
+		{
+			return this.charState.seat;
+		}
+
+		if (this.vehicleEntryInstance !== null && this.vehicleEntryInstance.targetSeat !== undefined)
+		{
+			return this.vehicleEntryInstance.targetSeat;
+		}
+
+		return null;
+	}
+
+	/** Sitting in, climbing into or out of, or parented to a vehicle. */
+	public isBusyWithVehicle(): boolean
+	{
+		if (this.occupyingSeat !== null) return true;
+
+		return this.world !== undefined && this.parent !== null && this.parent !== this.world.graphicsWorld;
+	}
+
+	/**
+	 * Gives up a seat another player turned out to hold. Only the local
+	 * character does this; everyone else is played back from their own client.
+	 *
+	 * Walking up to it just stops. Halfway through the door, back out. Already
+	 * sitting in it, which happens when a whole party spawns into the one car,
+	 * move along to a free seat, or climb out if there isn't one.
+	 */
+	public yieldSeat(seat: VehicleSeat): void
+	{
+		if (this.world === undefined || this.world.localCharacter !== this) return;
+
+		if (this.occupyingSeat === seat)
+		{
+			let vehicle = seat.vehicle as unknown as Vehicle;
+
+			for (const other of vehicle.seats)
+			{
+				if (other !== seat && this.canUseSeat(other))
+				{
+					this.moveToSeat(other);
+					return;
+				}
+			}
+
+			this.forceLeaveVehicle();
+			return;
+		}
+
+		if ((this.charState instanceof OpenVehicleDoor || this.charState instanceof EnteringVehicle) && this.charState.seat === seat)
+		{
+			this.forceLeaveVehicle();
+			this.world.notices.say('Somebody beat you to that seat');
+			return;
+		}
+
+		if (this.vehicleEntryInstance !== null && this.vehicleEntryInstance.targetSeat === seat)
+		{
+			this.cancelVehicleEntry();
+			this.world.notices.say('Somebody beat you to that seat');
+		}
+	}
+
+	/** Stops walking toward a vehicle, without leaving the forward key stuck down. */
+	public cancelVehicleEntry(): void
+	{
+		if (this.vehicleEntryInstance === null) return;
+
+		this.vehicleEntryInstance = null;
+		this.triggerAction('up', false);
+	}
+
+	/** Straight into another seat of the same vehicle, no animation. */
+	private moveToSeat(seat: VehicleSeat): void
+	{
+		this.stopControllingVehicle();
+		this.leaveSeat();
+		this.modelContainer.visible = true;
+
+		let sit = seat.getSitPosition(new THREE.Vector3());
+		this.setPosition(sit.x, sit.y, sit.z);
+		this.quaternion.copy(seat.seatPointObject.quaternion);
+		this.occupySeat(seat);
+
+		if (seat.type === SeatType.Driver) this.setState(new Driving(this, seat));
+		else this.setState(new Sitting(this, seat));
+	}
+
+	/**
+	 * Out of any vehicle, all at once: no longer driving, no longer sitting,
+	 * parented back to the world with physics on, standing by the door. Safe
+	 * to call on foot, where it only makes sure of all that.
+	 *
+	 * For dying at the wheel and for respawning, both of which used to leave the
+	 * body seated and then move it in the car's own coordinates. Must not run
+	 * inside a physics step, since it puts the capsule back into the world.
+	 */
+	public forceLeaveVehicle(): void
+	{
+		if (this.world === undefined) return;
+
+		let seat = this.occupyingSeat;
+		if (seat === null && (this.charState instanceof OpenVehicleDoor || this.charState instanceof EnteringVehicle))
+		{
+			seat = this.charState.seat;
+		}
+
+		this.stopControllingVehicle();
+		this.controlledObject = undefined;
+		this.vehicleEntryInstance = null;
+		this.modelContainer.visible = true;
+
+		let attached = this.parent !== null && this.parent !== this.world.graphicsWorld;
+		let exit = new THREE.Vector3();
+
+		if (attached && seat !== null && seat.entryPoints.length > 0)
+		{
+			// Beside the door rather than where the seat is, inside the bodywork
+			seat.entryPoints[0].getWorldPosition(exit);
+			exit.y += 0.52;
+		}
+		else
+		{
+			this.getWorldPosition(exit);
+		}
+
+		if (seat !== null && seat.door !== undefined) seat.door.physicsEnabled = true;
+
+		this.leaveSeat();
+		if (attached) this.world.graphicsWorld.attach(this);
+		if (!this.physicsEnabled) this.setPhysicsEnabled(true);
+
+		this.setPosition(exit.x, exit.y, exit.z);
+		this.resetVelocity();
+		this.resetOrientation();
+
+		if (this.charState !== undefined) this.setState(new Idle(this));
 	}
 
 	public enterVehicle(seat: VehicleSeat, entryPoint: THREE.Object3D): void
@@ -995,18 +1213,46 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 	public teleportToVehicle(vehicle: Vehicle, seat: VehicleSeat): void
 	{
+		// A seat that's already taken, which a party reaches by everybody
+		// spawning into the same car: take another one, or stand beside it
+		if (!this.canUseSeat(seat))
+		{
+			let spare = vehicle.seats.find((other) => this.canUseSeat(other));
+
+			if (spare === undefined)
+			{
+				let beside = new THREE.Vector3();
+				if (seat.entryPoints.length > 0) seat.entryPoints[0].getWorldPosition(beside);
+				else vehicle.getWorldPosition(beside);
+
+				this.setPosition(beside.x, beside.y + 0.52, beside.z);
+				this.resetVelocity();
+				return;
+			}
+
+			seat = spare;
+		}
+
 		this.resetVelocity();
 		this.rotateModel();
 		this.setPhysicsEnabled(false);
 		(vehicle as unknown as THREE.Object3D).attach(this);
 
-		this.setPosition(seat.seatPointObject.position.x, seat.seatPointObject.position.y + 0.6, seat.seatPointObject.position.z);
+		let sit = seat.getSitPosition(new THREE.Vector3());
+		this.setPosition(sit.x, sit.y, sit.z);
 		this.quaternion.copy(seat.seatPointObject.quaternion);
 
 		this.occupySeat(seat);
-		this.setState(new Driving(this, seat));
 
-		this.startControllingVehicle(vehicle, seat);
+		if (seat.type === SeatType.Driver)
+		{
+			this.setState(new Driving(this, seat));
+			this.startControllingVehicle(vehicle, seat);
+		}
+		else
+		{
+			this.setState(new Sitting(this, seat));
+		}
 	}
 
 	public startControllingVehicle(vehicle: IControllable, seat: VehicleSeat): void
@@ -1099,7 +1345,9 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	{
 		if (this.occupyingSeat !== null)
 		{
-			this.occupyingSeat.occupiedBy = null;
+			// Only if it's still ours. Someone may have been put in it since, and
+			// clearing it under them is how a seat came to be shared.
+			if (this.occupyingSeat.occupiedBy === this) this.occupyingSeat.occupiedBy = null;
 			this.occupyingSeat = null;
 
 			this.updateNameTagHeight();
@@ -1292,6 +1540,10 @@ export class Character extends THREE.Object3D implements IWorldEntity
 				world.inputManager.inputReceiver = undefined;
 			}
 
+			// Otherwise a scenario relaunch leaves the old body as the one the
+			// party keeps publishing, seat, car and all, while the new one loads
+			if (world.localCharacter === this) world.localCharacter = undefined;
+
 			this.world = undefined;
 
 			// Remove from characters
@@ -1300,8 +1552,9 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			// Remove physics
 			world.physicsWorld.remove(this.characterCapsule.body);
 
-			// Remove visuals
-			world.graphicsWorld.remove(this);
+			// Remove visuals. From whatever holds it: a seated character belongs
+			// to its vehicle, and removing it from the scene alone left it there.
+			if (this.parent !== null) this.parent.remove(this);
 			world.graphicsWorld.remove(this.raycastBox);
 
 			if (this.nameTag !== undefined)

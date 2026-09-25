@@ -87,6 +87,12 @@ export class World
 	public musicElement: HTMLAudioElement;
 	public localPlayer: PlayerIdentity = PlayerIdentity.load();
 	public localCharacter: Character;
+	/**
+	 * Counts scenario launches. Everything a launch spawns arrives later, from a
+	 * download, and anything that arrives after a newer launch has started
+	 * belongs to a world that no longer exists and is thrown away.
+	 */
+	public scenarioGeneration: number = 0;
 	public party: PartySession;
 	public combat: CombatSystem;
 	public effects: Effects;
@@ -347,6 +353,9 @@ export class World
 		body.interpolatedQuaternion.copy(newQuat);
 		body.velocity.setZero();
 		body.angularVelocity.setZero();
+		// A sleeping body keeps the collision box it dozed off with
+		body.aabbNeedsUpdate = true;
+		body.wakeUp();
 	}
 
 	/**
@@ -910,14 +919,33 @@ export class World
 		return spawnPoint;
 	}
 
-	public launchScenario(scenarioID: string, loadingManager?: LoadingManager): void
+	/**
+	 * 'quiet' is for launches that arrive from the party rather than from this
+	 * player: no briefing to dismiss and no clock stopped behind it, since the
+	 * rest of the room is already playing and nobody here asked for it.
+	 */
+	public launchScenario(scenarioID: string, loadingManager?: LoadingManager, quiet?: boolean): void
 	{
 		this.lastScenarioID = scenarioID;
+		this.scenarioGeneration++;
 
 		this.clearEntities();
 
 		// Launch default scenario
 		if (!loadingManager) loadingManager = new LoadingManager(this);
+		loadingManager.generation = this.scenarioGeneration;
+
+		if (quiet === true && loadingManager.onFinishedCallback === undefined)
+		{
+			// Set before the scenario is, which only adds its briefing when no
+			// callback has been set yet
+			loadingManager.onFinishedCallback = () =>
+			{
+				this.update(1, 1);
+				this.setTimeScale(1);
+				UIManager.setUserInterfaceVisible(true);
+			};
+		}
 		this.race.stop();
 
 		for (const scenario of this.scenarios) {
@@ -933,6 +961,17 @@ export class World
 
 		// Everyone in a party has to be in the same scenario, or vehicle ids don't line up
 		if (this.party !== undefined) this.party.onScenarioLaunched(scenarioID);
+	}
+
+	/**
+	 * Shift+R. In a party it puts just this player back at a spawn point:
+	 * restarting the scenario there restarts it for everybody, and a key the
+	 * controls call "Respawn" shouldn't reset the whole room.
+	 */
+	public requestRespawn(): void
+	{
+		if (this.party !== undefined && this.party.active) this.combat.respawnNow();
+		else this.restartScenario();
 	}
 
 	public restartScenario(): void
@@ -963,6 +1002,10 @@ export class World
 
 	public scrollTheTimeScale(scrollAmount: number): void
 	{
+		// Slow motion is one player's world running slow, which in a party means
+		// them and the car they drive crawling on everyone else's screen
+		if (this.party !== undefined && this.party.active) return;
+
 		// Changing time scale with scroll wheel
 		const timeScaleBottomLimit = 0.003;
 		const timeScaleChangeSpeed = 1.3;
@@ -1241,6 +1284,8 @@ export class World
 		worldFolder.add(this.params, 'Time_Scale', 0, 1).listen()
 			.onChange((value) =>
 			{
+				// Eased straight back while in a party, for the same reason as the wheel
+				if (scope.party !== undefined && scope.party.active) return;
 				scope.timeScaleTarget = value;
 			});
 		worldFolder.add(this.params, 'Day_Night').listen();

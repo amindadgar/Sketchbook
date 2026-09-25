@@ -1,11 +1,15 @@
 /**
  * Sketchbook party relay.
  *
- * Deliberately dumb: it owns room membership and nothing else. Every client
+ * Deliberately dumb: it owns room membership and very little else. Every client
  * simulates its own character and the vehicle it drives, and the server just
  * forwards those updates to the rest of the room. That means a modified client
  * can lie about its position, which is fine for playing with friends and not
  * fine for anything competitive.
+ *
+ * The one thing it does decide is who sits where. Two clients can't agree on a
+ * seat between themselves, because each one sees the other a round trip late,
+ * so the first claim to arrive here wins and everyone hears about it.
  *
  *   node server/index.js            # localhost:9000
  *   PORT=8081 node server/index.js
@@ -59,6 +63,31 @@ const MATCH_SYNC_MS = 5000;
 const MAX_CHAT_LENGTH = 160;
 /** One line every second and a bit, so nobody can paper over the screen. */
 const CHAT_COOLDOWN_MS = 1200;
+
+/**
+ * A seat claim outlives a player who stops publishing by this much. A tab in
+ * the background stops its game loop but keeps its socket, and without this it
+ * would hold a car for everyone else until the five minute idle drop.
+ */
+const SEAT_STALE_MS = Number(process.env.SEAT_STALE_MS) || 5000;
+/** A death only earns the named killer a point if they hit the victim this recently. */
+const KILL_CREDIT_MS = 10 * 1000;
+/** Positions this far out are garbage, not a very long drive. */
+const MAX_COORDINATE = 1e5;
+const MAX_SEAT_INDEX = 15;
+const MAX_ID_LENGTH = 64;
+/** Pellet end points in one shot. The shotgun has eight. */
+const MAX_SHOT_POINTS = 8;
+/** Vehicles remembered per room for late joiners. More than any scenario has. */
+const MAX_CACHED_VEHICLES = 64;
+// State and vehicle updates at 20 a second each, an automatic's shots and hits,
+// and a car or two still being reported as it rolls to a stop come to under a
+// hundred messages a second. Anything well past that is a runaway client, and
+// dropping its excess keeps it from flooding the room.
+const RATE_PER_SECOND = 150;
+const RATE_BURST = 300;
+/** What this relay understands beyond the original protocol, sent in 'joined'. */
+const FEATURES = ['seats', 'vehicles', 'scenarioEcho', 'hurt', 'pickup'];
 
 /** @type {Map<string, {code: string, players: Set<object>, scenario: string}>} */
 const rooms = new Map();
@@ -122,16 +151,199 @@ function tally(action, userId)
 	action(userId).catch((error) => console.error('stats:', error.message));
 }
 
-function readPoint(value)
+/** The first 'count' entries as finite, sane numbers, or null. */
+function readNumbers(value, count)
 {
-	if (!Array.isArray(value) || value.length < 3) return null;
+	if (!Array.isArray(value) || value.length < count) return null;
 
-	for (let i = 0; i < 3; i++)
+	for (let i = 0; i < count; i++)
 	{
 		if (typeof value[i] !== 'number' || !Number.isFinite(value[i])) return null;
+		if (Math.abs(value[i]) > MAX_COORDINATE) return null;
 	}
 
-	return value;
+	return value.slice(0, count);
+}
+
+function readPoint(value)
+{
+	return readNumbers(value, 3);
+}
+
+function readString(value, maxLength)
+{
+	return (typeof value === 'string' && value.length > 0 && value.length <= maxLength) ? value : null;
+}
+
+function readInt(value, min, max)
+{
+	return (Number.isInteger(value) && value >= min && value <= max) ? value : null;
+}
+
+// Movement, vehicle and shot messages go to everyone else in the room, so they
+// are rebuilt from the fields the game reads rather than forwarded as sent. A
+// NaN in someone's position would otherwise poison every other client's copy
+// of them for good, and arbitrary extra fields ride along for free.
+
+function sanitizeState(msg)
+{
+	const p = readPoint(msg.p);
+	const q = readNumbers(msg.q, 4);
+	if (p === null || q === null) return null;
+
+	const out = { t: 'state', p, q };
+
+	const a = readString(msg.a, 48);
+	if (a !== null) out.a = a;
+
+	out.v = readString(msg.v, MAX_ID_LENGTH);
+	const s = readInt(msg.s, -1, MAX_SEAT_INDEX);
+	out.s = (out.v !== null && s !== null) ? s : -1;
+
+	if (typeof msg.h === 'number' && Number.isFinite(msg.h)) out.h = Math.max(0, Math.min(100, msg.h));
+
+	// Absent means an older client that doesn't say, which is different from unarmed
+	if (msg.w !== undefined) out.w = WEAPONS.has(msg.w) ? msg.w : null;
+
+	const l = readInt(msg.l, 0, 1e9);
+	if (l !== null) out.l = l;
+
+	return out;
+}
+
+function sanitizeVehicle(msg)
+{
+	const p = readPoint(msg.p);
+	const q = readNumbers(msg.q, 4);
+	if (p === null || q === null) return null;
+
+	const out = { t: 'vehicle', p, q };
+
+	const v = readString(msg.v, MAX_ID_LENGTH);
+	if (v !== null) out.v = v;
+
+	const lv = readPoint(msg.lv);
+	if (lv !== null) out.lv = lv;
+
+	const av = readPoint(msg.av);
+	if (av !== null) out.av = av;
+
+	if (msg.f) out.f = 1;
+
+	return out;
+}
+
+function sanitizeShot(msg)
+{
+	const p = readPoint(msg.p);
+	const d = readPoint(msg.d);
+	if (p === null || d === null || !WEAPONS.has(msg.w)) return null;
+
+	const out = { t: 'shot', p, d, w: msg.w };
+
+	if (Array.isArray(msg.e))
+	{
+		const ends = msg.e.slice(0, MAX_SHOT_POINTS).map(readPoint).filter((point) => point !== null);
+		if (ends.length > 0) out.e = ends;
+	}
+
+	return out;
+}
+
+/** Refills at a steady rate and spends one per message. False means drop it. */
+function withinRate(player, now)
+{
+	player.tokens = Math.min(RATE_BURST, player.tokens + (now - player.tokensAt) / 1000 * RATE_PER_SECOND);
+	player.tokensAt = now;
+
+	if (player.tokens < 1) return false;
+
+	player.tokens--;
+	return true;
+}
+
+// ------------------------------------------------------------------- seats
+
+function seatMessage(player)
+{
+	return player.seatKey === null
+		? { t: 'seat', id: player.id, v: null, s: -1 }
+		: { t: 'seat', id: player.id, v: player.seatVehicle, s: player.seatIndex };
+}
+
+/** Frees whatever the player holds. Reports whether they held anything. */
+function releaseSeat(player, announce)
+{
+	if (player.seatKey === null) return false;
+
+	const room = player.room;
+	if (room !== null && room.seats.get(player.seatKey) === player) room.seats.delete(player.seatKey);
+
+	player.seatKey = null;
+	player.seatVehicle = null;
+	player.seatIndex = -1;
+
+	if (announce && room !== null) broadcast(room, seatMessage(player));
+	return true;
+}
+
+/**
+ * First come, first served. A player holds one seat at most, so claiming a new
+ * one gives up the old one in the same step. Refusals go back to the claimant
+ * alone, as the current holder's own claim: that tells them who beat them to it,
+ * and needs no message type of its own.
+ */
+function claimSeat(player, vehicle, index)
+{
+	const room = player.room;
+
+	if (vehicle === null)
+	{
+		if (!releaseSeat(player, true)) send(player, seatMessage(player));
+		return;
+	}
+
+	const key = vehicle + '#' + index;
+	const holder = room.seats.get(key);
+
+	if (holder !== undefined && holder !== player)
+	{
+		send(player, seatMessage(holder));
+		return;
+	}
+
+	if (player.seatKey === key)
+	{
+		send(player, seatMessage(player));
+		return;
+	}
+
+	if (player.seatKey !== null) room.seats.delete(player.seatKey);
+
+	room.seats.set(key, player);
+	player.seatKey = key;
+	player.seatVehicle = vehicle;
+	player.seatIndex = index;
+
+	broadcast(room, seatMessage(player));
+}
+
+/** Everyone who has stopped publishing gives their seat back. */
+function releaseStaleSeats()
+{
+	const now = Date.now();
+
+	for (const room of rooms.values())
+	{
+		for (const player of room.players)
+		{
+			if (player.seatKey !== null && now - player.lastState > SEAT_STALE_MS)
+			{
+				console.log('player %d (%s) went quiet, releasing their seat', player.id, player.name);
+				releaseSeat(player, true);
+			}
+		}
+	}
 }
 
 function apart(a, b)
@@ -163,6 +375,8 @@ function hitIsPlausible(player, msg, now)
 
 	const target = findInRoom(player.room, msg.target);
 	if (target === null || target === player) return 'no such target';
+	// Their own client says they're down, and it owns that number
+	if (target.health !== undefined && target.health <= 0) return 'target is already down';
 
 	// Positions come from the movement updates both clients are already sending
 	const from = readPoint(msg.p) || player.position;
@@ -198,7 +412,9 @@ function matchMessage(room, now)
 		// round already in progress from the start of the next one
 		round: room.round,
 		remaining: Math.max(0, Math.round((room.endsAt - now) / 1000)),
-		results: room.phase === 'over' ? standings(room) : undefined
+		// Taken when the round ended, so a kill during the intermission can't
+		// rewrite a result everyone has already seen
+		results: room.phase === 'over' ? room.results : undefined
 	};
 }
 
@@ -214,6 +430,7 @@ function tickMatches()
 			if (room.phase === 'running')
 			{
 				room.phase = 'over';
+				room.results = standings(room);
 				room.endsAt = now + INTERMISSION_MS;
 				console.log('room %s: round over', room.code);
 			}
@@ -222,6 +439,7 @@ function tickMatches()
 				for (const player of room.players) player.score = 0;
 
 				room.phase = 'running';
+				room.results = undefined;
 				room.round++;
 				room.endsAt = now + MATCH_LENGTH_MS;
 				console.log('room %s: round %d', room.code, room.round);
@@ -264,6 +482,11 @@ function leaveRoom(player)
 	const room = player.room;
 	if (room === null) return;
 
+	// 'leave' says the same to anyone listening, but an explicit release keeps
+	// the seat table in one code path on the clients
+	releaseSeat(player, room.players.size > 1);
+	room.lastHit.delete(player.id);
+
 	room.players.delete(player);
 	player.room = null;
 
@@ -283,15 +506,23 @@ function joinRoom(player, room)
 	leaveRoom(player);
 
 	const others = Array.from(room.players).map(publicInfo);
+	const seats = Array.from(room.players).filter((other) => other.seatKey !== null).map(seatMessage);
 	room.players.add(player);
 	player.room = room;
+	player.lastState = Date.now();
 
 	send(player, {
 		t: 'joined',
 		code: room.code,
 		id: player.id,
 		scenario: room.scenario,
-		players: others
+		scenarioSeq: room.scenarioSeq,
+		players: others,
+		// Who sits where, and where the vehicles were last seen, so a late
+		// arrival doesn't climb into an occupied seat or a car that has moved
+		seats: seats,
+		vehicles: Array.from(room.vehicles.values()),
+		features: FEATURES
 	});
 
 	tally(db.recordPlayed, player.userId);
@@ -343,7 +574,17 @@ wss.on('connection', (ws) =>
 		position: null,
 		damageWindow: [],
 		lastDeath: 0,
-		lastChat: 0
+		lastChat: 0,
+		/** When the last movement update arrived. A seat is let go after SEAT_STALE_MS without one. */
+		lastState: Date.now(),
+		/** 'vehicle#seat' held in room.seats, or null. */
+		seatKey: null,
+		seatVehicle: null,
+		seatIndex: -1,
+		/** 2 for clients that know their own scenario changes come back to them. */
+		protocol: 1,
+		tokens: RATE_BURST,
+		tokensAt: Date.now()
 	};
 	connections.add(player);
 
@@ -355,6 +596,8 @@ wss.on('connection', (ws) =>
 	ws.on('message', (raw) =>
 	{
 		player.lastActivity = Date.now();
+
+		if (!withinRate(player, player.lastActivity)) return;
 
 		let msg;
 		try
@@ -374,6 +617,7 @@ wss.on('connection', (ws) =>
 				player.name = sanitizeName(msg.name);
 				player.color = sanitizeColor(msg.color);
 				player.hat = sanitizeHat(msg.hat);
+				player.protocol = msg.protocol === 2 ? 2 : 1;
 				adoptToken(player, msg.token);
 
 				const code = makeRoomCode();
@@ -385,8 +629,16 @@ wss.on('connection', (ws) =>
 
 				const now = Date.now();
 				const room = {
-					code, players: new Set(), scenario: msg.scenario || null,
-					phase: 'running', round: 1, endsAt: now + MATCH_LENGTH_MS, lastSync: now
+					code, players: new Set(), scenario: readString(msg.scenario, MAX_ID_LENGTH),
+					phase: 'running', round: 1, endsAt: now + MATCH_LENGTH_MS, lastSync: now,
+					results: undefined,
+					scenarioSeq: 0,
+					/** 'vehicle#seat' to the player holding it */
+					seats: new Map(),
+					/** Vehicle id to its last reported pose, for late joiners */
+					vehicles: new Map(),
+					/** Victim id to the last hit on them this relay let through, for crediting kills */
+					lastHit: new Map()
 				};
 				rooms.set(code, room);
 				joinRoom(player, room);
@@ -398,6 +650,7 @@ wss.on('connection', (ws) =>
 				player.name = sanitizeName(msg.name);
 				player.color = sanitizeColor(msg.color);
 				player.hat = sanitizeHat(msg.hat);
+				player.protocol = msg.protocol === 2 ? 2 : 1;
 				adoptToken(player, msg.token);
 
 				const code = typeof msg.code === 'string' ? msg.code.toUpperCase().trim() : '';
@@ -433,10 +686,32 @@ wss.on('connection', (ws) =>
 			case 'scenario':
 			{
 				// Everyone needs the same scenario or vehicle ids don't line up
-				if (player.room !== null && typeof msg.id === 'string')
+				const id = readString(msg.id, MAX_ID_LENGTH);
+				if (player.room === null || id === null) break;
+
+				const room = player.room;
+				room.scenario = id;
+				room.scenarioSeq++;
+
+				// Every vehicle is respawned, so nobody is sitting anywhere and no
+				// remembered pose belongs to anything that exists any more
+				room.seats.clear();
+				room.vehicles.clear();
+				for (const other of room.players)
 				{
-					player.room.scenario = msg.id;
-					broadcast(player.room, { t: 'scenario', id: msg.id }, player);
+					other.seatKey = null;
+					other.seatVehicle = null;
+					other.seatIndex = -1;
+				}
+
+				// Back to the sender as well, when it understands that. Two players
+				// changing scenario at the same moment otherwise each end up in the
+				// other's; this way everyone applies the changes in the order they
+				// arrived here, and the last one wins everywhere.
+				const change = { t: 'scenario', id: id, seq: room.scenarioSeq, by: player.id };
+				for (const other of room.players)
+				{
+					if (other !== player || other.protocol >= 2) send(other, change);
 				}
 				break;
 			}
@@ -445,22 +720,47 @@ wss.on('connection', (ws) =>
 			{
 				if (player.room === null) break;
 
-				const at = readPoint(msg.p);
-				if (at !== null) player.position = at;
+				const state = sanitizeState(msg);
+				if (state === null) break;
 
-				msg.id = player.id;
-				broadcast(player.room, msg, player);
+				player.position = state.p;
+				player.lastState = Date.now();
+				if (state.h !== undefined) player.health = state.h;
+
+				state.id = player.id;
+				broadcast(player.room, state, player);
 				break;
 			}
 
 			case 'vehicle':
+			{
+				if (player.room === null) break;
+
+				const vehicle = sanitizeVehicle(msg);
+				if (vehicle === null) break;
+
+				const room = player.room;
+				if (vehicle.v !== undefined && (room.vehicles.has(vehicle.v) || room.vehicles.size < MAX_CACHED_VEHICLES))
+				{
+					room.vehicles.set(vehicle.v, {
+						v: vehicle.v, p: vehicle.p, q: vehicle.q, lv: vehicle.lv, av: vehicle.av
+					});
+				}
+
+				vehicle.id = player.id;
+				broadcast(room, vehicle, player);
+				break;
+			}
+
 			case 'shot':
 			{
-				if (player.room !== null)
-				{
-					msg.id = player.id;
-					broadcast(player.room, msg, player);
-				}
+				if (player.room === null) break;
+
+				const shot = sanitizeShot(msg);
+				if (shot === null) break;
+
+				shot.id = player.id;
+				broadcast(player.room, shot, player);
 				break;
 			}
 
@@ -468,15 +768,67 @@ wss.on('connection', (ws) =>
 			{
 				if (player.room === null) break;
 
-				const problem = hitIsPlausible(player, msg, Date.now());
+				const now = Date.now();
+				const problem = hitIsPlausible(player, msg, now);
 				if (problem !== null)
 				{
 					console.log('rejected a hit from player %d (%s): %s', player.id, player.name, problem);
 					break;
 				}
 
-				msg.id = player.id;
-				broadcast(player.room, msg, player);
+				const target = findInRoom(player.room, msg.target);
+				player.room.lastHit.set(target.id, { by: player.id, at: now });
+
+				// Only the player named has anything to do with it
+				const hit = {
+					t: 'hit', id: player.id, target: target.id, damage: msg.damage, w: msg.w,
+					p: readPoint(msg.p) || undefined
+				};
+				const life = readInt(msg.l, 0, 1e9);
+				if (life !== null) hit.l = life;
+
+				send(target, hit);
+				break;
+			}
+
+			case 'claim':
+			{
+				if (player.room === null) break;
+
+				const vehicle = msg.v === null ? null : readString(msg.v, MAX_ID_LENGTH);
+				const index = readInt(msg.s, 0, MAX_SEAT_INDEX);
+				if (msg.v !== null && (vehicle === null || index === null)) break;
+
+				claimSeat(player, vehicle, index);
+				break;
+			}
+
+			case 'hurt':
+			{
+				// The victim telling the shooter a hit counted, which is what
+				// lights their hit marker. Only the shooter needs to know.
+				if (player.room === null) break;
+
+				const shooter = findInRoom(player.room, msg.to);
+				if (shooter === null || shooter === player) break;
+				if (typeof msg.damage !== 'number' || !Number.isFinite(msg.damage)) break;
+
+				send(shooter, {
+					t: 'hurt', id: player.id,
+					damage: Math.max(0, Math.min(500, msg.damage)),
+					dead: msg.dead === true
+				});
+				break;
+			}
+
+			case 'pickup':
+			{
+				if (player.room === null) break;
+
+				const index = readInt(msg.i, 0, 255);
+				if (index === null) break;
+
+				broadcast(player.room, { t: 'pickup', id: player.id, i: index }, player);
 				break;
 			}
 
@@ -502,8 +854,14 @@ wss.on('connection', (ws) =>
 			case 'death':
 			{
 				// The player who died reports it, because their client is the one
-				// that owns their health. The point goes to whoever they name.
+				// that owns their health. The point goes to whoever they name,
+				// provided this relay actually let a hit from them through.
 				if (player.room === null) break;
+
+				const room = player.room;
+
+				// The dead let go of the wheel, whatever else happens here
+				releaseSeat(player, true);
 
 				// One death per respawn, so nobody can hand out points in bulk
 				const now = Date.now();
@@ -514,22 +872,33 @@ wss.on('connection', (ws) =>
 				}
 				player.lastDeath = now;
 
-				tally(db.recordDeath, player.userId);
+				const lastHit = room.lastHit.get(player.id);
+				room.lastHit.delete(player.id);
 
-				for (const other of player.room.players)
+				let killer = null;
+				if (lastHit !== undefined && lastHit.by === msg.killer && now - lastHit.at <= KILL_CREDIT_MS)
 				{
-					if (other.id === msg.killer && other !== player)
+					killer = findInRoom(room, msg.killer);
+					if (killer === player) killer = null;
+				}
+
+				// Nothing counts between rounds: the results are already up
+				if (room.phase === 'running')
+				{
+					tally(db.recordDeath, player.userId);
+
+					if (killer !== null)
 					{
-						other.score++;
-						tally(db.recordKill, other.userId);
-						broadcast(player.room, { t: 'score', id: other.id, score: other.score });
-						break;
+						killer.score++;
+						tally(db.recordKill, killer.userId);
+						broadcast(room, { t: 'score', id: killer.id, score: killer.score });
 					}
 				}
 
-				broadcast(player.room, {
-					t: 'death', id: player.id, killer: msg.killer,
-					w: WEAPONS.has(msg.w) ? msg.w : undefined
+				broadcast(room, {
+					t: 'death', id: player.id,
+					killer: killer !== null ? killer.id : undefined,
+					w: killer !== null && WEAPONS.has(msg.w) ? msg.w : undefined
 				}, player);
 				break;
 			}
@@ -567,6 +936,7 @@ function drop(player, reason)
 }
 
 const matchClock = setInterval(tickMatches, MATCH_TICK_MS);
+const seatSweep = setInterval(releaseStaleSeats, 1000);
 
 const sweep = setInterval(() =>
 {
@@ -596,6 +966,7 @@ wss.on('close', () =>
 {
 	clearInterval(sweep);
 	clearInterval(matchClock);
+	clearInterval(seatSweep);
 });
 
 db.connect()

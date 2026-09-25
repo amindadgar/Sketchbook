@@ -14,6 +14,8 @@ import { EntityType } from '../enums/EntityType';
  */
 export class Minimap implements IUpdatable
 {
+	private static scratch: THREE.Vector3 = new THREE.Vector3();
+
 	// After characters and vehicles have moved, so markers aren't a frame behind
 	public updateOrder: number = 15;
 
@@ -168,13 +170,15 @@ export class Minimap implements IUpdatable
 			this.drawMarker(focus, vehicle.position, color, 2.5, false);
 		});
 
-		// Everyone else stays visible however far off they are, pinned to the rim
+		// Everyone else stays visible however far off they are, pinned to the rim.
+		// World position, since anyone sitting in a car is parented to it and
+		// their own position is only where in the car they are.
 		this.world.characters.forEach((character) =>
 		{
 			if (character === this.world.localCharacter) return;
 			if (character.playerColor === undefined) return;
 
-			this.drawMarker(focus, character.position, character.playerColor, 4, true);
+			this.drawMarker(focus, character.getWorldPosition(Minimap.scratch), character.playerColor, 4, true);
 		});
 	}
 

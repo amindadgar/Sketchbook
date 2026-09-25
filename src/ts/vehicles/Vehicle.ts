@@ -67,6 +67,31 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	private static lampTexture: THREE.Texture;
 	private boundOnCollide: (event: any) => void;
 
+	/**
+	 * Where the player driving this on another client last said it was. Only
+	 * their client simulates it for real, so here the body is steered after
+	 * those reports: velocity toward the pose rather than teleports with the
+	 * velocity zeroed, so it collides like a moving car, sounds like one, and
+	 * doesn't get argued with by everything that assumed a parked one.
+	 */
+	private remoteTarget: {
+		position: THREE.Vector3, quaternion: THREE.Quaternion,
+		velocity: THREE.Vector3, angularVelocity: THREE.Vector3,
+		at: number, final: boolean
+	};
+	private remoteSteering: boolean = false;
+	/** Reports older than this mean the driver has gone quiet, so it coasts. */
+	private static readonly REMOTE_FRESH: number = 0.5;
+	/** Further off than this and the body is put there rather than pulled. */
+	private static readonly REMOTE_SNAP: number = 8;
+	/** How hard the pose error is pulled in, per second. */
+	private static readonly REMOTE_GAIN: number = 6;
+	/** Reports are extrapolated at most this far, so a stall doesn't fling it. */
+	private static readonly REMOTE_LEAD: number = 0.25;
+	/** The same force the handbrake and the race grid use. */
+	private static readonly PARKING_BRAKE: number = 1000000;
+	private parked: boolean = false;
+
 	constructor(gltf: any, handlingSetup?: any)
 	{
 		super();
@@ -117,6 +142,11 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 
 	public update(timeStep: number): void
 	{
+		// Runs after the physics step, so the velocity set here is what the next
+		// step integrates
+		this.followRemoteTarget();
+		this.updateParkingBrake();
+
 		this.position.set(
 			this.collision.interpolatedPosition.x,
 			this.collision.interpolatedPosition.y,
@@ -165,15 +195,16 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 
 		if (this.actions.seat_switch.justPressed && this.controllingCharacter?.occupyingSeat?.connectedSeats.length > 0)
 		{
-			this.controllingCharacter.modelContainer.visible = true;
-			this.controllingCharacter.setState(
-				new SwitchingSeats(
-					this.controllingCharacter,
-					this.controllingCharacter.occupyingSeat,
-					this.controllingCharacter.occupyingSeat.connectedSeats[0]
-				)
-			);
-			this.controllingCharacter.stopControllingVehicle();
+			// Only into a seat nobody else has, here or on anyone else's screen
+			let driver = this.controllingCharacter;
+			let free = driver.occupyingSeat.connectedSeats.find((seat) => driver.canUseSeat(seat));
+
+			if (free !== undefined)
+			{
+				driver.modelContainer.visible = true;
+				driver.setState(new SwitchingSeats(driver, driver.occupyingSeat, free));
+				driver.stopControllingVehicle();
+			}
 		}
 	}
 
@@ -207,7 +238,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		}
 		else if (code === 'KeyR' && pressed === true && event.shiftKey === true)
 		{
-			this.world.restartScenario();
+			if (!event.repeat) this.world.requestRespawn();
 		}
 		else
 		{
@@ -365,6 +396,207 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		// back to where it was for a frame before catching up
 		this.collision.interpolatedQuaternion.copy(this.collision.quaternion);
 		this.collision.interpolatedPosition.copy(this.collision.position);
+		this.collision.aabbNeedsUpdate = true;
+		this.collision.wakeUp();
+	}
+
+	/** The id vehicles are matched by across a party: the name of the spawn point. */
+	public getNetworkId(): string
+	{
+		return this.spawnPoint !== undefined ? this.spawnPoint.name : undefined;
+	}
+
+	/**
+	 * A pose report from whoever is driving this, or last drove it, on another
+	 * client. 'final' means they've let go and this is where it ended up.
+	 * Ignored while anyone local is at the wheel, whose simulation wins here.
+	 */
+	public setRemoteTarget(position: THREE.Vector3, quaternion: THREE.Quaternion,
+		velocity: THREE.Vector3, angularVelocity: THREE.Vector3, final: boolean): void
+	{
+		if (this.controllingCharacter !== undefined) return;
+
+		if (this.remoteTarget === undefined)
+		{
+			this.remoteTarget = {
+				position: new THREE.Vector3(), quaternion: new THREE.Quaternion(),
+				velocity: new THREE.Vector3(), angularVelocity: new THREE.Vector3(),
+				at: 0, final: false
+			};
+		}
+
+		let target = this.remoteTarget;
+		target.position.copy(position);
+		target.quaternion.copy(quaternion).normalize();
+		target.velocity.copy(velocity);
+		target.angularVelocity.copy(angularVelocity);
+		target.at = performance.now() / 1000;
+		target.final = final;
+
+		// Where it came to rest is where it is, no easing required
+		if (final) this.placeBody(position, target.quaternion, velocity, angularVelocity);
+	}
+
+	/** A driver on another client is steering this right now. */
+	public isRemoteDriven(): boolean
+	{
+		let target = this.remoteTarget;
+
+		return this.controllingCharacter === undefined
+			&& target !== undefined
+			&& !target.final
+			&& performance.now() / 1000 - target.at < Vehicle.REMOTE_FRESH;
+	}
+
+	/** Someone is at the wheel, here or on another client. For engines, rotors and lights. */
+	public hasDriver(): boolean
+	{
+		return this.controllingCharacter !== undefined || this.isRemoteDriven();
+	}
+
+	/** Back to local physics alone, for a scenario change or leaving the party. */
+	public clearRemoteTarget(): void
+	{
+		this.remoteTarget = undefined;
+		if (this.remoteSteering) this.releaseRemoteSteering();
+	}
+
+	private followRemoteTarget(): void
+	{
+		if (!this.isRemoteDriven())
+		{
+			if (this.remoteSteering) this.releaseRemoteSteering();
+			return;
+		}
+
+		let body = this.collision;
+		let target = this.remoteTarget;
+
+		if (!this.remoteSteering)
+		{
+			// Awake for as long as it's being steered: asleep, cannon skips it,
+			// and its collision box stays wherever it dozed off
+			this.remoteSteering = true;
+			body.allowSleep = false;
+			// Brakes left on here by a race countdown would drag against it
+			this.setBrake(0);
+		}
+		body.wakeUp();
+
+		let lead = Math.min(performance.now() / 1000 - target.at, Vehicle.REMOTE_LEAD);
+
+		let predicted = new THREE.Vector3().copy(target.position).addScaledVector(target.velocity, lead);
+		let predictedRotation = new THREE.Quaternion().copy(target.quaternion);
+		let spin = target.angularVelocity.length();
+		if (spin > 0.0001)
+		{
+			let turn = new THREE.Quaternion().setFromAxisAngle(
+				new THREE.Vector3().copy(target.angularVelocity).divideScalar(spin), spin * lead);
+			predictedRotation.premultiply(turn);
+		}
+
+		let current = new THREE.Vector3(body.position.x, body.position.y, body.position.z);
+		let error = predicted.clone().sub(current);
+
+		let currentRotation = new THREE.Quaternion(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w);
+		// The rotation still to go, taken the short way round
+		let delta = predictedRotation.clone().multiply(currentRotation.clone().inverse());
+		if (delta.w < 0) delta.set(-delta.x, -delta.y, -delta.z, -delta.w);
+		let angle = 2 * Math.acos(THREE.MathUtils.clamp(delta.w, -1, 1));
+
+		if (error.length() > Vehicle.REMOTE_SNAP || angle > 1.2)
+		{
+			this.placeBody(predicted, predictedRotation, target.velocity, target.angularVelocity);
+			return;
+		}
+
+		let velocity = target.velocity.clone().addScaledVector(error, Vehicle.REMOTE_GAIN);
+		body.velocity.set(velocity.x, velocity.y, velocity.z);
+
+		let angular = target.angularVelocity.clone();
+		let sine = Math.sqrt(Math.max(0, 1 - delta.w * delta.w));
+		if (sine > 0.0001)
+		{
+			angular.add(new THREE.Vector3(delta.x, delta.y, delta.z).divideScalar(sine).multiplyScalar(angle * Vehicle.REMOTE_GAIN));
+		}
+		if (angular.length() > 20) angular.setLength(20);
+		body.angularVelocity.set(angular.x, angular.y, angular.z);
+	}
+
+	/** Puts the body exactly somewhere, for jumps too big to pull across. */
+	private placeBody(position: THREE.Vector3, quaternion: THREE.Quaternion,
+		velocity: THREE.Vector3, angularVelocity: THREE.Vector3): void
+	{
+		let body = this.collision;
+
+		body.position.set(position.x, position.y, position.z);
+		body.previousPosition.set(position.x, position.y, position.z);
+		body.interpolatedPosition.set(position.x, position.y, position.z);
+		body.quaternion.set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+		// There at runtime, missing from the typings
+		(body as any).previousQuaternion.set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+		body.interpolatedQuaternion.set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+		body.velocity.set(velocity.x, velocity.y, velocity.z);
+		body.angularVelocity.set(angularVelocity.x, angularVelocity.y, angularVelocity.z);
+		body.aabbNeedsUpdate = true;
+		body.wakeUp();
+	}
+
+	/**
+	 * In a party a vehicle nobody is driving puts its brakes on once it has
+	 * slowed right down. The tyres hold almost nothing by themselves, so a car
+	 * left on a slope otherwise creeps downhill for ever, and each client's copy
+	 * creeps its own way until they're nowhere near each other. Whoever takes
+	 * the wheel next, here or on another client, lets them off.
+	 */
+	private updateParkingBrake(): void
+	{
+		let unattended = this.controllingCharacter === undefined && !this.isRemoteDriven();
+
+		if (!unattended)
+		{
+			if (this.parked)
+			{
+				this.parked = false;
+				this.setBrake(0);
+			}
+			return;
+		}
+
+		let body = this.collision;
+
+		if (this.parked)
+		{
+			// Braked wheels still slide a few centimetres a second on this little
+			// grip, just under what cannon counts as stopped. Once it's crawling on
+			// its wheels it's put to sleep, which holds it exactly where it is on
+			// every screen until something touches it or someone gets in.
+			if (body.allowSleep && body.sleepState === CANNON.Body.AWAKE
+				&& this.rayCastVehicle.numWheelsOnGround >= 3
+				&& body.velocity.length() < 0.1 && body.angularVelocity.length() < 0.1)
+			{
+				body.sleep();
+			}
+			return;
+		}
+
+		if (this.wheels.length === 0 || this.rayCastVehicle.numWheelsOnGround === 0) return;
+		if (this.world === undefined || this.world.party === undefined || !this.world.party.active) return;
+		if (body.velocity.length() > 1) return;
+
+		this.parked = true;
+		this.setBrake(Vehicle.PARKING_BRAKE);
+	}
+
+	/** Local physics takes over from whatever velocity it last had, so it coasts. */
+	private releaseRemoteSteering(): void
+	{
+		this.remoteSteering = false;
+
+		// A local driver who got in meanwhile keeps it awake, or a car stopped
+		// for a second would doze off and ignore the throttle
+		if (this.controllingCharacter === undefined) this.collision.allowSleep = true;
+		this.collision.wakeUp();
 	}
 
 	/**
@@ -541,6 +773,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		else
 		{
 			this.world = undefined;
+			this.clearRemoteTarget();
 			_.pull(world.vehicles, this);
 			world.graphicsWorld.remove(this);
 			// world.physicsWorld.remove(this.collision);

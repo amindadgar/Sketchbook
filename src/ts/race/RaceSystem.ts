@@ -308,6 +308,10 @@ export class RaceSystem implements IUpdatable
 	{
 		for (const vehicle of this.world.vehicles)
 		{
+			// Someone else's car, on their own countdown: braking it here would
+			// only drag against their reports of where it is
+			if (vehicle.isRemoteDriven()) continue;
+
 			vehicle.applyEngineForce(0);
 			vehicle.setBrake(1000000);
 		}

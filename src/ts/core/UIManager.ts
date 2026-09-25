@@ -89,6 +89,43 @@ export class UIManager
 		marker.classList.add('struck');
 	}
 
+	/**
+	 * Says the player was just hurt: a red flush at the edges, and when it came
+	 * from someone, a wedge pointing their way. Radians, nought straight ahead,
+	 * positive round to the right. Health dropping in the corner was all there
+	 * was before, and nobody watches that in a fight.
+	 */
+	public static flashDamage(angle?: number): void
+	{
+		UIManager.restartAnimation(UIManager.overlay('damage-flash'));
+
+		if (angle === undefined || !isFinite(angle)) return;
+
+		let direction = UIManager.overlay('damage-direction');
+		direction.style.transform = 'rotate(' + angle + 'rad)';
+		UIManager.restartAnimation(direction);
+	}
+
+	/** Found, or made the first time it's asked for, so the page needn't carry it. */
+	private static overlay(id: string): HTMLElement
+	{
+		let element = document.getElementById(id);
+		if (element !== null) return element;
+
+		element = document.createElement('div');
+		element.id = id;
+		document.body.appendChild(element);
+		return element;
+	}
+
+	private static restartAnimation(element: HTMLElement): void
+	{
+		element.classList.remove('struck');
+		// Reading a layout property forces the removal to take effect first
+		void element.offsetWidth;
+		element.classList.add('struck');
+	}
+
 	// ------------------------------------------------------------------ stunts
 
 	/** What the car is doing right now, mid air. Undefined takes it away. */

@@ -23,6 +23,13 @@ export class VehicleSeat
 
 	public occupiedBy: Character = null;
 
+	/**
+	 * How far above the seat point a seated character's origin sits. The model
+	 * hangs below its origin, so anything seating a character without this puts
+	 * them through the floor with their legs under the car.
+	 */
+	public static readonly SIT_HEIGHT: number = 0.6;
+
 	constructor(vehicle: IControllable, object: THREE.Object3D, gltf: any)
 	{
 		this.vehicle = vehicle;
@@ -65,6 +72,14 @@ export class VehicleSeat
 				this.connectedSeatsString = object.userData.connected_seats;
 			}
 		}
+	}
+
+	/** Where a seated character's origin goes, in the vehicle's own space. */
+	public getSitPosition(out: THREE.Vector3): THREE.Vector3
+	{
+		out.copy(this.seatPointObject.position);
+		out.y += VehicleSeat.SIT_HEIGHT;
+		return out;
 	}
 
 	public update(timeStep: number): void

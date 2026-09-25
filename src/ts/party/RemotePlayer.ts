@@ -5,7 +5,9 @@ import { Character } from '../characters/Character';
 import { World } from '../world/World';
 import { Vehicle } from '../vehicles/Vehicle';
 import { VehicleSeat } from '../vehicles/VehicleSeat';
+import { SeatType } from '../enums/SeatType';
 import { IUpdatable } from '../interfaces/IUpdatable';
+import { findWeapon } from '../combat/Weapons';
 import { PlayerInfo } from './NetworkClient';
 
 /**
@@ -13,7 +15,9 @@ import { PlayerInfo } from './NetworkClient';
  *
  * Their own client simulates them, so physics and the state machine are both
  * switched off here. All this does is ease the model toward the last reported
- * transform and replay whichever animation they said they were playing.
+ * transform and replay whichever animation they said they were playing, sit
+ * them where they said they were sitting, and show their gun and their death.
+ * The vehicle they drive is steered by the party session, from its own reports.
  */
 export class RemotePlayer implements IUpdatable
 {
@@ -21,6 +25,13 @@ export class RemotePlayer implements IUpdatable
 	public updateOrder: number = 0;
 
 	private static loader: GLTFLoader = new GLTFLoader();
+	/** How quickly the model closes on where it was reported, per second. */
+	private static readonly FOLLOW_RATE: number = 15;
+	/** A report is carried forward by the speed it implies, but no further than this. */
+	private static readonly MAX_LEAD: number = 0.15;
+	/** Further than this is a respawn or a teleport, not movement, so no easing. */
+	private static readonly SNAP_DISTANCE: number = 10;
+	private static readonly MAX_SPEED: number = 60;
 
 	public info: PlayerInfo;
 	public character: Character;
@@ -31,12 +42,17 @@ export class RemotePlayer implements IUpdatable
 	private targetPosition: THREE.Vector3 = new THREE.Vector3();
 	private targetQuaternion: THREE.Quaternion = new THREE.Quaternion();
 	private hasTarget: boolean = false;
+	/** Estimated from successive reports, to lead the model into where they are now. */
+	private velocity: THREE.Vector3 = new THREE.Vector3();
+	private reportedAt: number;
 	private animation: string;
-
-	private vehicle: Vehicle;
-	private vehicleTargetPosition: THREE.Vector3 = new THREE.Vector3();
-	private vehicleTargetQuaternion: THREE.Quaternion = new THREE.Quaternion();
-	private hasVehicleTarget: boolean = false;
+	private life: number;
+	/** Undefined until they say; null for empty handed. */
+	private weaponId: string;
+	/** The vehicle painted in their colour, which is only ever one they drive. */
+	private paintedVehicle: Vehicle;
+	/** The seat whose door they last used, for shutting it behind them. */
+	private doorSeat: VehicleSeat;
 
 	constructor(world: World, info: PlayerInfo)
 	{
@@ -79,57 +95,110 @@ export class RemotePlayer implements IUpdatable
 			this.character.setPlayerAppearance(name, color, hat);
 		}
 
-		if (this.vehicle !== undefined) this.vehicle.setPlayerTint(color);
+		if (this.paintedVehicle !== undefined) this.paintedVehicle.setPlayerTint(color);
 	}
 
 	public applyState(message: any): void
 	{
-		if (message.p !== undefined) this.targetPosition.set(message.p[0], message.p[1], message.p[2]);
-		if (message.q !== undefined) this.targetQuaternion.set(message.q[0], message.q[1], message.q[2], message.q[3]);
-		this.hasTarget = true;
+		let now = performance.now() / 1000;
+		let p = message.p;
 
-		if (this.character === undefined) return;
-
-		if (message.a !== undefined && message.a !== this.animation)
+		if (Array.isArray(p) && isFinite(p[0]) && isFinite(p[1]) && isFinite(p[2]))
 		{
-			this.animation = message.a;
-			this.character.setAnimation(message.a, 0.15);
-		}
+			let reported = new THREE.Vector3(p[0], p[1], p[2]);
 
-		this.applySeat(message.v, message.s);
-	}
-
-	public applyVehicleState(message: any): void
-	{
-		this.vehicleTargetPosition.set(message.p[0], message.p[1], message.p[2]);
-		this.vehicleTargetQuaternion.set(message.q[0], message.q[1], message.q[2], message.q[3]);
-		this.hasVehicleTarget = true;
-	}
-
-	public update(timeStep: number): void
-	{
-		if (this.character === undefined) return;
-
-		if (this.vehicle !== undefined && this.hasVehicleTarget)
-		{
-			this.driveVehicle();
-		}
-
-		// While seated the character's transform comes from the seat it's parented to
-		if (this.hasTarget && this.character.occupyingSeat === null)
-		{
-			// A big jump means a respawn or a teleport rather than movement, so don't ease into it
-			if (this.character.position.distanceTo(this.targetPosition) > 10)
+			// How fast they're going, from how far they got since the last report
+			let gap = this.reportedAt !== undefined ? now - this.reportedAt : 0;
+			if (this.hasTarget && gap > 0.01 && gap < 0.5)
 			{
-				this.character.position.copy(this.targetPosition);
+				this.velocity.subVectors(reported, this.targetPosition).divideScalar(gap);
+				if (this.velocity.length() > RemotePlayer.MAX_SPEED) this.velocity.set(0, 0, 0);
 			}
 			else
 			{
-				this.character.position.lerp(this.targetPosition, 0.25);
+				this.velocity.set(0, 0, 0);
 			}
 
-			this.character.quaternion.slerp(this.targetQuaternion, 0.25);
+			this.targetPosition.copy(reported);
+			this.reportedAt = now;
+			this.hasTarget = true;
 		}
+
+		let q = message.q;
+		if (Array.isArray(q) && isFinite(q[0]) && isFinite(q[1]) && isFinite(q[2]) && isFinite(q[3]))
+		{
+			this.targetQuaternion.set(q[0], q[1], q[2], q[3]).normalize();
+		}
+
+		if (this.character === undefined) return;
+
+		// A new life means they respawned, somewhere else entirely
+		let respawned = false;
+		if (typeof message.l === 'number')
+		{
+			respawned = this.life !== undefined && message.l !== this.life;
+			this.life = message.l;
+			this.character.networkLife = message.l;
+		}
+
+		// Their own client owns their health; this copy only needs it to lay the
+		// body down, and to stop shooting at one that's already down
+		if (typeof message.h === 'number' && isFinite(message.h)) this.character.health = message.h;
+
+		if (message.w !== undefined) this.applyWeapon(message.w);
+
+		this.applySeat(message.v, message.s);
+
+		if (respawned && this.character.occupyingSeat === null)
+		{
+			this.character.position.copy(this.targetPosition);
+			this.character.quaternion.copy(this.targetQuaternion);
+			this.velocity.set(0, 0, 0);
+			this.character.resetDeathPose();
+		}
+
+		// After the seat, so sitting down never overrides the clip they reported
+		if (typeof message.a === 'string' && message.a !== this.animation)
+		{
+			this.animation = message.a;
+			this.character.setAnimation(message.a, 0.15);
+			this.mirrorDoor(message.a);
+		}
+	}
+
+	public update(timeStep: number, unscaledTimeStep: number): void
+	{
+		if (this.character === undefined || !this.hasTarget) return;
+
+		// While seated the character's transform comes from the seat it's parented to
+		if (this.character.occupyingSeat !== null) return;
+
+		let lead = Math.min(performance.now() / 1000 - this.reportedAt, RemotePlayer.MAX_LEAD);
+		let predicted = new THREE.Vector3().copy(this.targetPosition).addScaledVector(this.velocity, lead);
+
+		if (this.character.position.distanceTo(predicted) > RemotePlayer.SNAP_DISTANCE)
+		{
+			this.character.position.copy(predicted);
+			this.character.quaternion.copy(this.targetQuaternion);
+			return;
+		}
+
+		// By the time passed rather than a fixed share per frame, which closed the
+		// gap twice as fast at 60 frames a second as at 30
+		let follow = 1 - Math.exp(-RemotePlayer.FOLLOW_RATE * unscaledTimeStep);
+
+		this.character.position.lerp(predicted, follow);
+		this.character.quaternion.slerp(this.targetQuaternion, follow);
+	}
+
+	/**
+	 * The relay has let go of their seat claim: they've gone quiet in a
+	 * background tab, or died, or left. Whoever it was, they aren't sitting
+	 * there any more for anyone else's purposes.
+	 */
+	public seatReleased(): void
+	{
+		if (this.character !== undefined && this.character.occupyingSeat !== null) this.unseat();
 	}
 
 	public dispose(): void
@@ -137,62 +206,57 @@ export class RemotePlayer implements IUpdatable
 		this.disposed = true;
 		this.world.unregisterUpdatable(this);
 
-		this.leaveVehicle();
-
 		if (this.character !== undefined)
 		{
-			this.character.leaveSeat();
+			let seat = this.character.occupyingSeat;
+			if (seat !== null)
+			{
+				this.unpaint(seat.vehicle as unknown as Vehicle);
+				this.character.leaveSeat();
+			}
 
-			// A scenario launch may have removed it already
+			// A scenario launch may have removed it already. Removing it takes it
+			// off whatever it's parented to, a car included, so nobody is left
+			// sitting frozen in a seat after they've gone.
 			if (this.world.characters.indexOf(this.character) >= 0)
 			{
 				this.world.remove(this.character);
+			}
+			else if (this.character.parent !== null)
+			{
+				this.character.parent.remove(this.character);
 			}
 
 			this.character = undefined;
 		}
 	}
 
-	/**
-	 * The driver's client is the authority on where their vehicle is, so the
-	 * body is pushed toward what they reported and its velocity is cancelled to
-	 * stop the local simulation from arguing with it.
-	 */
-	private driveVehicle(): void
+	private applyWeapon(id: any): void
 	{
-		let body = this.vehicle.collision;
+		let wanted: string = typeof id === 'string' ? id : null;
+		if (wanted === this.weaponId) return;
 
-		let position = new THREE.Vector3(body.position.x, body.position.y, body.position.z);
-		let quaternion = new THREE.Quaternion(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w);
+		this.weaponId = wanted;
 
-		if (position.distanceTo(this.vehicleTargetPosition) > 15)
-		{
-			position.copy(this.vehicleTargetPosition);
-			quaternion.copy(this.vehicleTargetQuaternion);
-		}
-		else
-		{
-			position.lerp(this.vehicleTargetPosition, 0.3);
-			quaternion.slerp(this.vehicleTargetQuaternion, 0.3);
-		}
-
-		body.position.set(position.x, position.y, position.z);
-		body.interpolatedPosition.set(position.x, position.y, position.z);
-		body.quaternion.set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-		body.interpolatedQuaternion.set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-		body.velocity.setZero();
-		body.angularVelocity.setZero();
+		let spec = wanted !== null ? findWeapon(wanted) : undefined;
+		if (spec !== undefined) this.character.equipWeapon(spec);
+		else this.character.unequipWeapon();
 	}
 
-	private applySeat(vehicleId: string, seatIndex: number): void
+	private applySeat(vehicleId: any, seatIndex: any): void
 	{
-		let seat = this.character.occupyingSeat;
-		// VehicleSeat types its vehicle as IControllable, which doesn't carry the spawn point
-		let seatVehicle = seat !== null ? (seat.vehicle as unknown as Vehicle) : undefined;
-		let currentId = (seatVehicle !== undefined && seatVehicle.spawnPoint !== undefined) ? seatVehicle.spawnPoint.name : null;
-		let wantedId = (vehicleId === undefined || vehicleId === null) ? null : vehicleId;
+		let wantedId: string = typeof vehicleId === 'string' ? vehicleId : null;
+		let wantedIndex = (wantedId !== null && typeof seatIndex === 'number') ? seatIndex : -1;
 
-		if (currentId === wantedId) return;
+		let seat = this.character.occupyingSeat;
+		let seatVehicle = seat !== null ? (seat.vehicle as unknown as Vehicle) : undefined;
+		let currentId = seatVehicle !== undefined ? seatVehicle.getNetworkId() : undefined;
+		if (currentId === undefined) currentId = null;
+		let currentIndex = seatVehicle !== undefined ? seatVehicle.seats.indexOf(seat) : -1;
+
+		// The same seat, or on foot both times. The index matters as well as the
+		// vehicle: sliding over into the driver's seat used to go unnoticed.
+		if (currentId === wantedId && currentIndex === wantedIndex) return;
 
 		if (wantedId === null)
 		{
@@ -201,10 +265,33 @@ export class RemotePlayer implements IUpdatable
 		}
 
 		let vehicle = this.findVehicle(wantedId);
-		if (vehicle === undefined || vehicle.seats[seatIndex] === undefined) return;
+		let target = vehicle !== undefined ? vehicle.seats[wantedIndex] : undefined;
 
-		this.unseat();
-		this.seat(vehicle, vehicle.seats[seatIndex]);
+		// Not spawned here yet; the next report tries again
+		if (target === undefined) return;
+
+		// Someone else is in it, here or by the relay's word. They stay on foot,
+		// at the spot they reported, rather than being stacked into it.
+		if (!this.canTake(target))
+		{
+			this.unseat();
+			return;
+		}
+
+		if (seatVehicle === vehicle) this.shiftTo(target);
+		else
+		{
+			this.unseat();
+			this.seat(vehicle, target);
+		}
+	}
+
+	private canTake(seat: VehicleSeat): boolean
+	{
+		if (seat.occupiedBy !== null && seat.occupiedBy !== this.character) return false;
+
+		let holder = this.world.party.seatHolder(seat);
+		return holder === undefined || holder === this.info.id;
 	}
 
 	/**
@@ -214,49 +301,91 @@ export class RemotePlayer implements IUpdatable
 	 */
 	private seat(vehicle: Vehicle, seat: VehicleSeat): void
 	{
-		// Scenarios with a single player spawn put everyone in the same car. When that
-		// happens the local player keeps the seat and the paint job, rather than having
-		// a second body stacked into it and the car repainted out from under them.
-		if (seat.occupiedBy !== null && seat.occupiedBy !== this.character) return;
-
 		(vehicle as unknown as THREE.Object3D).attach(this.character);
 
-		this.character.position.copy(seat.seatPointObject.position);
+		// The same height the local seating paths use; without it they sat 0.6
+		// lower than on their own screen, with their legs out under the car
+		seat.getSitPosition(this.character.position);
 		this.character.quaternion.copy(seat.seatPointObject.quaternion);
 		this.character.occupySeat(seat);
-		this.character.setAnimation('sitting', 0.1);
+		this.doorSeat = seat;
 
-		this.vehicle = vehicle;
-		this.hasVehicleTarget = false;
-		vehicle.setPlayerTint(this.info.color);
+		if (seat.type === SeatType.Driver) this.paint(vehicle);
+	}
+
+	/** Across to another seat of the same vehicle, without leaving it. */
+	private shiftTo(seat: VehicleSeat): void
+	{
+		let vehicle = seat.vehicle as unknown as Vehicle;
+
+		this.character.leaveSeat();
+		seat.getSitPosition(this.character.position);
+		this.character.quaternion.copy(seat.seatPointObject.quaternion);
+		this.character.occupySeat(seat);
+		this.doorSeat = seat;
+
+		if (seat.type === SeatType.Driver) this.paint(vehicle);
+		else this.unpaint(vehicle);
 	}
 
 	private unseat(): void
 	{
-		if (this.character.occupyingSeat !== null)
-		{
-			this.character.leaveSeat();
-			this.world.graphicsWorld.attach(this.character);
-		}
+		let seat = this.character.occupyingSeat;
+		if (seat === null) return;
 
-		this.leaveVehicle();
+		this.unpaint(seat.vehicle as unknown as Vehicle);
+		this.character.leaveSeat();
+
+		// Keeps the transform it had in the car, and eases on from there
+		this.world.graphicsWorld.attach(this.character);
 	}
 
-	private leaveVehicle(): void
+	/** Only the driver's colour goes on a car; a passenger climbing in doesn't repaint it. */
+	private paint(vehicle: Vehicle): void
 	{
-		if (this.vehicle !== undefined)
-		{
-			this.vehicle.clearPlayerTint();
-			this.vehicle = undefined;
-			this.hasVehicleTarget = false;
-		}
+		this.paintedVehicle = vehicle;
+		vehicle.setPlayerTint(this.info.color);
+	}
+
+	/** Back to the colour of whoever drives it now, if anyone here does. */
+	private unpaint(vehicle: Vehicle): void
+	{
+		if (this.paintedVehicle !== vehicle) return;
+		this.paintedVehicle = undefined;
+
+		vehicle.clearPlayerTint();
+
+		let driver = vehicle.controllingCharacter;
+		if (driver !== undefined && driver.playerColor !== undefined) vehicle.setPlayerTint(driver.playerColor);
+	}
+
+	/**
+	 * Opens and shuts the door they're using, which their own client does from
+	 * its state machine and nothing here would otherwise touch. Getting in, the
+	 * seat is the one they've claimed, since they aren't sitting in it yet.
+	 */
+	private mirrorDoor(clip: string): void
+	{
+		let opening = clip.indexOf('open_door') === 0 || clip.indexOf('stand_up') === 0;
+		let closing = clip.indexOf('close_door') === 0;
+		if (!opening && !closing) return;
+
+		let seat = this.character.occupyingSeat;
+		if (seat === null && opening) seat = this.world.party.seatOf(this.info.id);
+		if (seat === null || seat === undefined) seat = this.doorSeat;
+		if (seat === undefined || seat.door === undefined) return;
+
+		this.doorSeat = seat;
+
+		if (opening) seat.door.open();
+		else seat.door.close();
 	}
 
 	private findVehicle(id: string): Vehicle
 	{
 		for (const vehicle of this.world.vehicles)
 		{
-			if (vehicle.spawnPoint !== undefined && vehicle.spawnPoint.name === id) return vehicle;
+			if (vehicle.getNetworkId() === id) return vehicle;
 		}
 
 		return undefined;

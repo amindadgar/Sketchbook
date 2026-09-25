@@ -9,6 +9,12 @@ export class LoadingManager
 {
 	public firstLoad: boolean = true;
 	public onFinishedCallback: () => void;
+	/**
+	 * Which scenario launch this is loading for. A launch that starts while
+	 * another is still downloading leaves this one finishing late, and it must
+	 * not then pop a briefing or lift the loading screen over the new one.
+	 */
+	public generation: number;
 	
 	private world: World;
 	private gltfLoader: GLTFLoader;
@@ -59,6 +65,8 @@ export class LoadingManager
 	{
 		trackerEntry.finished = true;
 		trackerEntry.progress = 1;
+
+		if (this.generation !== undefined && this.generation !== this.world.scenarioGeneration) return;
 
 		if (this.isLoadingDone())
 		{

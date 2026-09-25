@@ -84,8 +84,8 @@ export class Airplane extends Vehicle implements IControllable, IWorldEntity
 	{
 		super.update(timeStep);
 		
-		// Rotors visuals
-		if (this.controllingCharacter !== undefined)
+		// Rotors visuals. A pilot on another client counts, or their propeller stops
+		if (this.hasDriver())
 		{
 			if (this.enginePower < 1) this.enginePower += timeStep * 0.4;
 			if (this.enginePower > 1) this.enginePower = 1;
@@ -188,6 +188,10 @@ export class Airplane extends Vehicle implements IControllable, IWorldEntity
 
 	public physicsPreStep(body: CANNON.Body, plane: Airplane): void
 	{
+		// Flown from another client: these forces write velocity outright, and
+		// would fight the reports that steer it here
+		if (this.isRemoteDriven()) return;
+
 		let quat = Utils.threeQuat(body.quaternion);
 		let right = new THREE.Vector3(1, 0, 0).applyQuaternion(quat);
 		let up = new THREE.Vector3(0, 1, 0).applyQuaternion(quat);

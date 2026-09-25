@@ -22,13 +22,18 @@ export class NetworkClient
 	public code: string;
 	public connected: boolean = false;
 
-	public onJoined: (code: string, id: number, players: PlayerInfo[], scenario: string) => void;
+	/** The whole 'joined' message: code, id, players, scenario, and what a newer relay adds (seats, vehicles, features). */
+	public onJoined: (message: any) => void;
 	public onPlayerJoin: (info: PlayerInfo) => void;
 	public onPlayerLeave: (id: number) => void;
 	public onPlayerState: (message: any) => void;
 	public onVehicleState: (message: any) => void;
 	public onIdentity: (info: PlayerInfo) => void;
-	public onScenario: (id: string) => void;
+	/** {id, seq, by}: 'by' is who changed it, which a newer relay sends back to the sender too. */
+	public onScenario: (message: any) => void;
+	public onSeat: (message: any) => void;
+	public onHurt: (message: any) => void;
+	public onPickup: (message: any) => void;
 	public onShot: (message: any) => void;
 	public onHit: (message: any) => void;
 	public onScore: (id: number, score: number) => void;
@@ -178,14 +183,20 @@ export class NetworkClient
 		});
 	}
 
+	/**
+	 * Protocol 2 tells the relay this client wants its own scenario changes
+	 * sent back to it, which is how concurrent changes end up agreed on.
+	 */
+	private static readonly PROTOCOL: number = 2;
+
 	public createRoom(name: string, color: string, hat: string, scenario: string, token: string): void
 	{
-		this.send({ t: 'create', name: name, color: color, hat: hat, scenario: scenario, token: token });
+		this.send({ t: 'create', name: name, color: color, hat: hat, scenario: scenario, token: token, protocol: NetworkClient.PROTOCOL });
 	}
 
 	public joinRoom(code: string, name: string, color: string, hat: string, token: string): void
 	{
-		this.send({ t: 'join', code: code, name: name, color: color, hat: hat, token: token });
+		this.send({ t: 'join', code: code, name: name, color: color, hat: hat, token: token, protocol: NetworkClient.PROTOCOL });
 	}
 
 	public send(message: any): void
@@ -226,7 +237,7 @@ export class NetworkClient
 			case 'joined':
 				this.id = message.id;
 				this.code = message.code;
-				if (this.onJoined !== undefined) this.onJoined(message.code, message.id, message.players, message.scenario);
+				if (this.onJoined !== undefined) this.onJoined(message);
 				break;
 
 			case 'join':
@@ -250,7 +261,19 @@ export class NetworkClient
 				break;
 
 			case 'scenario':
-				if (this.onScenario !== undefined) this.onScenario(message.id);
+				if (this.onScenario !== undefined) this.onScenario(message);
+				break;
+
+			case 'seat':
+				if (this.onSeat !== undefined) this.onSeat(message);
+				break;
+
+			case 'hurt':
+				if (this.onHurt !== undefined) this.onHurt(message);
+				break;
+
+			case 'pickup':
+				if (this.onPickup !== undefined) this.onPickup(message);
 				break;
 
 			case 'shot':

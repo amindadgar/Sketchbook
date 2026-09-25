@@ -26,8 +26,14 @@ export class VehicleSpawnPoint implements ISpawnPoint
 
 	public spawn(loadingManager: LoadingManager, world: World): void
 	{
+		// Anything arriving after another launch has begun belongs to a world
+		// that's gone, and adding it would put two vehicles under one id
+		let generation = world.scenarioGeneration;
+
 		loadingManager.loadGLTF('build/assets/' + this.type + '.glb', (model: any) =>
 		{
+			if (world.scenarioGeneration !== generation) return;
+
 			let vehicle: Vehicle = this.getNewVehicleByType(model, this.type);
 			vehicle.spawnPoint = this.object;
 
@@ -44,6 +50,8 @@ export class VehicleSpawnPoint implements ISpawnPoint
 			{
 				loadingManager.loadGLTF('build/assets/boxman.glb', (charModel) =>
 				{
+					if (world.scenarioGeneration !== generation) return;
+
 					let character = new Character(charModel);
 					world.add(character);
 					character.teleportToVehicle(vehicle, vehicle.seats[0]);

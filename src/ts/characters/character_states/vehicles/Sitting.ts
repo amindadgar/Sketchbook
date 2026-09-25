@@ -45,15 +45,23 @@ export class Sitting extends CharacterStateBase
 		{
 			if (this.character.vehicleEntryInstance.wantsToDrive)
 			{
+				let switched = false;
+
 				for (const possibleDriverSeat of this.seat.connectedSeats)
 				{
-					if (possibleDriverSeat.type === SeatType.Driver)
+					// Only across into an empty one. Sliding over regardless is
+					// how two people came to be sitting in the one driver's seat.
+					if (possibleDriverSeat.type === SeatType.Driver && this.character.canUseSeat(possibleDriverSeat))
 					{
 						if (this.seat.door?.rotation > 0) this.seat.door.physicsEnabled = true;
 						this.character.setState(new SwitchingSeats(this.character, this.seat, possibleDriverSeat));
+						switched = true;
 						break;
 					}
 				}
+
+				// Somebody is driving already, so this is a ride along
+				if (!switched) this.character.vehicleEntryInstance = null;
 			}
 			else
 			{
@@ -64,9 +72,10 @@ export class Sitting extends CharacterStateBase
 
 	public onInputChange(): void
 	{
-		if (this.character.actions.seat_switch.justPressed && this.seat.connectedSeats.length > 0)
+		if (this.character.actions.seat_switch.justPressed)
 		{
-			this.character.setState(new SwitchingSeats(this.character, this.seat, this.seat.connectedSeats[0]));
+			let free = this.seat.connectedSeats.find((seat) => this.character.canUseSeat(seat));
+			if (free !== undefined) this.character.setState(new SwitchingSeats(this.character, this.seat, free));
 		}
 
 		if (this.character.actions.enter.justPressed)

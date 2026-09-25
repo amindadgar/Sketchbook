@@ -64,6 +64,12 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 	private static readonly RECOIL_RECOVERY: number = 7;
 
 	public characterCaller: Character;
+	/**
+	 * Someone to watch instead of the player, while the player is dead. Read
+	 * here rather than written into 'target' from outside, because the input
+	 * receiver puts the target back on the body every frame before this runs.
+	 */
+	public spectateTarget: THREE.Object3D;
 
 	constructor(world: World, camera: THREE.Camera, sensitivityX: number = 1, sensitivityY: number = sensitivityX * 0.8)
 	{
@@ -157,6 +163,13 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 	{
 		if (this.manualLookTimer > 0) this.manualLookTimer -= unscaledTimeStep;
 		this.recoverRecoil(unscaledTimeStep);
+
+		if (this.spectateTarget !== undefined)
+		{
+			// Gone from the world, a scenario change or someone leaving
+			if (this.spectateTarget.parent === null) this.spectateTarget = undefined;
+			else this.spectateTarget.getWorldPosition(this.target);
+		}
 
 		if (this.followMode === true)
 		{

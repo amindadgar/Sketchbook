@@ -193,3 +193,62 @@
 	0% { opacity: 1; transform: scale(0.72); }
 	100% { opacity: 0; transform: scale(1.25); }
 }
+
+/* Being shot: the edges of the screen flush red, and a wedge on a ring points
+   the way it came from. Created by the script the first time it's needed. Under
+   the rest of the HUD, and never in the way of a tap or a click. */
+#damage-flash {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	opacity: 0;
+	pointer-events: none;
+	z-index: 24;
+	background: radial-gradient(ellipse at center, rgba(190, 0, 0, 0) 55%, rgba(190, 0, 0, 0.5) 100%);
+}
+
+#damage-flash.struck {
+	animation: damage-flash 0.5s ease-out;
+}
+
+@keyframes damage-flash {
+	0% { opacity: 1; }
+	100% { opacity: 0; }
+}
+
+#damage-direction {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	width: 180px;
+	height: 180px;
+	margin: -90px 0 0 -90px;
+	opacity: 0;
+	pointer-events: none;
+	z-index: 25;
+}
+
+/* Drawn pointing up, which is straight ahead; the script turns the ring */
+#damage-direction::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 50%;
+	margin-left: -14px;
+	border-left: 14px solid transparent;
+	border-right: 14px solid transparent;
+	border-bottom: 22px solid rgba(235, 45, 45, 0.9);
+	filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
+}
+
+#damage-direction.struck {
+	animation: damage-direction 0.8s ease-out;
+}
+
+@keyframes damage-direction {
+	0% { opacity: 1; }
+	60% { opacity: 0.85; }
+	100% { opacity: 0; }
+}

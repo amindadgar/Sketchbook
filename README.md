@@ -122,7 +122,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 | `C` | Centre the camera behind you |
 | `L` | Leaderboard: lap times on a circuit, kills anywhere else |
 | `Enter` | Party chat |
-| `Shift` + `R` | Respawn |
+| `Shift` + `R` | Respawn. In a party, just you, back at a spawn point |
 | `Shift` + `C` | Free camera |
 | Mouse wheel | Slow down or speed up time |
 | Gear icon | Settings |
@@ -296,7 +296,23 @@ bit, and the log fades out on its own.
 everyone at the airfield with a car, a helicopter and an aeroplane all within
 about thirty metres, so nobody has to walk across the map to fly. The race and
 stunt scenarios were built for one player and have a single spawn point, so a
-party will share a car in them.
+party shares the car in them: whoever the relay seats first drives, and everyone
+else is moved into the passenger seats, or beside the car once those are full.
+
+One person to a seat. Pressing `F` at a car someone is already driving puts you
+in beside them rather than on top of them, and two people going for the same
+seat at the same moment are settled by the relay, first come first served. A car
+somebody else drives is steered after their reports on everyone else's screen,
+so it moves, collides and sounds like a car rather than a parked one, and a car
+left behind keeps being reported until it stops, then puts its handbrake on, so
+it's in the same place for everyone.
+
+`Shift` + `R` in a party puts only you back at a spawn point, keeping your health
+and your gun, with a few seconds between uses. It used to restart the scenario for
+the whole room. Changing scenario from the menu still takes everyone along, and
+two changes made at the same moment settle on the same one everywhere. Slow motion
+is off in a party, since it only ever slowed one player down on everyone else's
+screen.
 
 Players who go quiet are dropped: anything that stops answering a ping, within a
 minute of going silent, and anything whose client has published nothing for five
@@ -308,7 +324,19 @@ you touch the controls or not.
 
 Every client simulates its own character, the vehicle it drives and its own
 health. A shooter reports a hit, and the player who was hit decides what it did
-to them. One owner per number beats two clients disagreeing about it.
+to them, then tells the shooter it counted, which is what lights the hit marker.
+One owner per number beats two clients disagreeing about it.
+
+The one thing the relay decides is who sits where. Two clients can't agree on a
+seat between themselves, since each sees the other a round trip late, so a
+player claims a seat the moment they press `F` and the first claim to arrive
+wins. Claims go when a player gets out, dies, leaves, or stops publishing for
+five seconds, as a tab in the background does.
+
+It also rebuilds every movement, vehicle and shot message from the fields the
+game reads before passing it on, so a malformed number can't poison anyone
+else's copy of a player, and it drops a client's messages beyond about a hundred
+and fifty a second.
 
 Claimed hits are no longer taken on trust. The relay checks that the weapon
 exists, that the damage is no more than that weapon does, that the target was
@@ -317,12 +345,17 @@ movement, and that nobody is doing more damage a second than the fastest honest
 weapon in the game. That last one is a sliding window rather than a shot
 counter, so relabelling the weapon on every message buys nothing. Against two
 hundred fabricated hits in one burst it lets through sixteen. Deaths are limited
-to one per respawn, so nobody can hand out points in bulk.
+to one per respawn, so nobody can hand out points in bulk, and a death only earns
+the named killer a point if the relay let a hit from them through in the last ten
+seconds. Nothing is scored between rounds.
 
 What the relay can't check is line of sight, because it has never seen the map.
-The client being shot at can, so it does: it raycasts from the reported muzzle
-to itself and drops anything that came through a wall. Both ends of a shot are a
-moment stale by the time it lands, so only cover well short of the player counts.
+The client being shot at can, so it does: it raycasts from the shooter's eye to
+its own head and chest and drops anything that came through a wall at both.
+Only fixed scenery counts, since every client has its own copy of the cars. Both
+ends of a shot are a moment stale by the time it lands, so only cover well short
+of the player counts. Hits aimed at a life that has since ended are dropped, and
+so is everything for a second and a half after respawning.
 
 The weapon numbers both sides check against live in `shared/weapons.json`. Two
 copies would drift and the relay would start refusing honest shots.
@@ -395,7 +428,10 @@ Ammunition is finite. Reloads draw on what you're carrying, and once that and th
 magazine are both empty the gun is dropped and you're looking for another column.
 
 Holding right mouse narrows the view, slides the camera over your shoulder so you
-aren't standing where the crosshair is, and cuts spread to a third.
+aren't standing where the crosshair is, and cuts spread to a third. Shots go to
+whatever is under the crosshair: the camera's line is traced to find it, and the
+shot flies from your eye to that point, so the shoulder offset doesn't throw them
+wide.
 
 Kills are announced at three, five, seven and ten in a row, and each one hands
 over a magazine of spare rounds. That is help rather than a head start: a streak
@@ -404,7 +440,13 @@ that armed the leader properly would end the round rather than liven it up.
 Every shot kicks the view up, from two thirds of a degree for the automatic to
 three and a half for the shotgun, and gives all of it back over the next
 fraction of a second, so a burst walks up the target and settles where it
-started. A shot that lands flashes four ticks around the crosshair and clicks.
+started. A shot that lands flashes four ticks around the crosshair and clicks;
+against another player that waits for their client to say it counted.
+
+Being shot flushes the edges of the screen red, points a wedge toward the
+shooter and thumps. Everyone else sees your tracers where they actually went,
+the gun in your hand, and you falling over when you die. Anyone in a car can be
+shot through its windows, and dying at the wheel drops you out beside it.
 
 Everyone starts on 100 health and respawns three seconds after dying. Dying lays
 you out and hands the camera to whoever shot you, or to the nearest player. A
