@@ -15,6 +15,8 @@ export class Sfx
 	private world: World;
 	private thudBuffer: AudioBuffer;
 	private whooshBuffer: AudioBuffer;
+	private screechBuffer: AudioBuffer;
+	private screechLoading: boolean = false;
 	private pool: THREE.PositionalAudio[] = [];
 	private cursor: number = 0;
 	private flat: THREE.Audio;
@@ -54,6 +56,32 @@ export class Sfx
 
 		this.flat.setBuffer(this.whooshBuffer);
 		this.flat.play();
+	}
+
+	/**
+	 * Fetches the recorded sounds, while the world loads. The tyre squeal is a
+	 * real car's, cut into a seamless loop; if it can't be had, the one made
+	 * here stands in for it.
+	 */
+	public load(): void
+	{
+		if (this.world.audioListener === undefined || this.screechLoading) return;
+		this.screechLoading = true;
+
+		new THREE.AudioLoader().load('build/assets/tyre_squeal.wav',
+			(buffer: AudioBuffer) => this.screechBuffer = buffer,
+			undefined,
+			() =>
+			{
+				console.warn('Couldn\'t load the tyre squeal, making one instead.');
+				this.screechBuffer = this.buildScreech();
+			});
+	}
+
+	/** A loop of tyre squeal, for vehicles to play as loud as their tyres are sliding. Undefined until it has loaded. */
+	public screech(): AudioBuffer
+	{
+		return this.screechBuffer;
 	}
 
 	private take(): THREE.PositionalAudio
@@ -101,6 +129,52 @@ export class Sfx
 			samples[i] = (rolling * 1.6 + Math.sin(2 * Math.PI * 70 * t) * 0.5) * decay;
 		}
 
+		return buffer;
+	}
+
+	/**
+	 * Standing in for the recording: a wavering tone a little over a kilohertz
+	 * with its overtones, fluttering in strength, roughened with hiss, over a
+	 * low scrub of the tyre dragging. Two seconds, looped, with the end faded
+	 * into the start so the join doesn't click.
+	 */
+	private buildScreech(): AudioBuffer
+	{
+		let context = this.world.audioListener.context;
+		let rate = context.sampleRate;
+		let length = Math.floor(rate * 2);
+		let overlap = Math.floor(rate * 0.12);
+		let raw = new Float32Array(length + overlap);
+
+		let phase = 0;
+		let rough = 0;
+		let scrub = 0;
+		for (let i = 0; i < raw.length; i++)
+		{
+			let t = i / rate;
+			// Whole numbers of wobbles in the two seconds, so they meet at the join
+			let frequency = 1080 + 80 * Math.sin(2 * Math.PI * 3 * t) + 40 * Math.sin(2 * Math.PI * 7.5 * t + 1.3);
+			phase += 2 * Math.PI * frequency / rate;
+			let tone = Math.sin(phase) + 0.45 * Math.sin(2 * phase + 0.5) + 0.22 * Math.sin(3 * phase + 1.1);
+			let flutter = 0.62 + 0.24 * Math.sin(2 * Math.PI * 11 * t) + 0.14 * Math.sin(2 * Math.PI * 17 * t + 0.7);
+
+			rough = rough * 0.55 + (Math.random() * 2 - 1) * 0.45;
+			scrub = scrub * 0.965 + (Math.random() * 2 - 1) * 0.035;
+
+			raw[i] = tone * flutter * 0.3 + rough * flutter * 0.12 + scrub * 2.2;
+		}
+
+		let buffer = context.createBuffer(1, length, rate);
+		let samples = buffer.getChannelData(0);
+		for (let i = 0; i < length; i++)
+		{
+			if (i < overlap)
+			{
+				let blend = i / overlap;
+				samples[i] = raw[i] * blend + raw[length + i] * (1 - blend);
+			}
+			else samples[i] = raw[i];
+		}
 		return buffer;
 	}
 

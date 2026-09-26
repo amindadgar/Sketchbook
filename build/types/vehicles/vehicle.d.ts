@@ -72,9 +72,33 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     /** The same force the handbrake and the race grid use. */
     private static readonly PARKING_BRAKE;
     private parked;
+    /** Squeal, as loud as the tyres are sliding. Made the first time they do. */
+    private screech;
+    private screechTone;
+    private screechPitch;
+    private screechVolume;
+    /** For a car driven on another client: its speed along itself last frame, and how hard it's slowing. */
+    private lastAlong;
+    private remoteBraking;
+    private static contactVelocity;
+    private static axle;
+    private static right;
     constructor(gltf: any, handlingSetup?: any);
     noDirectionPressed(): boolean;
     update(timeStep: number): void;
+    /** Braking with the pedal rather than a locked wheel, which only a car has. */
+    protected isFootBraking(): boolean;
+    /**
+     * Which tyres are sliding and how hard: skidding sideways, locked by a
+     * brake while the car moves, past their grip under power or braking, or
+     * braked hard with the pedal. Those leave rubber on the road, and between
+     * them set how loud the tyres squeal.
+     */
+    private updateTyres;
+    private updateScreech;
+    /** Stops the tyre squeal at once, for when the frame loop that fades it is about to stop. */
+    silenceTyres(): void;
+    private disposeScreech;
     forceCharacterOut(): void;
     onInputChange(): void;
     resetControls(): void;

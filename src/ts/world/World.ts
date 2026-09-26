@@ -9,6 +9,7 @@ import { Graphics, GraphicsQuality } from '../core/Graphics';
 import { Detector } from '../../lib/utils/Detector';
 import { Stats } from '../../lib/utils/Stats';
 import { FpsMeter } from '../core/FpsMeter';
+import { SkidMarks } from '../vehicles/SkidMarks';
 import * as GUI from '../../lib/utils/dat.gui';
 import { CannonDebugRenderer } from '../../lib/cannon/CannonDebugRenderer';
 import * as _ from 'lodash';
@@ -109,6 +110,7 @@ export class World
 	public leaderboard: Leaderboard;
 	public notices: Notices;
 	public sfx: Sfx;
+	public skidMarks: SkidMarks;
 	public intro: Onboarding;
 	public progress: Progress;
 	public stunts: StuntSystem;
@@ -220,6 +222,9 @@ export class World
 		this.race = new RaceSystem(this);
 		this.notices = new Notices(this);
 		this.sfx = new Sfx(this);
+		this.skidMarks = new SkidMarks(this);
+		// Fetched now, while loading, rather than in the frame of the first skid
+		this.sfx.load();
 		this.intro = new Onboarding(this);
 		this.progress = new Progress(this);
 		this.stunts = new StuntSystem(this);
@@ -1225,7 +1230,13 @@ export class World
 		// coming back is not a gesture, so nothing else would ever revive it
 		document.addEventListener('visibilitychange', () =>
 		{
-			if (document.visibilityState !== 'visible') return;
+			// A hidden tab stops the frames, and with them whatever fades a
+			// squeal out, so it would carry on in the background
+			if (document.visibilityState !== 'visible')
+			{
+				this.vehicles.forEach((vehicle) => vehicle.silenceTyres());
+				return;
+			}
 			if (this.audioListener.context.state === 'running') return;
 
 			this.listenForAudioUnlock();

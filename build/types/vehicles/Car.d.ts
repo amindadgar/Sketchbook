@@ -38,6 +38,8 @@ export declare class Car extends Vehicle implements IControllable {
     boosting: boolean;
     private boostPuff;
     constructor(gltf: any);
+    /** Pedal braking: reverse held while still rolling forward at speed. */
+    protected isFootBraking(): boolean;
     protected reapplyHeldBrakes(): void;
     noDirectionPressed(): boolean;
     update(timeStep: number): void;

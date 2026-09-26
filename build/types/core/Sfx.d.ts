@@ -12,6 +12,8 @@ export declare class Sfx {
     private world;
     private thudBuffer;
     private whooshBuffer;
+    private screechBuffer;
+    private screechLoading;
     private pool;
     private cursor;
     private flat;
@@ -19,9 +21,24 @@ export declare class Sfx {
     /** @param strength 0 to 1, how hard the hit was. */
     thud(position: THREE.Vector3, strength: number): void;
     whoosh(): void;
+    /**
+     * Fetches the recorded sounds, while the world loads. The tyre squeal is a
+     * real car's, cut into a seamless loop; if it can't be had, the one made
+     * here stands in for it.
+     */
+    load(): void;
+    /** A loop of tyre squeal, for vehicles to play as loud as their tyres are sliding. Undefined until it has loaded. */
+    screech(): AudioBuffer;
     private take;
     /** Noise through a falling envelope, with a low tone under it for the weight. */
     private buildThud;
+    /**
+     * Standing in for the recording: a wavering tone a little over a kilohertz
+     * with its overtones, fluttering in strength, roughened with hiss, over a
+     * low scrub of the tyre dragging. Two seconds, looped, with the end faded
+     * into the start so the join doesn't click.
+     */
+    private buildScreech;
     /** Noise that opens up and closes again, which is what a boost sounds like. */
     private buildWhoosh;
 }

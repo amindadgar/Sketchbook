@@ -92,6 +92,19 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	private static readonly PARKING_BRAKE: number = 1000000;
 	private parked: boolean = false;
 
+	// Tyres
+	/** Squeal, as loud as the tyres are sliding. Made the first time they do. */
+	private screech: THREE.PositionalAudio;
+	private screechTone: BiquadFilterNode;
+	private screechPitch: number = 1;
+	private screechVolume: number = 0;
+	/** For a car driven on another client: its speed along itself last frame, and how hard it's slowing. */
+	private lastAlong: number = 0;
+	private remoteBraking: number = 0;
+	private static contactVelocity: CANNON.Vec3 = new CANNON.Vec3();
+	private static axle: CANNON.Vec3 = new CANNON.Vec3();
+	private static right: CANNON.Vec3 = new CANNON.Vec3(1, 0, 0);
+
 	constructor(gltf: any, handlingSetup?: any)
 	{
 		super();
@@ -167,6 +180,9 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		if (this.impactCooldown > 0) this.impactCooldown -= timeStep;
 		this.updateSmoke(timeStep);
 
+		// Before the wheels are placed: placing them clears whether they touch the ground
+		this.updateTyres(timeStep);
+
 		for (let i = 0; i < this.rayCastVehicle.wheelInfos.length; i++)
 		{
 			this.rayCastVehicle.updateWheelTransform(i);
@@ -181,6 +197,154 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		}
 
 		this.updateMatrixWorld();
+	}
+
+	/** Braking with the pedal rather than a locked wheel, which only a car has. */
+	protected isFootBraking(): boolean
+	{
+		return false;
+	}
+
+	/**
+	 * Which tyres are sliding and how hard: skidding sideways, locked by a
+	 * brake while the car moves, past their grip under power or braking, or
+	 * braked hard with the pedal. Those leave rubber on the road, and between
+	 * them set how loud the tyres squeal.
+	 */
+	private updateTyres(timeStep: number): void
+	{
+		if (this.world === undefined || this.world.skidMarks === undefined || this.wheels.length === 0) return;
+
+		let body = this.collision;
+		let footBraking = this.isFootBraking();
+		let total = 0;
+		let speed = 0;
+		let smooth = THREE.MathUtils.smoothstep;
+
+		// Driven on another client, this copy's wheels aren't steered or braked
+		// here, and its tyres only fight the pose it's being pulled to. What it
+		// can tell is how hard it's slowing, which is what braking looks like
+		let remote = this.isRemoteDriven();
+		let ahead = new THREE.Vector3(0, 0, 1).applyQuaternion(this.quaternion);
+		let along = body.velocity.x * ahead.x + body.velocity.y * ahead.y + body.velocity.z * ahead.z;
+		if (remote && timeStep > 0)
+		{
+			let slowing = (Math.abs(this.lastAlong) - Math.abs(along)) / timeStep;
+			let braking = Math.abs(along) > 3 ? THREE.MathUtils.clamp((slowing - 5) / 8, 0, 1) : 0;
+			this.remoteBraking += (braking - this.remoteBraking) * Math.min(1, timeStep * 8);
+		}
+		else this.remoteBraking = 0;
+		this.lastAlong = along;
+
+		for (let i = 0; i < this.wheels.length; i++)
+		{
+			let info = this.rayCastVehicle.wheelInfos[this.wheels[i].rayCastWheelInfoIndex];
+			// What the last physics step found under the wheel. Not isInContact,
+			// which placing the wheels clears every frame, including frames with
+			// no physics step in them
+			if (info === undefined || info.raycastResult.body === null || info.raycastResult.body === undefined) continue;
+
+			let hit = info.raycastResult.hitPointWorld;
+			let normal = info.raycastResult.hitNormalWorld;
+			let velocity = body.getVelocityAtWorldPoint(hit, Vehicle.contactVelocity);
+			let across = normal.dot(velocity);
+			let vx = velocity.x - normal.x * across, vy = velocity.y - normal.y * across, vz = velocity.z - normal.z * across;
+			let moving = Math.sqrt(vx * vx + vy * vy + vz * vz);
+			speed = Math.max(speed, moving);
+			if (moving < 1.2) continue;
+
+			let axle = info.worldTransform.quaternion.vmult(Vehicle.right, Vehicle.axle);
+			let sideways = remote && this.wheels[i].steering ? 0 : Math.abs(vx * axle.x + vy * axle.y + vz * axle.z);
+
+			// Past its grip. Under power that's only a skid on a hard launch:
+			// the engine overdoes it after every gear change, which nobody hears
+			// as a skid or expects to see on the road
+			let saturated = !remote && info.sliding ? THREE.MathUtils.clamp((1 - info.skidInfo) * 1.8, 0, 1) : 0;
+			if (info.engineForce !== 0) saturated = moving < 5 && info.skidInfo < 0.35 ? saturated * 0.6 : 0;
+
+			let strength = Math.max(
+				smooth(sideways, 1.1, 4.5),
+				saturated,
+				info.brake > 1000 ? Math.min(1, moving / 8) : 0,
+				footBraking ? Math.min(1, moving / 14) * 0.85 : 0,
+				this.remoteBraking * 0.85
+			);
+			if (strength < 0.15) continue;
+
+			this.world.skidMarks.mark(this.wheels[i],
+				new THREE.Vector3(hit.x, hit.y, hit.z),
+				new THREE.Vector3(normal.x, normal.y, normal.z),
+				new THREE.Vector3(vx, vy, vz), strength);
+			total += strength;
+		}
+
+		this.updateScreech(total / this.wheels.length, speed, timeStep);
+	}
+
+	private updateScreech(sliding: number, speed: number, timeStep: number): void
+	{
+		let target = THREE.MathUtils.clamp(sliding * 1.6, 0, 1) * THREE.MathUtils.clamp(speed / 5, 0, 1);
+		// Comes in quickly and tails off, the way a skid does
+		let rate = target > this.screechVolume ? 12 : 5;
+		this.screechVolume += (target - this.screechVolume) * Math.min(1, timeStep * rate);
+
+		if (this.screech === undefined)
+		{
+			if (this.screechVolume < 0.02 || this.world.audioListener === undefined) return;
+			let buffer = this.world.sfx.screech();
+			if (buffer === undefined) return;
+			this.screech = new THREE.PositionalAudio(this.world.audioListener);
+			// Silent to start with: the gain begins at full, and the first setVolume
+			// only ramps it down, so the first skid would open with a pop
+			this.screech.gain.gain.setValueAtTime(0, this.screech.context.currentTime);
+			this.screech.setBuffer(buffer);
+			this.screech.setLoop(true);
+			this.screech.setRefDistance(9);
+			this.screech.setRolloffFactor(1.6);
+			this.screech.position.set(0, -0.2, 0);
+			// A light slide is a muffled scrub, a hard one the full bright squeal
+			this.screechTone = this.screech.context.createBiquadFilter();
+			this.screechTone.type = 'lowpass';
+			this.screechTone.Q.value = 0.7;
+			this.screech.setFilter(this.screechTone);
+			// Every car's tyres a little different
+			this.screechPitch = 0.94 + Math.random() * 0.12;
+			this.add(this.screech);
+		}
+
+		if (this.screechVolume < 0.01)
+		{
+			if (this.screech.isPlaying) this.screech.stop();
+			return;
+		}
+		if (!this.screech.isPlaying)
+		{
+			// Somewhere new in the recording each time, so no two skids start the same
+			let buffer = this.screech.buffer;
+			if (buffer !== null) this.screech.offset = Math.random() * buffer.duration * 0.9;
+			this.screech.play();
+		}
+
+		let now = this.screech.context.currentTime;
+		this.screech.setVolume(Math.pow(this.screechVolume, 0.8) * 0.8);
+		this.screechTone.frequency.setTargetAtTime(700 + 9000 * Math.pow(this.screechVolume, 1.5), now, 0.05);
+		this.screech.setPlaybackRate(this.screechPitch * (0.9 + 0.18 * Math.min(1, speed / 25)) * this.world.params.Time_Scale);
+	}
+
+	/** Stops the tyre squeal at once, for when the frame loop that fades it is about to stop. */
+	public silenceTyres(): void
+	{
+		if (this.screech !== undefined && this.screech.isPlaying) this.screech.stop();
+		this.screechVolume = 0;
+	}
+
+	private disposeScreech(): void
+	{
+		if (this.screech === undefined) return;
+		if (this.screech.isPlaying) this.screech.stop();
+		this.remove(this.screech);
+		this.screech = undefined;
+		this.screechVolume = 0;
 	}
 
 	public forceCharacterOut(): void
@@ -823,6 +987,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 			});
 
 			this.disposeEngineSound();
+			this.disposeScreech();
 		}
 	}
 

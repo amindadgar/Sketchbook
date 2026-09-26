@@ -281,6 +281,7 @@ export class NpcSystem implements IUpdatable
 		{
 			car.updateVisual(timeStep);
 			if (night !== this.lightsOn) car.setLights(night);
+			if (car.knocked && this.world.skidMarks !== undefined) car.leaveMarks(this.world.skidMarks);
 		}
 		this.lightsOn = night;
 		for (const pedestrian of this.pedestrians)

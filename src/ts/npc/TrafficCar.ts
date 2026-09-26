@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon';
 import { Lane } from './Navigation';
 import { CollisionGroups } from '../enums/CollisionGroups';
+import { SkidMarks } from '../vehicles/SkidMarks';
 
 /**
  * A car in the city's traffic.
@@ -74,6 +75,9 @@ export class TrafficCar
 	/** Its outline from above, for working out what's about to hit it. */
 	public halfWidth: number = 0.61;
 	public halfLength: number = 1.21;
+	/** Where each tyre meets the road, in the car's own frame, and the ball that stands for it. */
+	private tyreSpots: CANNON.Vec3[] = [];
+	private tyreBalls: CANNON.Sphere[] = [];
 	/** Where it came to rest, drawn eased back into its lane as it pulls away. */
 	private blendOffset: THREE.Vector3 = new THREE.Vector3();
 	private blendHeading: number = 0;
@@ -182,7 +186,9 @@ export class TrafficCar
 
 		for (const wheel of wheels)
 		{
+			this.tyreSpots.push(new CANNON.Vec3(wheel.x, -TrafficCar.RIDE, wheel.z));
 			let ball = new CANNON.Sphere(TrafficCar.WHEEL_RADIUS);
+			this.tyreBalls.push(ball);
 			ball.collisionFilterMask = ~CollisionGroups.TrimeshColliders;
 			this.body.addShape(ball, new CANNON.Vec3(wheel.x, TrafficCar.WHEEL_RADIUS - TrafficCar.RIDE, wheel.z));
 		}
@@ -297,6 +303,36 @@ export class TrafficCar
 		q.vmult(ahead, ahead);
 		if (Math.hypot(ahead.x, ahead.z) > 0.2) this.heading = Math.atan2(ahead.x, ahead.z);
 		this.forward.set(Math.sin(this.heading), 0, Math.cos(this.heading));
+	}
+
+	/** Rubber on the road from tyres dragged sideways, while it's knocked about. */
+	public leaveMarks(marks: SkidMarks): void
+	{
+		if (!this.knocked || !this.upright || this.body.world === null || this.body.world === undefined) return;
+		let body = this.body;
+
+		// Only tyres on the ground, by what the physics found them resting on
+		let grounded = new Set<CANNON.Shape>();
+		for (const contact of body.world.contacts as any[])
+		{
+			// The normal points from the first body to the second
+			if (contact.bi === body && contact.ni.y < -0.5) grounded.add(contact.si);
+			else if (contact.bj === body && contact.ni.y > 0.5) grounded.add(contact.sj);
+		}
+
+		let right = body.quaternion.vmult(new CANNON.Vec3(1, 0, 0));
+		let up = new THREE.Vector3(0, 1, 0);
+		this.tyreSpots.forEach((spot, i) =>
+		{
+			if (!grounded.has(this.tyreBalls[i])) return;
+			let point = body.pointToWorldFrame(spot);
+			let velocity = body.getVelocityAtWorldPoint(point, new CANNON.Vec3());
+			let sideways = Math.abs(velocity.x * right.x + velocity.z * right.z);
+			let strength = THREE.MathUtils.smoothstep(sideways, 1.1, 4.5);
+			if (strength < 0.15) return;
+			marks.mark(this.object.uuid + i, new THREE.Vector3(point.x, point.y, point.z), up,
+				new THREE.Vector3(velocity.x, 0, velocity.z), strength);
+		});
 	}
 
 	/** Right way up, more or less. */

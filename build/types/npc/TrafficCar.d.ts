@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon';
 import { Lane } from './Navigation';
+import { SkidMarks } from '../vehicles/SkidMarks';
 /**
  * A car in the city's traffic.
  *
@@ -66,6 +67,9 @@ export declare class TrafficCar {
     /** Its outline from above, for working out what's about to hit it. */
     halfWidth: number;
     halfLength: number;
+    /** Where each tyre meets the road, in the car's own frame, and the ball that stands for it. */
+    private tyreSpots;
+    private tyreBalls;
     /** Where it came to rest, drawn eased back into its lane as it pulls away. */
     private blendOffset;
     private blendHeading;
@@ -92,6 +96,8 @@ export declare class TrafficCar {
     unknock(): void;
     /** Where the physics world has put it, while it's knocked. */
     readBody(): void;
+    /** Rubber on the road from tyres dragged sideways, while it's knocked about. */
+    leaveMarks(marks: SkidMarks): void;
     /** Right way up, more or less. */
     get upright(): boolean;
     /**

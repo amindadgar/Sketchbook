@@ -4,6 +4,7 @@ import { CameraOperator } from '../core/CameraOperator';
 import { Graphics } from '../core/Graphics';
 import { Stats } from '../../lib/utils/Stats';
 import { FpsMeter } from '../core/FpsMeter';
+import { SkidMarks } from '../vehicles/SkidMarks';
 import { CannonDebugRenderer } from '../../lib/cannon/CannonDebugRenderer';
 import { InputManager } from '../core/InputManager';
 import { LoadingManager } from '../core/LoadingManager';
@@ -89,6 +90,7 @@ export declare class World {
     leaderboard: Leaderboard;
     notices: Notices;
     sfx: Sfx;
+    skidMarks: SkidMarks;
     intro: Onboarding;
     progress: Progress;
     stunts: StuntSystem;

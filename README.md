@@ -29,7 +29,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 * **Party mode** — room codes over a small WebSocket relay, up to 8 players, in five minute rounds
 * **Combat** — four weapons, health, kills, recoil, hit markers and a scoreboard
 * **Races** — the three circuits the world always had, now with laps, times and a running order
-* **Driving with consequences** — a handbrake that steps the back out, downforce, crash damage and smoke
+* **Driving with consequences** — a handbrake that steps the back out, downforce, crash damage and smoke, and tyres that squeal and leave rubber on the road when they skid
 * **Nitro** — three and a half seconds of it, and a stunt park to spend it in
 * **Stunt scoring** — airtime, flips, barrel rolls and spins, chained for a multiplier
 * **Levels and daily challenges** — three a day, the same three for everyone
@@ -68,6 +68,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 	* Cars, airplanes and helicopters
 	* All three within reach in the Free roam (everything) scenario
 	* Handbrake drift, speed sensitive downforce, crash damage and smoke
+	* Skid marks and tyre squeal when braking hard, sliding or spinning the wheels
 	* Nitro, and R to set a stuck one back on its wheels
 * Stunts
 	* Airtime, flips, barrel rolls and spins, measured off the physics body
@@ -598,6 +599,7 @@ replacing the file, with no code change:
 | `world.glb`, `car.glb`, `heli.glb`, `airplane.glb` | The island and the vehicles, exported from `src/blend` |
 | `boxman.glb` | The original character, whose animations the people were built from |
 | `car.wav`, `heli.wav`, `airplane.wav` | Engine loops |
+| `tyre_squeal.wav` | A real car's tyre squeal cut into a ten second seamless loop, levelled so it holds steady, see Credits |
 | `music.mp3` | Music, streamed rather than decoded into memory. "Voltaic" by Kevin MacLeod, CC BY 4.0, see Credits |
 | `gun_*.wav` | Weapon reports |
 | `humans/player.glb` | The player, with every animation. Built by `tools/humans/build_character.py` |
@@ -690,3 +692,8 @@ credited on the welcome screen as well.
 The people are built from [MakeHuman](http://www.makehumancommunity.org)'s system assets,
 released under CC0, with the [MPFB](https://extensions.blender.org/add-ons/mpfb/) add-on. The city's
 textures and street props are from [Poly Haven](https://polyhaven.com), also CC0.
+
+The tyre squeal is cut from "Chrysler LHS tire squeal 04" by
+[audible-edge](https://freesound.org/people/audible-edge/sounds/71739/) on Freesound, CC0: the
+steady part of a real car squealing round the microphone, filtered, levelled and crossfaded
+into a loop.

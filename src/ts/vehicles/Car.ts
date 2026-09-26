@@ -94,6 +94,12 @@ export class Car extends Vehicle implements IControllable
 		this.steeringSimulator = new SpringSimulator(60, 10, 0.6);
 	}
 
+	/** Pedal braking: reverse held while still rolling forward at speed. */
+	protected isFootBraking(): boolean
+	{
+		return this.controllingCharacter !== undefined && this.actions.reverse.isPressed && this.speed > 3;
+	}
+
 	protected reapplyHeldBrakes(): void
 	{
 		if (this.actions.brake.isPressed) this.setBrake(Car.HANDBRAKE_FORCE, 'rwd');
