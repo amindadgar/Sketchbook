@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { Character } from '../characters/Character';
 import { IInputReceiver } from './IInputReceiver';
 import { VehicleSeat } from '../vehicles/VehicleSeat';

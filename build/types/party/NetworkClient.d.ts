@@ -2,6 +2,7 @@ export interface PlayerInfo {
     id: number;
     name: string;
     color: string;
+    hat?: string;
     score?: number;
 }
 /**
@@ -16,16 +17,28 @@ export declare class NetworkClient {
     id: number;
     code: string;
     connected: boolean;
-    onJoined: (code: string, id: number, players: PlayerInfo[], scenario: string) => void;
+    /** The whole 'joined' message: code, id, players, scenario, and what a newer relay adds (seats, vehicles, features). */
+    onJoined: (message: any) => void;
     onPlayerJoin: (info: PlayerInfo) => void;
     onPlayerLeave: (id: number) => void;
     onPlayerState: (message: any) => void;
     onVehicleState: (message: any) => void;
     onIdentity: (info: PlayerInfo) => void;
-    onScenario: (id: string) => void;
+    /** {id, seq, by}: 'by' is who changed it, which a newer relay sends back to the sender too. */
+    onScenario: (message: any) => void;
+    onSeat: (message: any) => void;
+    onHurt: (message: any) => void;
+    onPickup: (message: any) => void;
     onShot: (message: any) => void;
     onHit: (message: any) => void;
     onScore: (id: number, score: number) => void;
+    onMatch: (message: any) => void;
+    onChat: (message: any) => void;
+    onDeath: (message: any) => void;
+    onNpcs: (message: any) => void;
+    onNpcHit: (message: any) => void;
+    onNpcSteal: (message: any) => void;
+    onBreak: (message: any) => void;
     onError: (message: string) => void;
     onDisconnect: () => void;
     private socket;
@@ -42,8 +55,13 @@ export declare class NetworkClient {
     static saveUrl(url: string): void;
     /** Resolves once the socket is open, rejects with a readable reason. */
     connect(url: string): Promise<void>;
-    createRoom(name: string, color: string, scenario: string, token: string): void;
-    joinRoom(code: string, name: string, color: string, token: string): void;
+    /**
+     * Protocol 2 tells the relay this client wants its own scenario changes
+     * sent back to it, which is how concurrent changes end up agreed on.
+     */
+    private static readonly PROTOCOL;
+    createRoom(name: string, color: string, hat: string, scenario: string, token: string): void;
+    joinRoom(code: string, name: string, color: string, hat: string, token: string): void;
     send(message: any): void;
     disconnect(): void;
     private handleMessage;

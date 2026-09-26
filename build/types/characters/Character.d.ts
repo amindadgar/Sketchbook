@@ -63,20 +63,37 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     static readonly MAX_HEALTH: number;
     /** How far a body has to come down to lie on the ground rather than over it. */
     private static readonly FALLEN_DROP;
+    /** World units from the neck joint to the top of the head. */
+    private static readonly HAT_HEIGHT;
+    /** A person's head is about half the width of the boxman's, and its joint sits lower in it. */
+    private static readonly HUMAN_HAT_HEIGHT;
+    private static readonly HUMAN_HAT_SCALE;
     health: number;
     weapon: WeaponSpec;
     ammo: number;
     reserve: number;
     /** Set for anyone in a party, so hits can be addressed to their client. */
     networkId: number;
+    /**
+     * Which life a remote player is on, as they last reported it. A hit carries
+     * it back to them, so one aimed at the body they just left doesn't land on
+     * the one that respawned.
+     */
+    networkLife: number;
     playerName: string;
     playerColor: string;
     nameTag: NameTag;
     private physicsEnabled;
     private originalColors;
     private weaponModel;
+    /** Until when, in seconds of page time, the gun is held up, and along what. */
+    aimUntil: number;
+    aimAlong: THREE.Vector3;
     private headTexture;
     private headCanvas;
+    private headBone;
+    private hat;
+    private hatId;
     /**
      * Where "three.js" is printed on the boxman's face texture, measured off the
      * image itself. The text sits below the smiley and reads upside down in the
@@ -105,7 +122,7 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * Names and colours the character. The tag is parented to the model container,
      * so it rides along into vehicles and hides itself in first person view.
      */
-    setPlayerAppearance(name: string, color: string): void;
+    setPlayerAppearance(name: string, color: string, hat?: string): void;
     /**
      * Paints the player's name over the "three.js" the boxman is shipped wearing.
      *
@@ -115,6 +132,13 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * one head it belongs to.
      */
     private stampNameOnHead;
+    /**
+     * Puts whatever they've earned on their head.
+     *
+     * Hung off the head bone rather than the model container, so it stays put
+     * through the walk cycle instead of hovering where the head used to be.
+     */
+    wearHat(id: string, color: string): void;
     /** Copies the loaded face texture onto a canvas the tag can be drawn into. */
     private captureHeadTexture;
     /**
@@ -130,6 +154,15 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * mean a hand tuned offset per clip.
      */
     equipWeapon(spec: WeaponSpec): void;
+    /**
+     * Holds the gun out along a direction: both bones of the arm and the
+     * hand turned to point along it, over whatever the animation had them
+     * doing. A long gun gets the other hand on it too. Called after the
+     * animation, every frame the character is aiming or has just fired.
+     */
+    private poseAim;
+    /** Turns a bone, keeping its parent where it is, so its length points along a world direction. */
+    private static pointBone;
     unequipWeapon(): void;
     /** Where shots leave the gun, so flashes and tracers start at the barrel. */
     getMuzzlePosition(): THREE.Vector3;
@@ -153,6 +186,8 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * group down also lifts the body, and the offset brings it back to ground.
      */
     private updateDeathPose;
+    /** Straight back up, for a respawn that shouldn't be seen climbing off the floor. */
+    resetDeathPose(): void;
     inputReceiverInit(): void;
     displayControls(): void;
     inputReceiverUpdate(timeStep: number): void;
@@ -165,6 +200,50 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     rotateModel(): void;
     jump(initJumpSpeed?: number): void;
     findVehicleToEnter(wantsToDrive: boolean): void;
+    /**
+     * The closest seat in a vehicle worth walking to, and whether to slide over
+     * and drive once there.
+     *
+     * Asking to drive considers the driver's seat and any passenger seat that
+     * slides across into it, but only while that driver's seat is free: sliding
+     * over into it is exactly how two people used to end up sitting in one seat.
+     * With somebody already driving it falls back to riding along, which is also
+     * the only way in there is from a phone, where F is the one button.
+     */
+    private chooseSeat;
+    /**
+     * Free for this character: nobody else is in it here, and no other member
+     * of the party has claimed it. The claim covers the part a local check can't
+     * see, somebody on another screen who is still walking up to the door.
+     */
+    canUseSeat(seat: VehicleSeat): boolean;
+    /** The seat this character is in, getting into, or walking up to. */
+    getSeatOfInterest(): VehicleSeat;
+    /** Sitting in, climbing into or out of, or parented to a vehicle. */
+    isBusyWithVehicle(): boolean;
+    /**
+     * Gives up a seat another player turned out to hold. Only the local
+     * character does this; everyone else is played back from their own client.
+     *
+     * Walking up to it just stops. Halfway through the door, back out. Already
+     * sitting in it, which happens when a whole party spawns into the one car,
+     * move along to a free seat, or climb out if there isn't one.
+     */
+    yieldSeat(seat: VehicleSeat): void;
+    /** Stops walking toward a vehicle, without leaving the forward key stuck down. */
+    cancelVehicleEntry(): void;
+    /** Straight into another seat of the same vehicle, no animation. */
+    private moveToSeat;
+    /**
+     * Out of any vehicle, all at once: no longer driving, no longer sitting,
+     * parented back to the world with physics on, standing by the door. Safe
+     * to call on foot, where it only makes sure of all that.
+     *
+     * For dying at the wheel and for respawning, both of which used to leave the
+     * body seated and then move it in the car's own coordinates. Must not run
+     * inside a physics step, since it puts the capsule back into the world.
+     */
+    forceLeaveVehicle(): void;
     enterVehicle(seat: VehicleSeat, entryPoint: THREE.Object3D): void;
     teleportToVehicle(vehicle: Vehicle, seat: VehicleSeat): void;
     startControllingVehicle(vehicle: IControllable, seat: VehicleSeat): void;

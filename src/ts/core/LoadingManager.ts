@@ -1,4 +1,5 @@
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createGLTFLoader } from './Loaders';
 import { LoadingTrackerEntry } from './LoadingTrackerEntry';
 import { UIManager } from './UIManager';
 import { Scenario } from '../world/Scenario';
@@ -23,7 +24,7 @@ export class LoadingManager
 	constructor(world: World)
 	{
 		this.world = world;
-		this.gltfLoader = new GLTFLoader();
+		this.gltfLoader = createGLTFLoader();
 
 		this.world.setTimeScale(0);
 		UIManager.setUserInterfaceVisible(false);

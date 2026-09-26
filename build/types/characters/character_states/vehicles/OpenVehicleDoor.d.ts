@@ -3,7 +3,7 @@ import { CharacterStateBase } from '../_stateLibrary';
 import { Character } from '../../Character';
 import { VehicleSeat } from '../../../vehicles/VehicleSeat';
 export declare class OpenVehicleDoor extends CharacterStateBase {
-    private seat;
+    readonly seat: VehicleSeat;
     private entryPoint;
     private hasOpenedDoor;
     private startPosition;

@@ -26,7 +26,9 @@ const WebSocket = require('ws');
 
 const PORT = process.env.PORT || 9000;
 const MAX_PLAYERS_PER_ROOM = 8;
-const MAX_MESSAGE_BYTES = 4096;
+// The city's traffic and crowds go out in one message, a few kilobytes of it
+const MAX_MESSAGE_BYTES = 16384;
+const MAX_NPCS = 64;
 // Closing a browser closes the socket, and that path is immediate. These two
 // cover the cases where it doesn't: a sleeping laptop or dropped wifi can leave
 // a half open socket the OS never reports, and a frozen or backgrounded tab
@@ -80,6 +82,9 @@ const MAX_ID_LENGTH = 64;
 const MAX_SHOT_POINTS = 8;
 /** Vehicles remembered per room for late joiners. More than any scenario has. */
 const MAX_CACHED_VEHICLES = 64;
+/** Cars taken from the city's traffic, named 'stolen:...' by the client, cached apart from the rest. */
+const STOLEN_PREFIX = 'stolen:';
+const MAX_CACHED_STOLEN = 8;
 // State and vehicle updates at 20 a second each, an automatic's shots and hits,
 // and a car or two still being reported as it rolls to a stop come to under a
 // hundred messages a second. Anything well past that is a runaway client, and
@@ -87,7 +92,7 @@ const MAX_CACHED_VEHICLES = 64;
 const RATE_PER_SECOND = 150;
 const RATE_BURST = 300;
 /** What this relay understands beyond the original protocol, sent in 'joined'. */
-const FEATURES = ['seats', 'vehicles', 'scenarioEcho', 'hurt', 'pickup'];
+const FEATURES = ['seats', 'vehicles', 'scenarioEcho', 'hurt', 'pickup', 'npcs', 'breakables', 'steal'];
 
 /** @type {Map<string, {code: string, players: Set<object>, scenario: string}>} */
 const rooms = new Map();
@@ -352,6 +357,52 @@ function apart(a, b)
 	const dy = a[1] - b[1];
 	const dz = a[2] - b[2];
 	return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+/**
+ * The city's pedestrians and traffic, from whichever client simulates them:
+ * each an array of plain numbers, rebuilt so nothing else rides along.
+ */
+function sanitizeNpcs(msg)
+{
+	const rows = (value, width) =>
+	{
+		if (!Array.isArray(value)) return [];
+		const out = [];
+		for (const row of value.slice(0, MAX_NPCS))
+		{
+			const numbers = readNumbers(row, width);
+			if (numbers !== null) out.push(numbers);
+		}
+		return out;
+	};
+
+	// Cars may carry an eighth number, how wrecked they are: 0, 1 upright, 2 on their roof
+	const cars = [];
+	if (Array.isArray(msg.c))
+	{
+		for (const row of msg.c.slice(0, MAX_NPCS))
+		{
+			const numbers = readNumbers(row, 7);
+			if (numbers === null) continue;
+			if (Number.isInteger(row[7]) && row[7] >= 0 && row[7] <= 2) numbers.push(row[7]);
+			cars.push(numbers);
+		}
+	}
+
+	const clock = typeof msg.k === 'number' && Number.isFinite(msg.k) ? msg.k : 0;
+	return { t: 'npcs', k: clock, c: cars, p: rows(msg.p, 8) };
+}
+
+/** Whoever has the lowest id in a room is the one that simulates the city. */
+function npcHost(room)
+{
+	let host = null;
+	for (const player of room.players)
+	{
+		if (host === null || player.id < host.id) host = player;
+	}
+	return host;
 }
 
 function findInRoom(room, id)
@@ -740,7 +791,18 @@ wss.on('connection', (ws) =>
 				if (vehicle === null) break;
 
 				const room = player.room;
-				if (vehicle.v !== undefined && (room.vehicles.has(vehicle.v) || room.vehicles.size < MAX_CACHED_VEHICLES))
+				if (vehicle.v !== undefined && vehicle.v.startsWith(STOLEN_PREFIX))
+				{
+					// Cars taken from the traffic come and go all game, so they get
+					// a few places of their own, the least recently moved given up
+					room.vehicles.delete(vehicle.v);
+					const stolen = [...room.vehicles.keys()].filter((key) => key.startsWith(STOLEN_PREFIX));
+					if (stolen.length >= MAX_CACHED_STOLEN) room.vehicles.delete(stolen[0]);
+					room.vehicles.set(vehicle.v, {
+						v: vehicle.v, p: vehicle.p, q: vehicle.q, lv: vehicle.lv, av: vehicle.av
+					});
+				}
+				else if (vehicle.v !== undefined && (room.vehicles.has(vehicle.v) || room.vehicles.size < MAX_CACHED_VEHICLES + MAX_CACHED_STOLEN))
 				{
 					room.vehicles.set(vehicle.v, {
 						v: vehicle.v, p: vehicle.p, q: vehicle.q, lv: vehicle.lv, av: vehicle.av
@@ -848,6 +910,49 @@ wss.on('connection', (ws) =>
 				broadcast(player.room, {
 					t: 'chat', id: player.id, name: player.name, color: player.color, text: text
 				});
+				break;
+			}
+
+			case 'npcs':
+			{
+				// Only from the client whose job it is, to everyone else
+				if (player.room === null || npcHost(player.room) !== player) break;
+				broadcast(player.room, sanitizeNpcs(msg), player);
+				break;
+			}
+
+			case 'npcHit':
+			{
+				// A shot at a pedestrian, passed to the client simulating them
+				if (player.room === null) break;
+				const host = npcHost(player.room);
+				const id = readInt(msg.n, 0, 1e9);
+				const damage = typeof msg.d === 'number' && Number.isFinite(msg.d) ? Math.max(0, Math.min(200, msg.d)) : null;
+				if (host === null || host === player || id === null || damage === null) break;
+				send(host, { t: 'npcHit', n: id, d: damage, p: readPoint(msg.p) || undefined, id: player.id });
+				break;
+			}
+
+			case 'npcSteal':
+			{
+				// Somebody pulled a driver out of the traffic; the simulating
+				// client takes that car off the road
+				if (player.room === null) break;
+				const host = npcHost(player.room);
+				const id = readInt(msg.n, 0, 1e9);
+				if (host === null || host === player || id === null) break;
+				send(host, { t: 'npcSteal', n: id, p: readPoint(msg.p) || undefined, id: player.id });
+				break;
+			}
+
+			case 'break':
+			{
+				// A lamp or sign knocked over, which the city on every screen has
+				// under the same number
+				if (player.room === null) break;
+				const id = readInt(msg.b, 0, 1e6);
+				if (id === null) break;
+				broadcast(player.room, { t: 'break', b: id, v: readPoint(msg.v) || undefined, id: player.id }, player);
 				break;
 			}
 

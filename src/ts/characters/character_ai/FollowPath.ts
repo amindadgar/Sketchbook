@@ -65,7 +65,18 @@ export class FollowPath extends FollowTarget implements ICharacterAI
 			(this.character.controlledObject as unknown as Vehicle).collision.position = Utils.cannonVector(worldPos);
 			(this.character.controlledObject as unknown as Vehicle).collision.interpolatedPosition = Utils.cannonVector(worldPos);
 			(this.character.controlledObject as unknown as Vehicle).collision.angularVelocity = new CANNON.Vec3();
-			(this.character.controlledObject as unknown as Vehicle).collision.quaternion.copy((this.character.controlledObject as unknown as Vehicle).collision.initQuaternion);
+			(this.character.controlledObject as unknown as Vehicle).collision.velocity = new CANNON.Vec3();
+
+			// Pointed along the course from there, not back the way the grid
+			// faced: on a track that isn't a small loop those are rarely the same
+			let along = this.targetNode.nextNode.object.position.clone().sub(this.targetNode.object.position);
+			along.y = 0;
+			let yaw = along.lengthSq() > 0 ? Math.atan2(along.x, along.z) : 0;
+			let facing = new CANNON.Quaternion();
+			facing.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), yaw);
+			let body = (this.character.controlledObject as unknown as Vehicle).collision;
+			body.quaternion.copy(facing);
+			body.initQuaternion.copy(facing);
 			this.staleTimer = 0;
 		}
 

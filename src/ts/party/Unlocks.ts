@@ -69,11 +69,11 @@ export function buildHat(id: string, color: string): THREE.Object3D
 	{
 		let crown = new THREE.Mesh(
 			new THREE.SphereGeometry(0.17, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-			new THREE.MeshLambertMaterial({ color: tint }));
+			new THREE.MeshStandardMaterial({ color: tint, roughness: 0.85 }));
 
 		let peak = new THREE.Mesh(
 			new THREE.CylinderGeometry(0.19, 0.19, 0.02, 12, 1, false, -Math.PI / 2.4, Math.PI / 1.2),
-			new THREE.MeshLambertMaterial({ color: dark }));
+			new THREE.MeshStandardMaterial({ color: dark, roughness: 0.85 }));
 		peak.position.set(0, 0.01, 0.08);
 
 		group.add(crown);
@@ -83,12 +83,12 @@ export function buildHat(id: string, color: string): THREE.Object3D
 	{
 		let cone = new THREE.Mesh(
 			new THREE.ConeGeometry(0.15, 0.34, 14),
-			new THREE.MeshLambertMaterial({ color: tint }));
+			new THREE.MeshStandardMaterial({ color: tint, roughness: 0.85 }));
 		cone.position.y = 0.17;
 
 		let bobble = new THREE.Mesh(
 			new THREE.SphereGeometry(0.045, 10, 8),
-			new THREE.MeshLambertMaterial({ color: 0xffffff }));
+			new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }));
 		bobble.position.y = 0.36;
 
 		group.add(cone);
@@ -98,7 +98,7 @@ export function buildHat(id: string, color: string): THREE.Object3D
 	{
 		let band = new THREE.Mesh(
 			new THREE.CylinderGeometry(0.17, 0.17, 0.09, 14, 1, true),
-			new THREE.MeshLambertMaterial({ color: 0xffd23d, side: THREE.DoubleSide }));
+			new THREE.MeshStandardMaterial({ color: 0xffd23d, metalness: 0.9, roughness: 0.3, side: THREE.DoubleSide }));
 		band.position.y = 0.05;
 		group.add(band);
 
@@ -107,7 +107,7 @@ export function buildHat(id: string, color: string): THREE.Object3D
 		{
 			let spike = new THREE.Mesh(
 				new THREE.ConeGeometry(0.045, 0.12, 6),
-				new THREE.MeshLambertMaterial({ color: 0xffd23d }));
+				new THREE.MeshStandardMaterial({ color: 0xffd23d, metalness: 0.9, roughness: 0.3 }));
 
 			let angle = (i / 5) * Math.PI * 2;
 			spike.position.set(Math.cos(angle) * 0.15, 0.14, Math.sin(angle) * 0.15);

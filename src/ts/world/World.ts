@@ -1,16 +1,14 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon';
 import Swal from 'sweetalert2';
-import * as $ from 'jquery';
+import $ from 'jquery';
 
 import { CameraOperator } from '../core/CameraOperator';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
-import { FXAAShader  } from 'three/examples/jsm/shaders/FXAAShader';
+import { Graphics, GraphicsQuality } from '../core/Graphics';
 
 import { Detector } from '../../lib/utils/Detector';
 import { Stats } from '../../lib/utils/Stats';
+import { FpsMeter } from '../core/FpsMeter';
 import * as GUI from '../../lib/utils/dat.gui';
 import { CannonDebugRenderer } from '../../lib/cannon/CannonDebugRenderer';
 import * as _ from 'lodash';
@@ -33,7 +31,9 @@ import { Scenario } from './Scenario';
 import { CharacterSpawnPoint } from './CharacterSpawnPoint';
 import { VehicleSpawnPoint } from './VehicleSpawnPoint';
 import { Sky } from './Sky';
-import { Ocean } from './Ocean';
+import { Water } from './Water';
+import { City } from '../city/City';
+import { NpcSystem } from '../npc/NpcSystem';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartyMenu } from '../party/PartyMenu';
 import { PartySession } from '../party/PartySession';
@@ -55,10 +55,16 @@ export class World
 {
 	public renderer: THREE.WebGLRenderer;
 	public camera: THREE.PerspectiveCamera;
-	public composer: any;
+	public graphics: Graphics;
 	public stats: Stats;
+	public fps: FpsMeter;
 	public graphicsWorld: THREE.Scene;
 	public sky: Sky;
+	public water: Water;
+	public city: City;
+	public npcs: NpcSystem;
+	private islandPickups: THREE.Vector3[] = [];
+	private islandRespawns: THREE.Vector3[] = [];
 	public physicsWorld: CANNON.World;
 	public parallelPairs: any[];
 	public physicsFrameRate: number;
@@ -117,17 +123,22 @@ export class World
 	 * frame the minimap. Measured from this world file.
 	 */
 	public worldBounds = {
-		minX: -211.882,
-		maxX: 211.882,
-		minZ: -169.098,
-		maxZ: 153.232,
+		minX: -1130,
+		maxX: 230,
+		minZ: -660,
+		maxZ: 700,
 		seaLevel: 14.989,
-		floor: 0.107
+		floor: 0.107,
+		/**
+		 * Where the sea's surface is drawn. A little under the island's ground,
+		 * which sits at 14.8: the old sea had a hole cut for the island, and
+		 * the new one runs under everything out to the horizon.
+		 */
+		waterLevel: 14.35
 	};
 
 
 	private speedometerFill: number = 0;
-	private fxaaPass: any;
 	private boundResumeAudio: (evt: any) => void;
 
 	constructor(worldScenePath?: any)
@@ -148,7 +159,7 @@ export class World
 		}
 
 		// Renderer
-		this.renderer = new THREE.WebGLRenderer();
+		this.renderer = new THREE.WebGLRenderer({ powerPreference: 'high-performance' });
 		this.renderer.setPixelRatio(DeviceProfile.pixelRatio());
 		this.renderer.setSize(window.innerWidth, window.innerHeight);
 		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -165,22 +176,12 @@ export class World
 
 		// Three.js scene
 		this.graphicsWorld = new THREE.Scene();
-		this.camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1010);
+		this.camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 3000);
 
-		// Passes
-		let renderPass = new RenderPass( this.graphicsWorld, this.camera );
-		let fxaaPass = new ShaderPass( FXAAShader );
-		this.fxaaPass = fxaaPass;
-
-		// FXAA
-		let pixelRatio = this.renderer.getPixelRatio();
-		fxaaPass.material['uniforms'].resolution.value.x = 1 / ( window.innerWidth * pixelRatio );
-		fxaaPass.material['uniforms'].resolution.value.y = 1 / ( window.innerHeight * pixelRatio );
-
-		// Composer
-		this.composer = new EffectComposer( this.renderer );
-		this.composer.addPass( renderPass );
-		this.composer.addPass( fxaaPass );
+		// Post processing
+		this.graphics = new Graphics(this.renderer, this.graphicsWorld, this.camera);
+		this.graphics.setSize(window.innerWidth, window.innerHeight);
+		this.installMaterialHook();
 
 		// Physics
 		this.physicsWorld = new CANNON.World();
@@ -203,6 +204,7 @@ export class World
 
 		// Stats (FPS, Frame time, Memory)
 		this.stats = Stats();
+		this.fps = new FpsMeter();
 		// Create right panel GUI
 		this.createParamsGUI(scope);
 
@@ -228,6 +230,7 @@ export class World
 		this.inputManager = new InputManager(this, this.renderer.domElement);
 		this.cameraOperator = new CameraOperator(this, this.camera, this.params.Mouse_Sensitivity);
 		this.sky = new Sky(this);
+		this.water = new Water(this, this.worldBounds.waterLevel, 12000, World.ISLAND);
 
 		// Only on devices whose primary pointer is a finger. Desktop never
 		// constructs this, so nothing about it changes.
@@ -332,21 +335,39 @@ export class World
 		});
 	}
 
+	/** The island's own footprint, measured from its world file. Some of it is below the sea. */
+	private static readonly ISLAND = { minX: -211.882, maxX: 211.882, minZ: -169.098, maxZ: 153.232 };
+
 	public isOutOfBounds(position: CANNON.Vec3): boolean
 	{
 		let bounds = this.worldBounds;
+		let island = World.ISLAND;
+
+		// The island has sunken tracks below sea level, walled off from it
+		let onIsland = position.x > island.minX && position.x < island.maxX &&
+			position.z > island.minZ && position.z < island.maxZ;
+		if (onIsland) return position.y < bounds.floor;
 
 		let inside = position.x > bounds.minX && position.x < bounds.maxX &&
-					position.z > bounds.minZ && position.z < bounds.maxZ &&
-					position.y > bounds.floor;
-		let belowSeaLevel = position.y < bounds.seaLevel;
+			position.z > bounds.minZ && position.z < bounds.maxZ;
 
-		return !inside && belowSeaLevel;
+		// Anywhere else, a metre under the surface is in the sea
+		return !inside || position.y < bounds.waterLevel - 1.1;
 	}
 
 	public outOfBoundsRespawn(body: CANNON.Body, position?: CANNON.Vec3): void
 	{
-		let newPos = position || new CANNON.Vec3(0, 16, 0);
+		let newPos = position;
+		if (newPos === undefined)
+		{
+			// Back onto the nearest pavement in the city, or the middle of the island
+			newPos = new CANNON.Vec3(0, 16, 0);
+			if (this.city !== undefined && body.position.x < World.ISLAND.minX)
+			{
+				let spot = this.city.nearestSpawn(new THREE.Vector3(body.position.x, body.position.y, body.position.z));
+				newPos = new CANNON.Vec3(spot.x, spot.y + 1, spot.z);
+			}
+		}
 		let newQuat = new CANNON.Quaternion(0, 0, 0, 1);
 
 		body.position.copy(newPos);
@@ -390,22 +411,16 @@ export class World
 	public applyViewportSize(): void
 	{
 		// A resize can arrive before the constructor has finished building these
-		if (this.camera === undefined || this.composer === undefined) return;
+		if (this.camera === undefined || this.graphics === undefined) return;
 
 		let width = window.innerWidth;
 		let height = window.innerHeight;
-		let pixelRatio = this.renderer.getPixelRatio();
-
 		this.camera.aspect = width / height;
 		this.camera.updateProjectionMatrix();
 		this.renderer.setSize(width, height);
+		if (this.sky !== undefined) this.sky.csm.updateFrustums();
 
-		if (this.fxaaPass !== undefined)
-		{
-			this.fxaaPass.uniforms['resolution'].value.set(1 / (width * pixelRatio), 1 / (height * pixelRatio));
-		}
-
-		this.composer.setSize(width * pixelRatio, height * pixelRatio);
+		this.graphics.setSize(width, height);
 	}
 
 	public render(world: World): void
@@ -438,9 +453,10 @@ export class World
 		// Stats end
 		this.stats.end();
 		this.stats.begin();
+		this.fps.frame();
 
-		// Actual rendering with a FXAA ON/OFF switch
-		if (this.params.FXAA) this.composer.render();
+		// Actual rendering, through the post processing unless it's switched off
+		if (this.params.Post_Processing) this.graphics.render();
 		else this.renderer.render(this.graphicsWorld, this.camera);
 
 		// Measuring render time
@@ -682,6 +698,66 @@ export class World
 		}
 	}
 
+	/**
+	 * Every lit material has to be told about the shadow cascades before it's
+	 * first drawn. The cascades are three directional lights, and a material
+	 * that hasn't been set up for them is lit by all three at once, which is
+	 * three suns' worth. Guns, hats, props and whole vehicles are made all over
+	 * the codebase, so rather than trust each of them to remember, the check
+	 * runs on every object on its way to the screen: one property lookup for
+	 * anything already done.
+	 */
+	private installMaterialHook(): void
+	{
+		const world = this;
+		THREE.Object3D.prototype.onBeforeRender = function(renderer: any, scene: any, camera: any, geometry: any, material: any): void
+		{
+			if (material !== undefined && material.userData.csmReady !== true && World.isLit(material))
+			{
+				world.setupMaterial(material);
+			}
+		};
+	}
+
+	private static isLit(material: any): boolean
+	{
+		return material.isMeshStandardMaterial === true || material.isMeshPhongMaterial === true
+			|| material.isMeshLambertMaterial === true || material.isMeshToonMaterial === true;
+	}
+
+	/**
+	 * Hooks a material up to the shadow cascades. A material with its own
+	 * shader tweaks keeps them: they run first, then the cascades'. Its
+	 * userData.shaderKey tells three's program cache the variants apart, since
+	 * every wrapped hook looks the same from outside.
+	 */
+	public setupMaterial(material: any): void
+	{
+		if (material.userData.csmReady === true) return;
+		material.userData.csmReady = true;
+
+		if (this.sky === undefined) return;
+
+		let own = material.onBeforeCompile;
+		let hasOwn = own !== THREE.Material.prototype.onBeforeCompile;
+
+		this.sky.csm.setupMaterial(material);
+
+		if (hasOwn)
+		{
+			let cascades = material.onBeforeCompile;
+			material.onBeforeCompile = (shader: any, renderer: any) =>
+			{
+				own.call(material, shader, renderer);
+				cascades.call(material, shader, renderer);
+			};
+		}
+
+		let key = material.userData.shaderKey || '';
+		material.customProgramCacheKey = () => 'csm:' + key;
+		material.needsUpdate = true;
+	}
+
 	public add(worldEntity: IWorldEntity): void
 	{
 		worldEntity.addToWorld(this);
@@ -713,12 +789,19 @@ export class World
 				if (child.type === 'Mesh')
 				{
 					Utils.setupMeshProperties(child);
-					this.sky.csm.setupMaterial(child.material);
 
-					if (child.material.name === 'ocean')
+					// Painted for a flat, unlit look, the island's pale surfaces
+					// glare under real light; a shade darker sits it in the scene
+					if (child.material !== undefined && child.material.color !== undefined && child.material.userData.islandToned !== true)
 					{
-						this.registerUpdatable(new Ocean(child, this));
+						child.material.color.multiplyScalar(0.8);
+						child.material.roughness = 0.9;
+						child.material.userData.islandToned = true;
 					}
+
+					// The island's own patch of sea, which the one out to the
+					// horizon has replaced
+					if (child.material.name === 'ocean') child.visible = false;
 				}
 
 				if (child.userData.hasOwnProperty('data'))
@@ -768,6 +851,12 @@ export class World
 
 		this.createMergedScenario(gltf);
 		this.prepareCombat(gltf);
+
+		// The city on the mainland, which is where a game starts now
+		this.city = new City(this, loadingManager);
+		this.npcs = new NpcSystem(this, this.city);
+		this.scenarios.forEach((scenario) => scenario.default = scenario.id === 'city');
+		this.prepareCityCombat();
 
 		// Launch default scenario
 		let defaultScenarioID: string;
@@ -834,6 +923,31 @@ export class World
 
 		this.combat.setRespawnPoints(playerSpawns.length > 0 ? playerSpawns : anchors);
 		this.combat.placePickups(anchors);
+		this.islandPickups = anchors;
+		this.islandRespawns = playerSpawns.length > 0 ? playerSpawns : anchors;
+	}
+
+	/**
+	 * Adds the city's pavements to the places the dead come back and the
+	 * guns are left, thinned out the same way the island's are.
+	 */
+	private prepareCityCombat(): void
+	{
+		let spots = this.city.spawnSpots.map((spot) => spot.position);
+		let anchors: THREE.Vector3[] = [];
+		let random = 0.5;
+		for (const candidate of spots)
+		{
+			if (anchors.length >= 18) break;
+			// Spread over the city rather than bunched in the first blocks listed
+			random = (random * 9301 + 49297) % 233280 / 233280;
+			if (random < 0.6) continue;
+			if (anchors.some((chosen) => chosen.distanceTo(candidate) < 90)) continue;
+			anchors.push(candidate);
+		}
+
+		this.combat.setRespawnPoints(this.islandRespawns.concat(spots.filter((_, i) => i % 3 === 0)));
+		this.combat.placePickups(this.islandPickups.concat(anchors));
 	}
 
 	private createMergedScenario(gltf: any): void
@@ -972,8 +1086,10 @@ export class World
 	 * A party member's spare car that this client doesn't have, because they
 	 * joined after it launched. Anything else by that name is left alone.
 	 */
-	public spawnPartyVehicle(name: string): void
+	/** A vehicle another player has that this client doesn't: a spare party car, or one taken from the traffic. */
+	public spawnPartyVehicle(name: string, message?: any): void
 	{
+		if (this.npcs !== undefined && this.npcs.spawnStolen(name, message)) return;
 		if (this.activeScenario !== undefined) this.activeScenario.spawnPartyExtra(name, this);
 	}
 
@@ -1063,6 +1179,8 @@ export class World
 		// Available whatever the input receiver is, so they're listed everywhere
 		html += '<div class="ctrl-row"><span class="ctrl-key">M</span>'
 			+ '<span class="ctrl-desc">Mute music</span></div>';
+		html += '<div class="ctrl-row"><span class="ctrl-key">N</span>'
+			+ '<span class="ctrl-desc">Big map</span></div>';
 		html += '<div class="ctrl-row"><span class="ctrl-key">C</span>'
 			+ '<span class="ctrl-desc">Center camera</span></div>';
 		html += '<div class="ctrl-row"><span class="ctrl-key">L</span>'
@@ -1177,6 +1295,7 @@ export class World
 				</div>
 				<div id="settings-gear" title="Settings">&#9881;</div>
 				<div id="health-badge"><span id="health-heart">&#10084;</span><span id="health-number">100</span></div>
+				<div id="fps-badge" class="good"><span id="fps-number">60</span><span id="fps-unit">FPS</span></div>
 				<div id="minimap-toggle">MAP</div>
 				<div id="speed-badge"><span id="speed-number">0</span><span id="speed-unit">km/h</span></div>
 				<div id="boost"><div id="boost-fill"></div></div>
@@ -1281,8 +1400,10 @@ export class World
 			Mouse_Sensitivity: 0.3,
 			Time_Scale: 1,
 			Shadows: true,
-			FXAA: true,
+			Post_Processing: true,
+			Graphics_Quality: DeviceProfile.isTouch() ? 'Low' : 'High',
 			Debug_Physics: false,
+			Show_FPS: true,
 			Debug_FPS: false,
 			Sun_Elevation: 50,
 			Sun_Rotation: 145,
@@ -1327,7 +1448,12 @@ export class World
 
 		// Input
 		let settingsFolder = gui.addFolder('Settings');
-		settingsFolder.add(this.params, 'FXAA');
+		settingsFolder.add(this.params, 'Post_Processing');
+		settingsFolder.add(this.params, 'Graphics_Quality', ['High', 'Medium', 'Low'])
+			.onChange((quality: GraphicsQuality) =>
+			{
+				scope.graphics.setQuality(quality);
+			});
 		settingsFolder.add(this.params, 'Shadows')
 			.onChange((enabled) =>
 			{
@@ -1391,6 +1517,11 @@ export class World
 				{
 					char.raycastBox.visible = enabled;
 				});
+			});
+		settingsFolder.add(this.params, 'Show_FPS')
+			.onChange((enabled) =>
+			{
+				this.fps.setVisible(enabled);
 			});
 		settingsFolder.add(this.params, 'Debug_FPS')
 			.onChange((enabled) =>

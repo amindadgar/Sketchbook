@@ -49,7 +49,29 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     private static readonly SMOKE_BELOW;
     private impactCooldown;
     private smokeTimer;
+    private headlights;
+    private static lampTexture;
     private boundOnCollide;
+    /**
+     * Where the player driving this on another client last said it was. Only
+     * their client simulates it for real, so here the body is steered after
+     * those reports: velocity toward the pose rather than teleports with the
+     * velocity zeroed, so it collides like a moving car, sounds like one, and
+     * doesn't get argued with by everything that assumed a parked one.
+     */
+    private remoteTarget;
+    private remoteSteering;
+    /** Reports older than this mean the driver has gone quiet, so it coasts. */
+    private static readonly REMOTE_FRESH;
+    /** Further off than this and the body is put there rather than pulled. */
+    private static readonly REMOTE_SNAP;
+    /** How hard the pose error is pulled in, per second. */
+    private static readonly REMOTE_GAIN;
+    /** Reports are extrapolated at most this far, so a stall doesn't fling it. */
+    private static readonly REMOTE_LEAD;
+    /** The same force the handbrake and the race grid use. */
+    private static readonly PARKING_BRAKE;
+    private parked;
     constructor(gltf: any, handlingSetup?: any);
     noDirectionPressed(): boolean;
     update(timeStep: number): void;
@@ -70,11 +92,65 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     setSteeringValue(val: number): void;
     applyEngineForce(force: number): void;
     /**
+     * Sets a stuck vehicle back on its wheels where it stands.
+     *
+     * A car that stops upside down rights itself already, but one wedged nose
+     * first into a barrier is the right way up and going nowhere, and there was
+     * no way out of that short of restarting the whole scenario. The heading is
+     * kept and everything else about the rotation is thrown away.
+     */
+    recover(): void;
+    /** The id vehicles are matched by across a party: the name of the spawn point. */
+    getNetworkId(): string;
+    /**
+     * A pose report from whoever is driving this, or last drove it, on another
+     * client. 'final' means they've let go and this is where it ended up.
+     * Ignored while anyone local is at the wheel, whose simulation wins here.
+     */
+    setRemoteTarget(position: THREE.Vector3, quaternion: THREE.Quaternion, velocity: THREE.Vector3, angularVelocity: THREE.Vector3, final: boolean): void;
+    /** A driver on another client is steering this right now. */
+    isRemoteDriven(): boolean;
+    /** Someone is at the wheel, here or on another client. For engines, rotors and lights. */
+    hasDriver(): boolean;
+    /** Back to local physics alone, for a scenario change or leaving the party. */
+    clearRemoteTarget(): void;
+    private followRemoteTarget;
+    /** Puts the body exactly somewhere, for jumps too big to pull across. */
+    private placeBody;
+    /**
+     * A vehicle nobody is driving puts its brakes on once it has slowed right
+     * down. The tyres hold almost nothing by themselves, so a car left on a
+     * slope otherwise creeps downhill for ever, a car bumped into rolls off
+     * down the street, and in a party each client's copy creeps its own way
+     * until they're nowhere near each other. Whoever takes the wheel next,
+     * here or on another client, lets them off.
+     */
+    private updateParkingBrake;
+    /** For controls held down as a driver takes over, which the parking brake coming off would undo. */
+    protected reapplyHeldBrakes(): void;
+    /** Local physics takes over from whatever velocity it last had, so it coasts. */
+    private releaseRemoteSteering;
+    /**
+     * A pair of lamps at the front, lit after dark. Sprites rather than lights:
+     * they're parented to the vehicle so they follow it for nothing, and the
+     * point is that a car is visible in the dark, not that it lights the road.
+     */
+    setHeadlights(on: boolean): void;
+    private static getLampTexture;
+    /**
      * Cannon reports a collision once, on the frame the two bodies first touch,
      * to both of them. A crash is still several of those as the car tumbles, so
      * there's a short cooldown to stop one accident being billed five times.
      */
     private onCollide;
+    /**
+     * Hit by something while nobody is driving it. The parking brake stays on,
+     * which locks the wheels rather than the car: a hit shoves it along in a
+     * skid that its tyres soon stop. A shove from the local player's own car
+     * is reported to the party until the car comes to rest, the way a car
+     * someone has just got out of is.
+     */
+    private onShoved;
     /** A battered vehicle smokes, harder the worse it is, and only while running. */
     private updateSmoke;
     /**

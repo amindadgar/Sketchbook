@@ -5,7 +5,7 @@ import { Object3D } from 'three';
 export declare class EnteringVehicle extends CharacterStateBase {
     private vehicle;
     private animData;
-    private seat;
+    readonly seat: VehicleSeat;
     private initialPositionOffset;
     private startPosition;
     private endPosition;

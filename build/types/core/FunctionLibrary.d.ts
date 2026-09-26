@@ -4,7 +4,6 @@ import { SimulationFrame } from '../physics/spring_simulation/SimulationFrame';
 import { Side } from '../enums/Side';
 import { Object3D } from 'three';
 import { Space } from '../enums/Space';
-export declare function createCapsuleGeometry(radius?: number, height?: number, N?: number): THREE.Geometry;
 /**
  * Constructs a 2D matrix from first vector, replacing the Y axes with the global Y axis,
  * and applies this matrix to the second vector. Saves performance when compared to full 3D matrix application.
@@ -35,7 +34,20 @@ export declare function threeVector(vec: CANNON.Vec3): THREE.Vector3;
 export declare function cannonVector(vec: THREE.Vector3): CANNON.Vec3;
 export declare function threeQuat(quat: CANNON.Quaternion): THREE.Quaternion;
 export declare function cannonQuat(quat: THREE.Quaternion): CANNON.Quaternion;
+/**
+ * Shadows on, and the materials left as they were authored: physically based,
+ * straight out of the glTF. They used to be swapped for flat Phong ones, which
+ * threw away their roughness and bump detail and is most of why everything
+ * looked like plastic.
+ */
 export declare function setupMeshProperties(child: any): void;
+/**
+ * Car paint: the painted texture under a clear coat that reflects the sky,
+ * which does more than anything else to stop a car looking like a toy. The
+ * material is swapped once per loaded model, and every car of that model
+ * shares it until something tints one.
+ */
+export declare function paintVehicle(child: any): void;
 export declare function detectRelativeSide(from: Object3D, to: Object3D): Side;
 export declare function easeInOutSine(x: number): number;
 export declare function easeOutQuad(x: number): number;
@@ -45,3 +57,5 @@ export declare function getForward(obj: THREE.Object3D, space?: Space): THREE.Ve
 export declare function getBack(obj: THREE.Object3D, space?: Space): THREE.Vector3;
 export declare function getMatrix(obj: THREE.Object3D, space: Space): THREE.Matrix4;
 export declare function countSleepyBodies(): any;
+/** Small seeded random number generator, so every client makes the same choices. */
+export declare function mulberry32(seed: number): () => number;

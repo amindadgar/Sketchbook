@@ -54,6 +54,12 @@ export declare class CameraOperator implements IInputReceiver, IUpdatable {
     private recoilOwed;
     private static readonly RECOIL_RECOVERY;
     characterCaller: Character;
+    /**
+     * Someone to watch instead of the player, while the player is dead. Read
+     * here rather than written into 'target' from outside, because the input
+     * receiver puts the target back on the body every frame before this runs.
+     */
+    spectateTarget: THREE.Object3D;
     constructor(world: World, camera: THREE.Camera, sensitivityX?: number, sensitivityY?: number);
     setSensitivity(sensitivityX: number, sensitivityY?: number): void;
     setRadius(value: number, instantly?: boolean): void;

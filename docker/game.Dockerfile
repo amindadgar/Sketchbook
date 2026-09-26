@@ -2,7 +2,7 @@
 
 # The bundle is rebuilt here rather than copied from the repo, so what ships in
 # the image is always built from the source next to it.
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 WORKDIR /app
 
 RUN npm install -g pnpm@10.19.0
@@ -16,7 +16,7 @@ COPY shared ./shared
 RUN pnpm build
 
 
-# The game itself is static: a bundle, a page and 30MB of models and audio.
+# The game itself is static: a bundle, a page, and models, textures and audio.
 FROM nginx:alpine
 
 # A template rather than a plain config: the official image runs envsubst over

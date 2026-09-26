@@ -22,6 +22,8 @@ export class Scenario
 	 * a race rather than anything written down about its name.
 	 */
 	public racePath: string;
+	/** How many laps a race is, when it isn't the usual. */
+	public laps: number;
 	
 	private rootNode: THREE.Object3D;
 	private spawnPoints: ISpawnPoint[] = [];
@@ -71,6 +73,10 @@ export class Scenario
 		if (root.userData.hasOwnProperty('camera_angle')) 
 		{
 			this.initialCameraAngle = root.userData.camera_angle;
+		}
+		if (root.userData.hasOwnProperty('laps'))
+		{
+			this.laps = Number(root.userData.laps);
 		}
 
 		if (!this.invisible) this.createLaunchLink();

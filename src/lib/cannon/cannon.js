@@ -591,6 +591,16 @@ Broadphase.prototype.needBroadphaseCollision = function(bodyA,bodyB){
         return false;
     }
 
+    // Kinematic bodies are moved by hand and never pushed, so a kinematic body
+    // against a static or another kinematic one has nothing to resolve: the
+    // city's traffic against its buildings, say. Against a sleeping body it
+    // still counts, since that contact is what wakes the sleeper.
+    var still = Body.STATIC | Body.KINEMATIC;
+    if(((bodyA.type & Body.KINEMATIC)!==0 && (bodyB.type & still)!==0) ||
+       ((bodyB.type & Body.KINEMATIC)!==0 && (bodyA.type & still)!==0)) {
+        return false;
+    }
+
     return true;
 };
 

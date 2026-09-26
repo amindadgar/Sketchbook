@@ -1,2 +1,6 @@
 .vscode
 node_modules
+# Written by the production build alongside the bundle
+build/*.LICENSE.txt
+
+.DS_Store

@@ -40,6 +40,10 @@ export class NetworkClient
 	public onMatch: (message: any) => void;
 	public onChat: (message: any) => void;
 	public onDeath: (message: any) => void;
+	public onNpcs: (message: any) => void;
+	public onNpcHit: (message: any) => void;
+	public onNpcSteal: (message: any) => void;
+	public onBreak: (message: any) => void;
 	public onError: (message: string) => void;
 	public onDisconnect: () => void;
 
@@ -284,6 +288,18 @@ export class NetworkClient
 				if (this.onHit !== undefined) this.onHit(message);
 				break;
 
+			case 'npcs':
+				if (this.onNpcs !== undefined) this.onNpcs(message);
+				break;
+			case 'npcHit':
+				if (this.onNpcHit !== undefined) this.onNpcHit(message);
+				break;
+			case 'npcSteal':
+				if (this.onNpcSteal !== undefined) this.onNpcSteal(message);
+				break;
+			case 'break':
+				if (this.onBreak !== undefined) this.onBreak(message);
+				break;
 			case 'death':
 				if (this.onDeath !== undefined) this.onDeath(message);
 				break;

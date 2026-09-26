@@ -113,6 +113,37 @@
 	color: #e6394a;
 }
 
+/* Frames per second, left of the health: green is smooth, amber is playable,
+   red is struggling */
+#fps-badge {
+	position: fixed;
+	top: 16px;
+	right: 146px;
+	display: flex;
+	align-items: baseline;
+	gap: 4px;
+	padding: 5px 10px;
+	background: rgba(0, 0, 0, 0.45);
+	border-radius: 16px;
+	font-family: 'Solway', serif;
+	font-size: 17px;
+	font-weight: 700;
+	color: #fff;
+	pointer-events: none;
+	user-select: none;
+	z-index: 25;
+	font-variant-numeric: tabular-nums;
+}
+
+#fps-unit {
+	font-size: 11px;
+	opacity: 0.75;
+}
+
+#fps-badge.good #fps-number { color: #6ee07a; }
+#fps-badge.fair #fps-number { color: #ffc93c; }
+#fps-badge.poor #fps-number { color: #ff5a5a; }
+
 /* Bleeds red as it runs down, so the number isn't the only warning */
 #health-badge.hurt {
 	background: rgba(140, 20, 30, 0.6);

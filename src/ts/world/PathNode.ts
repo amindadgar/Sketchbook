@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { Path } from './Path';
 import { Object3D } from 'three';
 

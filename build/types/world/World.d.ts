@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon';
 import { CameraOperator } from '../core/CameraOperator';
+import { Graphics } from '../core/Graphics';
 import { Stats } from '../../lib/utils/Stats';
+import { FpsMeter } from '../core/FpsMeter';
 import { CannonDebugRenderer } from '../../lib/cannon/CannonDebugRenderer';
 import { InputManager } from '../core/InputManager';
 import { LoadingManager } from '../core/LoadingManager';
@@ -13,19 +15,36 @@ import { Path } from './Path';
 import { Vehicle } from '../vehicles/Vehicle';
 import { Scenario } from './Scenario';
 import { Sky } from './Sky';
+import { Water } from './Water';
+import { City } from '../city/City';
+import { NpcSystem } from '../npc/NpcSystem';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartySession } from '../party/PartySession';
 import { Minimap } from '../core/Minimap';
 import { TouchControls } from '../core/TouchControls';
 import { Effects } from '../core/Effects';
+import { RaceSystem } from '../race/RaceSystem';
+import { Chat } from '../party/Chat';
+import { Leaderboard } from '../party/Leaderboard';
+import { Notices } from '../core/Notices';
+import { Sfx } from '../core/Sfx';
+import { Onboarding } from '../core/Onboarding';
+import { Progress } from '../progress/Progress';
+import { StuntSystem } from '../stunts/StuntSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 export declare class World {
     renderer: THREE.WebGLRenderer;
     camera: THREE.PerspectiveCamera;
-    composer: any;
+    graphics: Graphics;
     stats: Stats;
+    fps: FpsMeter;
     graphicsWorld: THREE.Scene;
     sky: Sky;
+    water: Water;
+    city: City;
+    npcs: NpcSystem;
+    private islandPickups;
+    private islandRespawns;
     physicsWorld: CANNON.World;
     parallelPairs: any[];
     physicsFrameRate: number;
@@ -54,9 +73,27 @@ export declare class World {
     musicElement: HTMLAudioElement;
     localPlayer: PlayerIdentity;
     localCharacter: Character;
+    /**
+     * Counts scenario launches. Everything a launch spawns arrives later, from a
+     * download, and anything that arrives after a newer launch has started
+     * belongs to a world that no longer exists and is thrown away.
+     */
+    scenarioGeneration: number;
+    /** The scenario last launched, rather than the ones that always spawn alongside it. */
+    private activeScenario;
     party: PartySession;
     combat: CombatSystem;
     effects: Effects;
+    race: RaceSystem;
+    chat: Chat;
+    leaderboard: Leaderboard;
+    notices: Notices;
+    sfx: Sfx;
+    intro: Onboarding;
+    progress: Progress;
+    stunts: StuntSystem;
+    private headlightsOn;
+    private beam;
     minimap: Minimap;
     touchControls: TouchControls;
     lastScenarioID: string;
@@ -71,13 +108,20 @@ export declare class World {
         maxZ: number;
         seaLevel: number;
         floor: number;
+        /**
+         * Where the sea's surface is drawn. A little under the island's ground,
+         * which sits at 14.8: the old sea had a hole cut for the island, and
+         * the new one runs under everything out to the horizon.
+         */
+        waterLevel: number;
     };
     private speedometerFill;
-    private fxaaPass;
     private boundResumeAudio;
     constructor(worldScenePath?: any);
     update(timeStep: number, unscaledTimeStep: number): void;
     updatePhysics(timeStep: number): void;
+    /** The island's own footprint, measured from its world file. Some of it is below the sea. */
+    private static readonly ISLAND;
     isOutOfBounds(position: CANNON.Vec3): boolean;
     outOfBoundsRespawn(body: CANNON.Body, position?: CANNON.Vec3): void;
     /**
@@ -96,6 +140,15 @@ export declare class World {
     private syncViewportSize;
     applyViewportSize(): void;
     render(world: World): void;
+    /**
+     * Lights on after dark. Every car gets a pair of glowing lamps, which cost
+     * two sprites and nothing else, and the car the player is in also gets the
+     * one real light in the scene: eight spotlights would rebuild every shader
+     * in the world and buy very little at the speed a car goes past.
+     */
+    private updateHeadlights;
+    /** Distance, speed and time aloft, the things nothing else was counting. */
+    private updateProgress;
     /**
      * The car the local player is driving, if any. While driving, the character
      * stays the input receiver and forwards input to the vehicle, so the car has
@@ -120,6 +173,8 @@ export declare class World {
      */
     /** Bound to M. */
     toggleMusic(): void;
+    /** Bound to L. */
+    toggleLeaderboard(): void;
     /** Bound to C. */
     toggleCameraCentering(): void;
     applyMusicVolume(): void;
@@ -137,6 +192,24 @@ export declare class World {
     private listenForAudioUnlock;
     /** A silent one sample buffer, which is what actually unlocks iOS. */
     private nudgeAudioContext;
+    /**
+     * Every lit material has to be told about the shadow cascades before it's
+     * first drawn. The cascades are three directional lights, and a material
+     * that hasn't been set up for them is lit by all three at once, which is
+     * three suns' worth. Guns, hats, props and whole vehicles are made all over
+     * the codebase, so rather than trust each of them to remember, the check
+     * runs on every object on its way to the screen: one property lookup for
+     * anything already done.
+     */
+    private installMaterialHook;
+    private static isLit;
+    /**
+     * Hooks a material up to the shadow cascades. A material with its own
+     * shader tweaks keeps them: they run first, then the cascades'. Its
+     * userData.shaderKey tells three's program cache the variants apart, since
+     * every wrapped hook looks the same from outside.
+     */
+    setupMaterial(material: any): void;
     add(worldEntity: IWorldEntity): void;
     registerUpdatable(registree: IUpdatable): void;
     remove(worldEntity: IWorldEntity): void;
@@ -163,10 +236,34 @@ export declare class World {
      * arbitrary coordinate could end up inside a wall or under the sea.
      */
     private prepareCombat;
+    /**
+     * Adds the city's pavements to the places the dead come back and the
+     * guns are left, thinned out the same way the island's are.
+     */
+    private prepareCityCombat;
     private createMergedScenario;
     /** Parks a vehicle on the line from the player to the aircraft, where the apron is clear. */
     private createVehicleSpawnBetween;
-    launchScenario(scenarioID: string, loadingManager?: LoadingManager): void;
+    /**
+     * 'quiet' is for launches that arrive from the party rather than from this
+     * player: no briefing to dismiss and no clock stopped behind it, since the
+     * rest of the room is already playing and nobody here asked for it.
+     */
+    launchScenario(scenarioID: string, loadingManager?: LoadingManager, quiet?: boolean): void;
+    /**
+     * A party member's spare car that this client doesn't have, because they
+     * joined after it launched. Anything else by that name is left alone.
+     */
+    /** A vehicle another player has that this client doesn't: a spare party car, or one taken from the traffic. */
+    spawnPartyVehicle(name: string, message?: any): void;
+    /** Whether a scenario starts players in a car, and so gives a party one each. */
+    scenarioHasPartyGrid(scenarioID: string): boolean;
+    /**
+     * Shift+R. In a party it puts just this player back at a spawn point:
+     * restarting the scenario there restarts it for everybody, and a key the
+     * controls call "Respawn" shouldn't reset the whole room.
+     */
+    requestRespawn(): void;
     restartScenario(): void;
     clearEntities(): void;
     scrollTheTimeScale(scrollAmount: number): void;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Pedestrian } from '../npc/Pedestrian';
 import * as CANNON from 'cannon';
 
 import { World } from '../world/World';
@@ -323,6 +324,14 @@ export class CombatSystem implements IUpdatable
 		}
 
 		let weapon = character.weapon;
+
+		// Aiming holds the gun up along the line of the camera
+		if (this.aiming && weapon !== undefined)
+		{
+			character.aimUntil = Math.max(character.aimUntil, performance.now() / 1000 + 0.15);
+			this.world.camera.getWorldDirection(character.aimAlong);
+		}
+
 		// Not from the driver's seat, and not halfway through a car door either,
 		// where the character belongs to the car and its own position is local
 		let ready = weapon !== undefined && !character.isBusyWithVehicle();
@@ -369,7 +378,19 @@ export class CombatSystem implements IUpdatable
 			ends.push(hit.point);
 
 			if (hit.character !== undefined && this.reportHit(hit.character, weapon, eye)) landed = true;
+			if (hit.pedestrian !== undefined)
+			{
+				this.world.npcs.damagePedestrian(hit.pedestrian.id, weapon.damage, eye);
+				landed = true;
+			}
 		}
+
+		// Everyone in earshot runs for it
+		if (this.world.npcs !== undefined) this.world.npcs.onGunshot(eye);
+
+		// The arm stays up a moment after the shot
+		character.aimUntil = performance.now() / 1000 + 1.2;
+		character.aimAlong.copy(aim);
 
 		// One marker for the shot rather than one per pellet, otherwise a shotgun
 		// at close range restarts it eight times and it never animates
@@ -455,7 +476,7 @@ export class CombatSystem implements IUpdatable
 	 * Their own car doesn't shield them; anything else in the way still does.
 	 */
 	private trace(origin: THREE.Vector3, direction: THREE.Vector3, range: number, shooter?: Character):
-		{ point: THREE.Vector3, character: Character }
+		{ point: THREE.Vector3, character: Character, pedestrian?: Pedestrian }
 	{
 		let end = new THREE.Vector3().copy(origin).addScaledVector(direction, range);
 
@@ -463,8 +484,9 @@ export class CombatSystem implements IUpdatable
 		this.world.physicsWorld.raycastAll(
 			new CANNON.Vec3(origin.x, origin.y, origin.z),
 			new CANNON.Vec3(end.x, end.y, end.z),
+			// Pedestrians' bodies are only there to be bumped into; they're tested below
 			// tslint:disable-next-line: no-bitwise
-			{ collisionFilterMask: ~CollisionGroups.Characters, collisionFilterGroup: -1, skipBackfaces: true },
+			{ collisionFilterMask: ~(CollisionGroups.Characters | CollisionGroups.Pedestrians), collisionFilterGroup: -1, skipBackfaces: true },
 			(result: CANNON.RaycastResult) =>
 			{
 				// The result object is reused for every hit, so it's copied out
@@ -505,7 +527,20 @@ export class CombatSystem implements IUpdatable
 			victim = character;
 		}
 
-		return { point: new THREE.Vector3().copy(origin).addScaledVector(direction, reach), character: victim };
+		// The city's pedestrians, the same way, behind the same walls
+		let pedestrian: Pedestrian;
+		if (this.world.npcs !== undefined)
+		{
+			let npc = this.world.npcs.rayHitsPedestrian(origin, direction, range);
+			if (npc !== undefined && npc.distance < reach && !hits.some((hit) => hit.distance < npc.distance))
+			{
+				reach = npc.distance;
+				victim = undefined;
+				pedestrian = npc.pedestrian;
+			}
+		}
+
+		return { point: new THREE.Vector3().copy(origin).addScaledVector(direction, reach), character: victim, pedestrian: pedestrian };
 	}
 
 	/** The body of the vehicle a character sits in or is climbing into, if any. */
@@ -736,8 +771,9 @@ export class CombatSystem implements IUpdatable
 		this.world.physicsWorld.raycastAll(
 			new CANNON.Vec3(from.x, from.y, from.z),
 			new CANNON.Vec3(end.x, end.y, end.z),
+			// Pedestrians' bodies are only there to be bumped into; they're tested below
 			// tslint:disable-next-line: no-bitwise
-			{ collisionFilterMask: ~CollisionGroups.Characters, collisionFilterGroup: -1, skipBackfaces: true },
+			{ collisionFilterMask: ~(CollisionGroups.Characters | CollisionGroups.Pedestrians), collisionFilterGroup: -1, skipBackfaces: true },
 			(result: CANNON.RaycastResult) =>
 			{
 				if (result.body.mass === 0) nearest = Math.min(nearest, result.distance);
@@ -851,7 +887,13 @@ export class CombatSystem implements IUpdatable
 
 		if (this.respawnPoints.length > 0)
 		{
-			let point = this.respawnPoints[Math.floor(Math.random() * this.respawnPoints.length)];
+			// Somewhere near where they fell, so dying downtown doesn't mean a
+			// drive back from the island
+			let here = character.getWorldPosition(new THREE.Vector3());
+			let nearby = this.respawnPoints.slice()
+				.sort((a, b) => a.distanceToSquared(here) - b.distanceToSquared(here))
+				.slice(0, 8);
+			let point = nearby[Math.floor(Math.random() * nearby.length)];
 			character.setPosition(point.x, point.y + 1, point.z);
 			character.resetVelocity();
 		}
@@ -904,6 +946,13 @@ export class CombatSystem implements IUpdatable
 
 		this.addMuzzleFlash(from);
 		this.playGunSound(weaponId, from);
+
+		// Their arm comes up along the shot on this screen too
+		if (shooter !== undefined)
+		{
+			shooter.aimUntil = performance.now() / 1000 + 1.2;
+			shooter.aimAlong.copy(direction).normalize();
+		}
 
 		if (endpoints !== undefined && endpoints.length > 0)
 		{

@@ -5,10 +5,13 @@ module.exports = {
         app: './src/ts/sketchbook.ts'
     },
     output: {
-        filename: './build/sketchbook.min.js',
-        library: 'Sketchbook',
-        libraryTarget: 'umd',
-        path: path.resolve(__dirname)
+        filename: 'sketchbook.min.js',
+        library: {
+            name: 'Sketchbook',
+            type: 'umd'
+        },
+        path: path.resolve(__dirname, 'build'),
+        publicPath: 'build/'
     },
     resolve: {
         alias: {

@@ -2,7 +2,7 @@ import { Character } from '../characters/Character';
 import * as THREE from 'three';
 import * as CANNON from 'cannon';
 import { World } from '../world/World';
-import _ = require('lodash');
+import * as _ from 'lodash';
 import { KeyBinding } from '../core/KeyBinding';
 import { VehicleSeat } from './VehicleSeat';
 import { Wheel } from './Wheel';
@@ -500,7 +500,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 
 		let currentRotation = new THREE.Quaternion(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w);
 		// The rotation still to go, taken the short way round
-		let delta = predictedRotation.clone().multiply(currentRotation.clone().inverse());
+		let delta = predictedRotation.clone().multiply(currentRotation.clone().invert());
 		if (delta.w < 0) delta.set(-delta.x, -delta.y, -delta.z, -delta.w);
 		let angle = 2 * Math.acos(THREE.MathUtils.clamp(delta.w, -1, 1));
 
@@ -543,11 +543,12 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	}
 
 	/**
-	 * In a party a vehicle nobody is driving puts its brakes on once it has
-	 * slowed right down. The tyres hold almost nothing by themselves, so a car
-	 * left on a slope otherwise creeps downhill for ever, and each client's copy
-	 * creeps its own way until they're nowhere near each other. Whoever takes
-	 * the wheel next, here or on another client, lets them off.
+	 * A vehicle nobody is driving puts its brakes on once it has slowed right
+	 * down. The tyres hold almost nothing by themselves, so a car left on a
+	 * slope otherwise creeps downhill for ever, a car bumped into rolls off
+	 * down the street, and in a party each client's copy creeps its own way
+	 * until they're nowhere near each other. Whoever takes the wheel next,
+	 * here or on another client, lets them off.
 	 */
 	private updateParkingBrake(): void
 	{
@@ -559,6 +560,8 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 			{
 				this.parked = false;
 				this.setBrake(0);
+				// A handbrake held while climbing in still wants its brakes
+				this.reapplyHeldBrakes();
 			}
 			return;
 		}
@@ -567,6 +570,10 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 
 		if (this.parked)
 		{
+			// Put back on if something else let it off, such as a race start
+			// releasing every brake on the grid
+			this.setBrake(Vehicle.PARKING_BRAKE);
+
 			// Braked wheels still slide a few centimetres a second on this little
 			// grip, just under what cannon counts as stopped. Once it's crawling on
 			// its wheels it's put to sleep, which holds it exactly where it is on
@@ -581,11 +588,16 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		}
 
 		if (this.wheels.length === 0 || this.rayCastVehicle.numWheelsOnGround === 0) return;
-		if (this.world === undefined || this.world.party === undefined || !this.world.party.active) return;
+		if (this.world === undefined) return;
 		if (body.velocity.length() > 1) return;
 
 		this.parked = true;
 		this.setBrake(Vehicle.PARKING_BRAKE);
+	}
+
+	/** For controls held down as a driver takes over, which the parking brake coming off would undo. */
+	protected reapplyHeldBrakes(): void
+	{
 	}
 
 	/** Local physics takes over from whatever velocity it last had, so it coasts. */
@@ -662,9 +674,12 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	 */
 	private onCollide(event: any): void
 	{
-		if (this.impactCooldown > 0 || event.contact === undefined) return;
+		if (event.contact === undefined) return;
 
 		let impact = Math.abs(event.contact.getImpactVelocityAlongNormal());
+		this.onShoved(event.body, impact);
+		if (this.impactCooldown > 0) return;
+
 		if (impact < Vehicle.IMPACT_FLOOR) return;
 
 		this.impactCooldown = 0.5;
@@ -680,6 +695,27 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		if (this.controllingCharacter !== this.world.localCharacter) return;
 
 		this.world.combat.applyCrashDamage(over * Vehicle.IMPACT_DAMAGE);
+	}
+
+	/**
+	 * Hit by something while nobody is driving it. The parking brake stays on,
+	 * which locks the wheels rather than the car: a hit shoves it along in a
+	 * skid that its tyres soon stop. A shove from the local player's own car
+	 * is reported to the party until the car comes to rest, the way a car
+	 * someone has just got out of is.
+	 */
+	private onShoved(other: any, impact: number): void
+	{
+		if (this.world === undefined || this.controllingCharacter !== undefined || impact < 1) return;
+
+		this.collision.wakeUp();
+
+		let pusher = this.world.vehicles.find((vehicle) => vehicle.collision === other);
+		if (pusher !== undefined && pusher.controllingCharacter !== undefined
+			&& pusher.controllingCharacter === this.world.localCharacter && this.world.party !== undefined)
+		{
+			this.world.party.shoved(this);
+		}
 	}
 
 	/** A battered vehicle smokes, harder the worse it is, and only while running. */
@@ -755,10 +791,6 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 				world.graphicsWorld.attach(wheel.wheelObject);
 			});
 
-			this.materials.forEach((mat) =>
-			{
-				world.sky.csm.setupMaterial(mat);
-			});
 
 			this.setupEngineSound(world);
 		}
@@ -910,6 +942,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 			if (child.isMesh)
 			{
 				Utils.setupMeshProperties(child);
+				Utils.paintVehicle(child);
 
 				if (child.material !== undefined)
 				{

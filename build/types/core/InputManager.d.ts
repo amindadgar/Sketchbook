@@ -28,5 +28,11 @@ export declare class InputManager implements IUpdatable {
     onMouseUp(event: MouseEvent): void;
     onKeyDown(event: KeyboardEvent): void;
     onKeyUp(event: KeyboardEvent): void;
+    /**
+     * A key going into a text box, such as a name or a settings number, rather
+     * than to the game. Not a checkbox or a list, which keep focus after a
+     * click and would otherwise leave the game deaf until the canvas is clicked.
+     */
+    private static isTyping;
     onMouseWheelMove(event: WheelEvent): void;
 }

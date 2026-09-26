@@ -191,6 +191,35 @@ export class PartySession implements IUpdatable
 
 			this.world.combat.showRemoteShot(from, direction, message.w,
 				shooter !== undefined ? shooter.character : undefined, ends);
+
+			// Pedestrians near someone else's gunfire run too
+			if (this.world.npcs !== undefined) this.world.npcs.onGunshot(from);
+		};
+
+		// The city's people and traffic, from whoever simulates them
+		this.client.onNpcs = (message) =>
+		{
+			if (this.world.npcs !== undefined) this.world.npcs.applySnapshot(message);
+		};
+
+		this.client.onNpcSteal = (message) =>
+		{
+			if (this.world.npcs !== undefined) this.world.npcs.onStolen(Number(message.n), PartySession.readVector(message.p));
+		};
+
+		this.client.onBreak = (message) =>
+		{
+			let city = this.world.city;
+			let velocity = PartySession.readVector(message.v) || new THREE.Vector3();
+			if (city !== undefined && typeof message.b === 'number') city.breakables.knockRemote(message.b, velocity);
+		};
+
+		// Someone else shot a pedestrian; this client decides what happens to them
+		this.client.onNpcHit = (message) =>
+		{
+			let from = PartySession.readVector(message.p) || new THREE.Vector3();
+			let damage = Number(message.d);
+			if (this.world.npcs !== undefined && isFinite(damage)) this.world.npcs.damagePedestrian(Number(message.n), damage, from);
 		};
 
 		this.client.onHit = (message) =>
@@ -387,6 +416,78 @@ export class PartySession implements IUpdatable
 		if (!this.active) return;
 
 		this.client.send({ t: 'identity', name: identity.name, color: identity.color, hat: identity.hat });
+	}
+
+	/** Where everyone in the city is, from the client that simulates them. */
+	public publishNpcs(snapshot: any): void
+	{
+		if (!this.active || !this.hasFeature('npcs')) return;
+		this.client.send(snapshot);
+	}
+
+	/** A shot at a pedestrian, for the client that simulates them to apply. */
+	public sendNpcHit(id: number, damage: number, from: THREE.Vector3): void
+	{
+		if (!this.active) return;
+		this.client.send({ t: 'npcHit', n: id, d: damage, p: [from.x, from.y, from.z] });
+	}
+
+	/**
+	 * Anything nobody drives that the local player's car is touching and
+	 * moving: pushed slowly, or kept pushing after the first knock, it's
+	 * reported for as long as it's being moved, not just from the first hit.
+	 */
+	private trackPushing(): void
+	{
+		if (this.drivenVehicle === undefined) return;
+		let own = this.drivenVehicle.collision;
+		for (const contact of this.world.physicsWorld.contacts)
+		{
+			let other = contact.bi === own ? contact.bj : (contact.bj === own ? contact.bi : undefined);
+			if (other === undefined || other.sleepState === CANNON.Body.SLEEPING || other.velocity.length() < 0.2) continue;
+			let pushed = this.world.vehicles.find((vehicle) => vehicle.collision === other);
+			if (pushed !== undefined && pushed.controllingCharacter === undefined) this.shoved(pushed);
+		}
+	}
+
+	/**
+	 * A car nobody is driving, just hit by the local player's: reported until
+	 * it comes to rest, so it ends up in the same place on every screen.
+	 */
+	public shoved(vehicle: Vehicle): void
+	{
+		if (!this.active || vehicle.getNetworkId() === undefined || vehicle.isRemoteDriven()) return;
+		if (vehicle === this.drivenVehicle || this.driverSeatHeldByOther(vehicle)) return;
+
+		let until = PartySession.now() + PartySession.COAST_TIME;
+		let entry = this.coasting.find((candidate) => candidate.vehicle === vehicle);
+		if (entry !== undefined)
+		{
+			entry.until = until;
+			entry.still = 0;
+		}
+		else this.coasting.push({ vehicle: vehicle, until: until, timer: 0, still: 0 });
+	}
+
+	/** A car that has just appeared here, so the room and everyone in it have it before anyone drives it. */
+	public announceVehicle(vehicle: Vehicle): void
+	{
+		if (!this.active || !this.client.connected) return;
+		this.publishVehicle(vehicle, true);
+	}
+
+	/** A car this player took out of the traffic, for the client that simulates it to clear away. */
+	public sendNpcSteal(id: number, door: THREE.Vector3): void
+	{
+		if (!this.active || !this.hasFeature('steal')) return;
+		this.client.send({ t: 'npcSteal', n: id, p: [door.x, door.y, door.z] });
+	}
+
+	/** A lamp or sign this player's car knocked over, so it falls on everyone's screen. */
+	public sendBreak(id: number, velocity: THREE.Vector3): void
+	{
+		if (!this.active || !this.hasFeature('breakables')) return;
+		this.client.send({ t: 'break', b: id, v: PartySession.round3([velocity.x, velocity.y, velocity.z]) });
 	}
 
 	/** Whether the relay supports something beyond the original protocol. */
@@ -705,6 +806,15 @@ export class PartySession implements IUpdatable
 			if (seat !== null && seat.type === SeatType.Driver && (seat.vehicle as unknown as Vehicle) === vehicle) return true;
 		}
 
+		// Both of us shoved it at once: the lower id keeps reporting it and the
+		// other follows, or each copy would chase the other's
+		let mine = this.coasting.findIndex((entry) => entry.vehicle === vehicle);
+		if (mine >= 0)
+		{
+			if (sender > this.client.id) return false;
+			this.coasting.splice(mine, 1);
+		}
+
 		return this.lastDrivers[id] === undefined || this.lastDrivers[id] === sender;
 	}
 
@@ -721,7 +831,7 @@ export class PartySession implements IUpdatable
 				// Still loading here, or a spare party car this client hasn't made
 				// yet; kept for when it turns up
 				this.pendingVehicles[message.v] = { message: message, sender: message.id, at: PartySession.now() };
-				this.world.spawnPartyVehicle(message.v);
+				this.world.spawnPartyVehicle(message.v, message);
 				return;
 			}
 		}
@@ -737,7 +847,13 @@ export class PartySession implements IUpdatable
 		if (!this.acceptsVehicleFrom(vehicle, message.id)) return;
 
 		let id = vehicle.getNetworkId();
-		if (id !== undefined) this.lastDrivers[id] = message.id;
+		if (id !== undefined)
+		{
+			// Once it has come to rest nobody owns it, so whoever moves it next
+			// is listened to, a player shoving it as much as one driving it
+			if (message.f === 1 || message.f === true) delete this.lastDrivers[id];
+			else this.lastDrivers[id] = message.id;
+		}
 
 		this.steerVehicle(vehicle, message);
 	}
@@ -776,7 +892,7 @@ export class PartySession implements IUpdatable
 			let vehicle = this.findVehicle(id);
 			if (vehicle === undefined)
 			{
-				this.world.spawnPartyVehicle(id);
+				this.world.spawnPartyVehicle(id, entry.message);
 				continue;
 			}
 
@@ -791,7 +907,8 @@ export class PartySession implements IUpdatable
 
 			if (!this.acceptsVehicleFrom(vehicle, entry.sender)) continue;
 
-			this.lastDrivers[id] = entry.sender;
+			if (entry.message.f === 1 || entry.message.f === true) delete this.lastDrivers[id];
+			else this.lastDrivers[id] = entry.sender;
 			this.steerVehicle(vehicle, entry.message);
 		}
 	}
@@ -971,6 +1088,7 @@ export class PartySession implements IUpdatable
 
 		if (this.hasFeature('seats')) this.reconcileSeat();
 		this.trackDrivenVehicle();
+		this.trackPushing();
 		this.applyPendingVehicles();
 
 		this.sendTimer += unscaledTimeStep;

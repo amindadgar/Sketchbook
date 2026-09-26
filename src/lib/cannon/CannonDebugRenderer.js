@@ -130,57 +130,40 @@ CannonDebugRenderer.prototype = {
             break;
 
         case CANNON.Shape.types.CONVEXPOLYHEDRON:
-            // Create mesh
-            var geo = new THREE.Geometry();
-
-            // Add vertices
-            for (var i = 0; i < shape.vertices.length; i++) {
-                var v = shape.vertices[i];
-                geo.vertices.push(new THREE.Vector3(v.x, v.y, v.z));
-            }
-
+            var points = [];
             for(var i=0; i < shape.faces.length; i++){
                 var face = shape.faces[i];
 
-                // add triangles
-                var a = face[0];
+                // Fanned into triangles
                 for (var j = 1; j < face.length - 1; j++) {
-                    var b = face[j];
-                    var c = face[j + 1];
-                    geo.faces.push(new THREE.Face3(a, b, c));
+                    [face[0], face[j], face[j + 1]].forEach(function(index) {
+                        var v = shape.vertices[index];
+                        points.push(v.x, v.y, v.z);
+                    });
                 }
             }
-            geo.computeBoundingSphere();
-            geo.computeFaceNormals();
 
+            var geo = this._geometryFrom(points);
             mesh = new THREE.Mesh(geo, cyan);
             shape.geometryId = geo.id;
             break;
 
         case CANNON.Shape.types.TRIMESH:
-            var geometry = new THREE.Geometry();
+            var points = [];
             var v0 = this.tmpVec0;
             var v1 = this.tmpVec1;
             var v2 = this.tmpVec2;
             for (var i = 0; i < shape.indices.length / 3; i++) {
                 shape.getTriangleVertices(i, v0, v1, v2);
-                geometry.vertices.push(
-                    new THREE.Vector3(v0.x, v0.y, v0.z),
-                    new THREE.Vector3(v1.x, v1.y, v1.z),
-                    new THREE.Vector3(v2.x, v2.y, v2.z)
-                );
-                var j = geometry.vertices.length - 3;
-                geometry.faces.push(new THREE.Face3(j, j+1, j+2));
+                points.push(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z);
             }
-            geometry.computeBoundingSphere();
-            geometry.computeFaceNormals();
+            var geometry = this._geometryFrom(points);
             mesh = new THREE.Mesh(geometry, purple);
             shape.geometryId = geometry.id;
             break;
 
         case CANNON.Shape.types.HEIGHTFIELD:
-            var geometry = new THREE.Geometry();
-
+            var points = [];
             var v0 = this.tmpVec0;
             var v1 = this.tmpVec1;
             var v2 = this.tmpVec2;
@@ -194,18 +177,11 @@ CannonDebugRenderer.prototype = {
                         v0.vadd(shape.pillarOffset, v0);
                         v1.vadd(shape.pillarOffset, v1);
                         v2.vadd(shape.pillarOffset, v2);
-                        geometry.vertices.push(
-                            new THREE.Vector3(v0.x, v0.y, v0.z),
-                            new THREE.Vector3(v1.x, v1.y, v1.z),
-                            new THREE.Vector3(v2.x, v2.y, v2.z)
-                        );
-                        var i = geometry.vertices.length - 3;
-                        geometry.faces.push(new THREE.Face3(i, i+1, i+2));
+                        points.push(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z);
                     }
                 }
             }
-            geometry.computeBoundingSphere();
-            geometry.computeFaceNormals();
+            var geometry = this._geometryFrom(points);
             mesh = new THREE.Mesh(geometry, purple);
             shape.geometryId = geometry.id;
             break;
@@ -216,6 +192,15 @@ CannonDebugRenderer.prototype = {
         }
 
         return mesh;
+    },
+
+    /** Unindexed triangles from a flat list of coordinates. */
+    _geometryFrom: function(points){
+        var geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+        geometry.computeVertexNormals();
+        geometry.computeBoundingSphere();
+        return geometry;
     },
 
     _scaleMesh: function(mesh, shape){

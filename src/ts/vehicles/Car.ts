@@ -41,6 +41,7 @@ export class Car extends Vehicle implements IControllable
 	/** What the tyres grip at normally, and what the handbrake drops them to. */
 	private static readonly GRIP: number = 0.8;
 	private static readonly HANDBRAKE_GRIP: number = 0.28;
+	private static readonly HANDBRAKE_FORCE: number = 1000000;
 	/**
 	 * Downforce as a share of the car's own weight at top speed. Applied down
 	 * the body's own up axis rather than the world's, so it presses the car into
@@ -91,6 +92,11 @@ export class Car extends Vehicle implements IControllable
 		};
 
 		this.steeringSimulator = new SpringSimulator(60, 10, 0.6);
+	}
+
+	protected reapplyHeldBrakes(): void
+	{
+		if (this.actions.brake.isPressed) this.setBrake(Car.HANDBRAKE_FORCE, 'rwd');
 	}
 
 	public noDirectionPressed(): boolean
@@ -373,7 +379,7 @@ export class Car extends Vehicle implements IControllable
 	public onInputChange(): void {
 		super.onInputChange();
 
-		const brakeForce = 1000000;
+		const brakeForce = Car.HANDBRAKE_FORCE;
 
 		if (this.actions.exitVehicle.justPressed)
 		{

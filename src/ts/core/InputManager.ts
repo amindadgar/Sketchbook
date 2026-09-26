@@ -102,6 +102,10 @@ export class InputManager implements IUpdatable
 			this.domElement.removeEventListener('mousemove', this.boundOnMouseMove, false);
 			this.domElement.removeEventListener('mouseup', this.boundOnMouseUp, false);
 			this.isLocked = false;
+
+			// The browser keeps the Esc that ends pointer lock to itself, so it
+			// never reaches the key handler that closes the big map
+			if (this.world.minimap !== undefined && this.world.minimap.expanded) this.world.minimap.setExpanded(false);
 		}
 	}
 
@@ -155,7 +159,7 @@ export class InputManager implements IUpdatable
 	public onKeyDown(event: KeyboardEvent): void
 	{
 		// Somebody is writing a message, so the keys are theirs, not the game's
-		if (this.world.chat.typing) return;
+		if (this.world.chat.typing || InputManager.isTyping(event)) return;
 
 		// Handled here rather than per receiver, so they work on foot, in a
 		// vehicle and in the free camera alike. Shift is left alone, Shift + C
@@ -165,6 +169,18 @@ export class InputManager implements IUpdatable
 			if (event.code === 'KeyM')
 			{
 				this.world.toggleMusic();
+				return;
+			}
+
+			if (event.code === 'KeyN' && this.world.minimap !== undefined)
+			{
+				this.world.minimap.toggleExpanded();
+				return;
+			}
+
+			if (event.code === 'Escape' && this.world.minimap !== undefined && this.world.minimap.expanded)
+			{
+				this.world.minimap.setExpanded(false);
 				return;
 			}
 
@@ -195,12 +211,29 @@ export class InputManager implements IUpdatable
 
 	public onKeyUp(event: KeyboardEvent): void
 	{
+		// Releases always go through, even into a text box: a key let go of
+		// there would otherwise stay held down in the game
 		if (this.world.chat.typing) return;
 
 		if (this.inputReceiver !== undefined)
 		{
 			this.inputReceiver.handleKeyboardEvent(event, event.code, false);
 		}
+	}
+
+	/**
+	 * A key going into a text box, such as a name or a settings number, rather
+	 * than to the game. Not a checkbox or a list, which keep focus after a
+	 * click and would otherwise leave the game deaf until the canvas is clicked.
+	 */
+	private static isTyping(event: KeyboardEvent): boolean
+	{
+		let target = event.target as HTMLElement;
+		if (target === null || target === undefined || target.tagName === undefined) return false;
+		if (target.isContentEditable === true || target.tagName === 'TEXTAREA') return true;
+		if (target.tagName !== 'INPUT') return false;
+		let type = ((target as HTMLInputElement).type || 'text').toLowerCase();
+		return ['text', 'password', 'number', 'search', 'email', 'url', 'tel'].indexOf(type) >= 0;
 	}
 
 	public onMouseWheelMove(event: WheelEvent): void

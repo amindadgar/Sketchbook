@@ -15,10 +15,16 @@ Simple web based game engine built on [three.js](https://github.com/mrdoob/three
 character code, and whoever has it can join you. It works on a phone too, and can
 be added to a home screen.
 
-This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook), which its author archived in February 2023. The engine underneath is theirs; what this fork adds is sound, multiplayer and a deathmatch layer on top of it.
+This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook), which its author archived in February 2023. The engine underneath is theirs; what this fork adds is sound, multiplayer, a deathmatch layer, and a city full of people to do it all in.
 
 ## What this fork adds
 
+* **A city** — downtown towers, midtown streets, flats and houses, a park, a beach, a working harbour, a highway ring with a viaduct, and a bridge back to the island the game started on
+* **People and traffic** — pedestrians on the pavements and cars in the lanes that stop at the lights, cross at the crossings and scatter from gunfire, the same for everyone in a party. Any car in the traffic can be stolen: its driver jumps out and runs
+* **Traffic you can shove** — hit a car in the traffic and it's knocked loose: pushed, spun and slid along on its tyres, then it pulls back into its lane and drives on, or stays put as a wreck if it rolled
+* **Street furniture that gives way** — street lights, signal masts, hydrants, bins and benches snap off when a car hits them instead of stopping it dead
+* **A realistic look** — three.js 0.186, physically based materials, a physical sky with clouds and a real night, reflections of that sky, ambient occlusion and bloom
+* **A person to play** — a realistic character built from MakeHuman's CC0 assets, with the game's whole animation set moved onto it and a gun held in hand
 * **Audio** — positional engine sound pitched by revs, and an outrun music track
 * **Party mode** — room codes over a small WebSocket relay, up to 8 players, in five minute rounds
 * **Combat** — four weapons, health, kills, recoil, hit markers and a scoreboard
@@ -40,8 +46,20 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 	* Cannon.js physics
 	* Variable timescale
 	* Frame skipping
-	* FXAA anti-aliasing
+	* Post processing: ambient occlusion, bloom and FXAA, at three quality levels
+	* Frames per second in the corner, green, amber or red, switched off in the settings
+* City
+	* Built in code from one plan, the same on every client, in about a second
+	* Lane markings, zebra crossings and working traffic lights
+	* Windows cut into every wall, lit a few at a time after dark
+	* Street lights, trees, palms, hydrants, benches and bins
+	* Street lights, signals and pavement clutter that a car knocks over, and that are quietly put back later
+	* Pedestrians and traffic, simulated by one client and sent to the rest
+	* Cars to steal from the traffic
+	* Traffic that's shoved about when hit, then drives on
+	* A map of the whole world on `N`
 * Characters
+	* A realistic person, one draw call, with the shirt in your colour
 	* Third-person camera, centred behind you with C
 	* Raycast character controller with capsule collisions
 	* General state system
@@ -93,7 +111,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 | `W` `A` `S` `D` | Move |
 | `Shift` | Sprint |
 | `Space` | Jump |
-| `F` / `G` | Enter vehicle as driver / passenger |
+| `F` / `G` | Enter vehicle as driver / passenger. `F` beside a car in the traffic steals it |
 | Left mouse | Fire |
 | Right mouse, held | Aim |
 
@@ -119,6 +137,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 | Anywhere | |
 | --- | --- |
 | `M` | Mute the music |
+| `N` | Big map of the whole world. `N` or `Esc` closes it |
 | `C` | Centre the camera behind you |
 | `L` | Leaderboard: lap times on a circuit, kills anywhere else |
 | `Enter` | Party chat |
@@ -153,7 +172,7 @@ while sitting in the car it just opened is no use to anybody:
 | --- | --- |
 | Stick | Move, and steer. Push it all the way to sprint, on foot |
 | Drag anywhere | Look. The camera goes back to following a moment later |
-| MAP | Shows the map in the middle of the screen, and puts it away again |
+| MAP | Opens the map of the whole world in the middle of the screen, and puts it away again |
 | Speech bubble | Party chat, in a party |
 
 The camera follows by itself on a phone, because one thumb is on the stick and
@@ -291,9 +310,10 @@ the scores go back to zero and the next round starts. `MATCH_MS` and
 Press `Enter` to say something. Messages are one line, one every second and a
 bit, and the log fades out on its own.
 
-**Free roam (everything)** is the scenario to use with friends. It starts
-everyone at the airfield with a car, a helicopter and an aeroplane all within
-about thirty metres, so nobody has to walk across the map to fly.
+A game starts in **City (free roam)**: downtown, on the pavement, with a car
+parked at the kerb. **Free roam (everything)** is the one to use for flying. It
+starts everyone at the island's airfield with a car, a helicopter and an aeroplane
+all within about thirty metres.
 
 The race and stunt scenarios were built for one player, with a single car to
 start in, but in a party everyone gets a car of their own. In a race the grid
@@ -365,6 +385,29 @@ so is everything for a second and a half after respawning.
 
 The weapon numbers both sides check against live in `shared/weapons.json`. Two
 copies would drift and the relay would start refusing honest shots.
+
+The city's pedestrians and traffic are simulated by one client, the member with
+the lowest id, who sends where they all are five times a second, along with the
+traffic lights' clock. The relay only passes that on from whoever's turn it is,
+rebuilt from plain numbers. A shot at a pedestrian from anyone else goes to that
+client, which decides what it did. When that member leaves, the next lowest id
+takes over and repopulates the streets.
+
+Stealing a car from the traffic works the same way. Whoever takes it makes a real
+car in its place and tells everyone, named `stolen:<who>:<n>:<colour>` so every
+client can make its own copy. If they aren't the one simulating the city, the
+relay passes an `npcSteal` on to the member who is, and that member takes the
+car out of the traffic and puts its driver out on the road. The relay keeps the
+last eight stolen cars' positions for anyone who joins later.
+
+Traffic that gets hit is knocked about by each client's own physics, since every
+client sees the hit happen. On the client simulating the city the car then pulls
+back into a lane, and everyone else's copy goes back to following it once theirs
+has stopped. A parked car shoved by a player's car is reported by that player
+until it comes to rest, the same as a car they've just got out of.
+
+Knocked over lamps and signs are a `break` with the thing's number, which is the
+same on every client because the city is. Everyone else's copy falls over too.
 
 None of this makes a modified client honest. It can still claim to be somewhere
 it isn't, and it can still decline to die. It can no longer clear a room from
@@ -500,16 +543,22 @@ it would only ever disagree with it.
 ## Day and night
 
 The sun crosses in seven minutes by default, settable in the settings panel, and
-moving either sun slider by hand takes it off the clock. It stops just short of
-the horizon: the sky is an atmospheric scattering shader with nothing behind it,
-so there are no stars to look at and a game nobody can see is worse than a short
-night. What sells the dark is the exposure coming down with the sun, which takes
-the sky with it.
+moving either sun slider by hand takes it off the clock. About a quarter of the
+cycle is night: the sun goes under, a bright moon takes over the shadows, the sky
+turns a moonlit blue with the moon in it, the stars come out, and the city lights up, a scatter of windows in every building, shop fronts,
+and a pool of lamplight under every street light. None of those are real lights,
+which would cost a shader rebuild each; they glow, and the bloom does the rest.
 
-Cars grow headlights after dusk. Two sprites each, which cost nothing and follow
-the car for free, plus one real spotlight on whichever car the player is in:
-eight spotlights would rebuild every shader in the scene and buy very little at
-the speed a car goes past.
+The moonlight is a game's rather than a real one, strong enough to drive and
+fight by, and the fill light from the sky comes up as the sun goes down, so dusk
+is never the darkest part of the day.
+
+The sky is three's physical sky, scaled down to sit with the sun, and the same sky
+is baked into a reflection map every time the sun has moved a degree or so, so
+glass and paint reflect the sky that's actually overhead.
+
+Cars grow headlights after dusk. Two sprites each, plus one real spotlight on
+whichever car the player is in.
 
 ## Racing
 
@@ -531,6 +580,10 @@ file is timed without anything in the code being told about it.
 | Marker | A ring on the next gate, not a fence of thirty |
 | Finish | Where you came, the total, and the best lap |
 
+The **City loop race** is one lap of the city instead of three: down the coast
+road, west along the south shore, up the ring road and back over the harbour
+viaduct. There's no traffic while it runs.
+
 Best laps are kept in the browser whether you are signed in or not, and sent up
 to the account as well when you are. `L` shows the board for the circuit you're
 on.
@@ -542,10 +595,15 @@ replacing the file, with no code change:
 
 | File | What it is |
 | --- | --- |
-| `world.glb`, `car.glb`, `heli.glb`, `airplane.glb`, `boxman.glb` | Scenes and models, exported from `src/blend` |
+| `world.glb`, `car.glb`, `heli.glb`, `airplane.glb` | The island and the vehicles, exported from `src/blend` |
+| `boxman.glb` | The original character, whose animations the people were built from |
 | `car.wav`, `heli.wav`, `airplane.wav` | Engine loops |
 | `music.mp3` | Music, streamed rather than decoded into memory. "Voltaic" by Kevin MacLeod, CC BY 4.0, see Credits |
 | `gun_*.wav` | Weapon reports |
+| `humans/player.glb` | The player, with every animation. Built by `tools/humans/build_character.py` |
+| `humans/npc_*.glb` | Nine pedestrians, which borrow the player's animations |
+| `textures/*.webp` | The city's surfaces: colour, normal and AO/roughness/metal for each |
+| `props.glb` | Street furniture from Poly Haven, packed by `tools/props/build_props.py` |
 
 `world.glb` is 6MB, down from the 26MB the fork inherited. Almost all of that
 was textures: 24.5MB of them against about 1.5MB of geometry, most of them PNGs
@@ -557,6 +615,24 @@ of 255. Run it on any new asset that arrives:
 
 ```bash
 python3 tools/shrink_textures.py build/assets/world.glb
+```
+
+The people are made with [MPFB](https://extensions.blender.org/add-ons/mpfb/),
+MakeHuman's Blender add-on, and its CC0 system asset pack. `tools/humans/characters.json`
+says who each one is: body shape, skin, hair and clothes. The script builds them,
+bakes and trims the meshes, packs every texture into one atlas, scales them to the
+world, moves the boxman's animations onto the new skeleton, adds a walk, and exports.
+To rebuild one, with MPFB installed and its asset pack unpacked into its data folder:
+
+```bash
+blender -b -P tools/humans/build_character.py -- tools/humans/characters.json player build/assets/humans/player.glb
+```
+
+The props come from Poly Haven's glTF downloads; the script decimates and rescales
+them into one file:
+
+```bash
+blender -b --factory-startup -P tools/props/build_props.py -- <polyhaven models folder> build/assets/props.glb
 ```
 
 Engine loops want to be **mono** and **wav or ogg**: they're positional, and mp3
@@ -580,6 +656,10 @@ Objects carry their meaning in custom properties: `data=physics` with
 for spawn points, `data=path` for the nodes car AI follows, and `data=scenario`
 for the entries in the scenarios panel. A material named `ocean` becomes water.
 
+The city isn't a scene file: it's laid out in `src/ts/city/CityPlan.ts` and built
+at load time, so changing it is a code change. The grid, the zones, the highway
+and the bridge are all constants and rules there.
+
 One thing to know if you build a new map: `World.worldBounds` holds this world's
 playable area. It decides what counts as out of bounds and worth respawning, and
 it frames the minimap, so a different map needs different numbers.
@@ -591,9 +671,9 @@ it frames the minimap, so a different map needs different numbers.
 3. `pnpm dev`, then open http://localhost:8080
 4. Make changes and commit
 
-The toolchain is old: webpack 4 and TypeScript 3.9. `@types/lodash` and
-`@types/jquery` are pinned exactly, because newer releases use syntax TypeScript
-3.9 cannot parse and a fresh install would otherwise break the build.
+The toolchain is webpack 5, TypeScript 5.9 and three.js 0.186. The bundled
+cannon.js has one change from upstream: kinematic bodies aren't tested against
+static ones, which saves the city's traffic being checked against every building.
 
 ## Credits
 
@@ -606,3 +686,7 @@ The music is "Voltaic" by Kevin MacLeod ([incompetech.com](https://incompetech.c
 under [Creative Commons: By Attribution 4.0](https://creativecommons.org/licenses/by/4.0/). It
 was re-encoded at 128 kbps and brought down in level to sit under the engines, and it is
 credited on the welcome screen as well.
+
+The people are built from [MakeHuman](http://www.makehumancommunity.org)'s system assets,
+released under CC0, with the [MPFB](https://extensions.blender.org/add-ons/mpfb/) add-on. The city's
+textures and street props are from [Poly Haven](https://polyhaven.com), also CC0.

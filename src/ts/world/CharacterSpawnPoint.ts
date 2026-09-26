@@ -1,4 +1,5 @@
 import { ISpawnPoint } from '../interfaces/ISpawnPoint';
+import { HumanModel } from '../characters/HumanModel';
 import * as THREE from 'three';
 import { World } from './World';
 import { Character } from '../characters/Character';
@@ -22,7 +23,7 @@ export class CharacterSpawnPoint implements ISpawnPoint
 		// that has already gone
 		let generation = world.scenarioGeneration;
 
-		loadingManager.loadGLTF('build/assets/boxman.glb', (model) =>
+		loadingManager.loadGLTF(HumanModel.PLAYER, (model) =>
 		{
 			if (world.scenarioGeneration !== generation) return;
 

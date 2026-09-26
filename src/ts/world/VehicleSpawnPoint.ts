@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { HumanModel } from '../characters/HumanModel';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createGLTFLoader } from '../core/Loaders';
 import { ISpawnPoint } from '../interfaces/ISpawnPoint';
 import { World } from '../world/World';
 import { Helicopter } from '../vehicles/Helicopter';
@@ -19,7 +21,7 @@ export class VehicleSpawnPoint implements ISpawnPoint
 	public firstAINode: string;
 
 	/** For a vehicle added in the middle of a game, where there's no loading screen to go through. */
-	private static loader: GLTFLoader = new GLTFLoader();
+	private static loader: GLTFLoader = createGLTFLoader();
 
 	private object: THREE.Object3D;
 
@@ -81,7 +83,7 @@ export class VehicleSpawnPoint implements ISpawnPoint
 
 			if (seatedDriver !== undefined && seatedDriver !== null)
 			{
-				load('build/assets/boxman.glb', (charModel) =>
+				load(HumanModel.PLAYER, (charModel) =>
 				{
 					if (world.scenarioGeneration !== generation) return;
 

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { HumanModel } from '../characters/HumanModel';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createGLTFLoader } from '../core/Loaders';
 
 import { Character } from '../characters/Character';
 import { World } from '../world/World';
@@ -24,7 +26,7 @@ export class RemotePlayer implements IUpdatable
 	// Ahead of characters (1) and vehicles (2), so they render this frame's transform
 	public updateOrder: number = 0;
 
-	private static loader: GLTFLoader = new GLTFLoader();
+	private static loader: GLTFLoader = createGLTFLoader();
 	/** How quickly the model closes on where it was reported, per second. */
 	private static readonly FOLLOW_RATE: number = 15;
 	/** A report is carried forward by the speed it implies, but no further than this. */
@@ -61,7 +63,7 @@ export class RemotePlayer implements IUpdatable
 
 		// Not routed through LoadingManager on purpose, a player joining mid game
 		// shouldn't drag the loading screen back over everybody's world
-		RemotePlayer.loader.load('build/assets/boxman.glb', (gltf: any) =>
+		RemotePlayer.loader.load(HumanModel.PLAYER, (gltf: any) =>
 		{
 			if (this.disposed) return;
 

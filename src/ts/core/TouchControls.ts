@@ -172,7 +172,7 @@ export class TouchControls
 		{
 			event.preventDefault();
 			event.stopPropagation();
-			document.body.classList.toggle('map-open');
+			if (this.world.minimap !== undefined) this.world.minimap.toggleExpanded();
 		}, { passive: false });
 
 		return root;

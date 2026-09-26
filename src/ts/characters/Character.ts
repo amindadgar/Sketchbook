@@ -27,6 +27,7 @@ import { SeatType } from '../enums/SeatType';
 import { GroundImpactData } from './GroundImpactData';
 import { ClosestObjectFinder } from '../core/ClosestObjectFinder';
 import { Object3D } from 'three';
+import { HumanModel } from './HumanModel';
 import { EntityType } from '../enums/EntityType';
 import { NameTag } from '../party/NameTag';
 import { buildHat } from '../party/Unlocks';
@@ -91,6 +92,9 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	private static readonly FALLEN_DROP: number = 0.49;
 	/** World units from the neck joint to the top of the head. */
 	private static readonly HAT_HEIGHT: number = 0.22;
+	/** A person's head is about half the width of the boxman's, and its joint sits lower in it. */
+	private static readonly HUMAN_HAT_HEIGHT: number = 0.118;
+	private static readonly HUMAN_HAT_SCALE: number = 0.5;
 
 	// Combat
 	public health: number = Character.MAX_HEALTH;
@@ -114,6 +118,9 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	private physicsEnabled: boolean = true;
 	private originalColors: { [uuid: string]: THREE.Color } = {};
 	private weaponModel: THREE.Object3D;
+	/** Until when, in seconds of page time, the gun is held up, and along what. */
+	public aimUntil: number = 0;
+	public aimAlong: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
 	private headTexture: THREE.Texture;
 	private headCanvas: HTMLCanvasElement;
 	private headBone: THREE.Object3D;
@@ -349,6 +356,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	 */
 	private stampNameOnHead(name: string): void
 	{
+		// Only the boxman has a face plate to print on
+		if (!this.materials.some((mat: any) => mat.name === 'Boxman')) return;
 		if (this.headCanvas === undefined && !this.captureHeadTexture()) return;
 
 		const label = Character.HEAD_LABEL;
@@ -389,7 +398,8 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	{
 		if (this.headBone === undefined)
 		{
-			this.headBone = this.modelContainer.getObjectByName('head');
+			this.headBone = this.modelContainer.getObjectByName('head')
+				|| this.modelContainer.getObjectByName(HumanModel.HEAD);
 			if (this.headBone === undefined) return;
 		}
 
@@ -413,10 +423,14 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		let inverse = 1 / (scale.x || 1);
 
 		let facing = this.headBone.getWorldQuaternion(new THREE.Quaternion());
-		let up = new THREE.Vector3(0, 1, 0).applyQuaternion(facing.inverse());
+		let up = new THREE.Vector3(0, 1, 0).applyQuaternion(facing.invert());
 
-		this.hat.scale.setScalar(inverse);
-		this.hat.position.copy(up.multiplyScalar(Character.HAT_HEIGHT * inverse));
+		let human = this.headBone.name === HumanModel.HEAD;
+		let height = human ? Character.HUMAN_HAT_HEIGHT : Character.HAT_HEIGHT;
+		let size = human ? Character.HUMAN_HAT_SCALE : 1;
+
+		this.hat.scale.setScalar(inverse * size);
+		this.hat.position.copy(up.multiplyScalar(height * inverse));
 		this.headBone.add(this.hat);
 	}
 
@@ -435,7 +449,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 		if (texture === undefined) return false;
 
-		let image = texture.image;
+		let image: any = texture.image;
 		if (!(image.width > 0) || !(image.height > 0)) return false;
 
 		let canvas = document.createElement('canvas');
@@ -479,15 +493,82 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		this.reserve = spec.reserve;
 
 		this.weaponModel = buildWeaponModel(spec);
-		this.weaponModel.position.set(0.24, 0.1, 0.2);
-		this.tiltContainer.add(this.weaponModel);
+
+		let hand = this.modelContainer.getObjectByName(HumanModel.RIGHT_HAND);
+		if (hand !== undefined)
+		{
+			// In the fist: barrel along the hand, the top of the gun on the
+			// thumb side. The hand bone runs to the fingers along its Y, with X
+			// out past the thumb and Z into the palm.
+			this.weaponModel.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(
+				new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)));
+			this.weaponModel.position.set(0.035, 0.075, 0.022);
+			hand.add(this.weaponModel);
+		}
+		else
+		{
+			this.weaponModel.position.set(0.24, 0.1, 0.2);
+			this.tiltContainer.add(this.weaponModel);
+		}
+	}
+
+	/**
+	 * Holds the gun out along a direction: both bones of the arm and the
+	 * hand turned to point along it, over whatever the animation had them
+	 * doing. A long gun gets the other hand on it too. Called after the
+	 * animation, every frame the character is aiming or has just fired.
+	 */
+	private poseAim(direction: THREE.Vector3): void
+	{
+		let bone = (name: string) => this.modelContainer.getObjectByName(name);
+		let upper = bone('mixamorigRightArm');
+		let fore = bone('mixamorigRightForeArm');
+		let hand = bone(HumanModel.RIGHT_HAND);
+		if (upper === undefined || fore === undefined || hand === undefined) return;
+
+		Character.pointBone(upper, direction);
+		Character.pointBone(fore, direction);
+		Character.pointBone(hand, direction);
+
+		let twoHanded = this.weapon !== undefined && this.weapon.id !== 'handgun';
+		if (!twoHanded) return;
+
+		// The left hand forward of the right, under the barrel
+		let leftUpper = bone('mixamorigLeftArm');
+		let leftFore = bone('mixamorigLeftForeArm');
+		if (leftUpper === undefined || leftFore === undefined) return;
+		let grip = hand.getWorldPosition(new THREE.Vector3()).addScaledVector(direction, 0.3);
+		let shoulder = leftUpper.getWorldPosition(new THREE.Vector3());
+		let toGrip = grip.clone().sub(shoulder);
+		let reach = toGrip.length();
+		toGrip.normalize();
+		// Elbow down a little, the way a rifle's held
+		let bend = new THREE.Vector3(0, -1, 0).addScaledVector(toGrip, 0.3).normalize();
+		let upperLength = leftFore.getWorldPosition(new THREE.Vector3()).distanceTo(shoulder);
+		let lift = Math.sqrt(Math.max(0, upperLength * upperLength - (reach / 2) * (reach / 2)));
+		let elbow = shoulder.clone().addScaledVector(toGrip, reach / 2).addScaledVector(bend, lift * 0.6);
+		Character.pointBone(leftUpper, elbow.clone().sub(shoulder).normalize());
+		Character.pointBone(leftFore, grip.clone().sub(elbow).normalize());
+	}
+
+	/** Turns a bone, keeping its parent where it is, so its length points along a world direction. */
+	private static pointBone(bone: THREE.Object3D, direction: THREE.Vector3): void
+	{
+		bone.updateWorldMatrix(true, false);
+		let world = bone.getWorldQuaternion(new THREE.Quaternion());
+		let along = new THREE.Vector3(0, 1, 0).applyQuaternion(world);
+		let turn = new THREE.Quaternion().setFromUnitVectors(along, direction);
+		let wanted = turn.multiply(world);
+		let parent = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+		bone.quaternion.copy(parent.invert().multiply(wanted));
+		bone.updateMatrixWorld(true);
 	}
 
 	public unequipWeapon(): void
 	{
 		if (this.weaponModel !== undefined)
 		{
-			this.tiltContainer.remove(this.weaponModel);
+			this.weaponModel.removeFromParent();
 			this.weaponModel = undefined;
 		}
 
@@ -524,6 +605,13 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 		this.materials.forEach((mat: any) =>
 		{
+			// A person only changes shirt
+			if (mat.userData.shirtTint !== undefined)
+			{
+				mat.userData.shirtTint.value.copy(target);
+				return;
+			}
+
 			if (mat.color === undefined) return;
 
 			if (this.originalColors[mat.uuid] === undefined)
@@ -545,6 +633,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 
 				if (child.material !== undefined)
 				{
+					if (HumanModel.isHumanMaterial(child.material)) HumanModel.prepareMaterial(child.material);
 					this.materials.push(child.material);
 				}
 			}
@@ -708,6 +797,14 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		if (this.physicsEnabled) this.springRotation(timeStep);
 		if (this.physicsEnabled) this.rotateModel();
 		if (this.mixer !== undefined) this.mixer.update(timeStep);
+
+		// Gun up while aiming or just after a shot, on foot and alive
+		if (this.weaponModel !== undefined && this.health > 0 && !this.isBusyWithVehicle()
+			&& performance.now() / 1000 < this.aimUntil)
+		{
+			this.updateMatrixWorld(true);
+			this.poseAim(this.aimAlong);
+		}
 
 		// Sync physics/graphics
 		if (this.physicsEnabled)
@@ -949,6 +1046,20 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			.map((vehicle) => ({ vehicle: vehicle, distance: vehicle.position.distanceTo(here) }))
 			.filter((entry) => entry.distance < 10)
 			.sort((a, b) => a.distance - b.distance);
+
+		// A car in the traffic, nearer than anything parked: its driver is
+		// pulled out and it becomes a car like any other, to get into
+		let npcs = this.world.npcs;
+		if (wantsToDrive && npcs !== undefined && this.world.localCharacter === this)
+		{
+			let traffic = npcs.stealable(here);
+			let trafficDistance = traffic !== undefined ? Math.hypot(traffic.position.x - here.x, traffic.position.z - here.z) : Infinity;
+			if (traffic !== undefined && (nearby.length === 0 || trafficDistance < nearby[0].distance))
+			{
+				let taken = npcs.steal(traffic);
+				if (taken !== undefined) nearby.unshift({ vehicle: taken, distance: 0 });
+			}
+		}
 
 		for (const entry of nearby)
 		{
@@ -1519,11 +1630,6 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			world.graphicsWorld.add(this);
 			world.graphicsWorld.add(this.raycastBox);
 
-			// Shadow cascades
-			this.materials.forEach((mat) =>
-			{
-				world.sky.csm.setupMaterial(mat);
-			});
 		}
 	}
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import * as catalogue from '../../../shared/weapons.json';
+import catalogue from '../../../shared/weapons.json';
 
 export interface WeaponSpec
 {

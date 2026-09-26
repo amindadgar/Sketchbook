@@ -25,6 +25,9 @@ export declare class Account {
     static login(server: string, username: string, password: string): Promise<AccountProfile>;
     /** Picks up an existing session, and refreshes the tallies while it's there. */
     static resume(server: string): Promise<AccountProfile>;
+    /** A new personal best, for the per track boards. Ignored when not signed in. */
+    static submitLap(server: string, track: string, milliseconds: number): Promise<void>;
+    static leaderboard(server: string, track?: string): Promise<any[]>;
     private static post;
     /** Turns the server's error shape into a rejection carrying its message. */
     private static unwrap;

@@ -3,16 +3,24 @@
         "src/ts/**/*"
     ],
     "compilerOptions": {
-        "module": "commonjs",
-        "target": "es5",
-        "lib": ["es2017", "dom"],
-        "moduleResolution": "node",
+        "module": "ESNext",
+        "target": "ES2020",
+        "lib": [
+            "ES2020",
+            "DOM"
+        ],
+        "moduleResolution": "bundler",
         "resolveJsonModule": true,
         "declaration": true,
         "declarationDir": "build/types",
         "baseUrl": ".",
         "paths": {
-            "cannon" : ["src/lib/cannon/cannon"]
-        }
+            "cannon": [
+                "src/lib/cannon/cannon"
+            ]
+        },
+        "skipLibCheck": true,
+        "types": [],
+        "allowSyntheticDefaultImports": true
     }
 }

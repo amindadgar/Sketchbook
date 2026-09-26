@@ -25,6 +25,10 @@ export interface WeaponSpec {
  * Four weapons that want to be used differently: the rifle rewards aim, the
  * shotgun rewards closing the distance, the automatic rewards holding an angle,
  * and the handgun is the one you always have something better than.
+ *
+ * The numbers live in shared/weapons.json because the relay checks incoming
+ * hits against them. A second copy over there would drift from this one and
+ * start turning honest shots away.
  */
 export declare const WEAPONS: WeaponSpec[];
 export declare function findWeapon(id: string): WeaponSpec;

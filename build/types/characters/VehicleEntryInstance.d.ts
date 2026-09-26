@@ -6,6 +6,8 @@ export declare class VehicleEntryInstance {
     targetSeat: VehicleSeat;
     entryPoint: THREE.Object3D;
     wantsToDrive: boolean;
+    /** Let go of forward at the door to wait for the party to confirm the seat. */
+    private heldAtDoor;
     constructor(character: Character);
     update(timeStep: number): void;
 }

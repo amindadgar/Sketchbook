@@ -172,6 +172,12 @@ body.touch #health-badge {
 	font-size: 15px;
 }
 
+body.touch #fps-badge {
+	right: 128px;
+	padding: 4px 8px;
+	font-size: 15px;
+}
+
 /* The map folds away behind a button and comes back on a tap */
 #minimap-toggle {
 	display: none;
@@ -207,17 +213,8 @@ body.touch #minimap {
 	display: none;
 }
 
-/* Centred rather than tucked in a corner: a landscape phone is only ~390px
-   tall, so any corner the map sits in is a corner a thumb is already using.
-   It's a glance, not a permanent fixture, so it takes the middle and leaves. */
-body.touch.map-open #minimap {
-	display: block;
-	top: 50%;
-	left: 50%;
-	right: auto;
-	bottom: auto;
-	transform: translate(-50%, -50%) scale(1.1);
-}
+/* The MAP button opens the whole-world map, centred: a landscape phone is
+   only ~390px tall, so any corner a map sits in is one a thumb is using. */
 
 /* A figure under the stick rather than a bar across the screen. At 390px tall
    the bar was both hard to read and in the way of a thumb. */

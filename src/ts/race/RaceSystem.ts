@@ -43,6 +43,8 @@ export class RaceSystem implements IUpdatable
 	private marker: THREE.Mesh;
 
 	private track: string;
+	/** Three round the island's tracks; the city loop is long enough for one. */
+	private laps: number = RaceSystem.LAPS;
 	private armed: boolean = false;
 	private countdown: number = 0;
 	private running: boolean = false;
@@ -97,6 +99,7 @@ export class RaceSystem implements IUpdatable
 		}
 
 		this.track = scenario.id;
+		this.laps = scenario.laps !== undefined ? scenario.laps : RaceSystem.LAPS;
 		this.bestLap = this.loadBest();
 		this.lap = 1;
 		this.gate = 0;
@@ -241,7 +244,7 @@ export class RaceSystem implements IUpdatable
 			this.world.notices.say('Best lap', 'good', RaceSystem.clock(this.lapTime));
 		}
 
-		if (this.lap >= RaceSystem.LAPS)
+		if (this.lap >= this.laps)
 		{
 			this.finish();
 			return;
@@ -387,7 +390,7 @@ export class RaceSystem implements IUpdatable
 	private draw(): void
 	{
 		UIManager.setRaceHud(
-			this.lap, RaceSystem.LAPS,
+			this.lap, this.laps,
 			this.place, this.field,
 			RaceSystem.clock(this.lapTime),
 			RaceSystem.clock(this.bestLap));

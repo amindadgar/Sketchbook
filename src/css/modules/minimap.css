@@ -15,3 +15,20 @@
 #minimap-canvas {
 	display: block;
 }
+
+/* Opened out with N: the whole world, in the middle of the screen. The game
+   keeps running behind it, so it's something to glance at and put away. */
+#minimap.expanded,
+body.touch #minimap.expanded {
+	display: block;
+	top: 50%;
+	left: 50%;
+	right: auto;
+	bottom: auto;
+	transform: translate(-50%, -50%);
+	border-radius: 14px;
+	border-width: 3px;
+	background: #0f2233;
+	box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+	z-index: 20;
+}

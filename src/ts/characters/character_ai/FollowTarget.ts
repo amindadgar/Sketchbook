@@ -12,6 +12,7 @@ export class FollowTarget implements ICharacterAI
 	public isTargetReached: boolean;
 	/** Held on the grid until the race starts. */
 	public paused: boolean = false;
+	private braking: boolean = false;
 
 	public target: THREE.Object3D;
 	private stopDistance: number;
@@ -34,7 +35,16 @@ export class FollowTarget implements ICharacterAI
 			this.character.controlledObject?.triggerAction('throttle', false);
 			this.character.controlledObject?.triggerAction('reverse', false);
 			this.character.controlledObject?.triggerAction('brake', true);
+			this.braking = true;
 			return;
+		}
+
+		// Off the brake once the lights go. Nothing else ever let go of it, so
+		// every computer driver raced the whole way with it held on
+		if (this.braking)
+		{
+			this.character.controlledObject?.triggerAction('brake', false);
+			this.braking = false;
 		}
 
 		if (this.character.controlledObject !== undefined)

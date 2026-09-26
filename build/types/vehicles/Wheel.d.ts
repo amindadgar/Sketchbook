@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 export declare class Wheel {
     wheelObject: THREE.Object3D;
     position: THREE.Vector3;

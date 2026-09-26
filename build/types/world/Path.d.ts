@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { PathNode } from './PathNode';
 export declare class Path {
     nodes: {
