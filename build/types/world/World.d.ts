@@ -32,6 +32,7 @@ import { Sfx } from '../core/Sfx';
 import { Onboarding } from '../core/Onboarding';
 import { Progress } from '../progress/Progress';
 import { Wallet } from '../progress/Wallet';
+import { CloudSave } from '../progress/CloudSave';
 import { CashDrops } from '../economy/CashDrops';
 import { Dealership } from '../economy/Dealership';
 import { Mugging } from '../economy/Mugging';
@@ -104,6 +105,7 @@ export declare class World {
     intro: Onboarding;
     progress: Progress;
     wallet: Wallet;
+    cloudSave: CloudSave;
     cashDrops: CashDrops;
     mugging: Mugging;
     /** What E does right here. */

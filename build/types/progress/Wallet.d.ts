@@ -4,6 +4,12 @@ export interface OwnedVehicle {
     model: string;
     color: number;
 }
+export interface WalletState {
+    cash: number;
+    guns: string[];
+    vehicles: OwnedVehicle[];
+    earned: number;
+}
 /**
  * Money, and what it has bought.
  *
@@ -24,6 +30,8 @@ export declare class Wallet {
     private dirty;
     private sinceSave;
     private shown;
+    /** Goes up with every change, for anything keeping its own copy to notice. */
+    changes: number;
     constructor(world: World);
     get cash(): number;
     /** Everything ever paid out, for the stats panel. */
@@ -48,5 +56,11 @@ export declare class Wallet {
     private refresh;
     private load;
     private save;
+    /** A copy of everything kept, for keeping somewhere else. */
+    snapshot(): WalletState;
+    /** Everything kept, replaced: an account's copy, loaded on sign-in. Written straight away. */
+    adopt(state: WalletState): void;
+    /** Nothing done yet on this browser: what anyone starts with, and nothing earned. */
+    get untouched(): boolean;
     private write;
 }

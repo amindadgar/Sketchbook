@@ -1,7 +1,7 @@
 import { World } from '../world/World';
 import { Challenge, challengesFor, today } from './Challenges';
 
-interface Saved
+export interface ProgressState
 {
 	xp: number;
 	day: string;
@@ -27,17 +27,32 @@ export class Progress
 	private static readonly XP_PER_STUNT_POINT: number = 0.05;
 
 	private world: World;
-	private state: Saved;
+	private state: ProgressState;
 	private challenges: Challenge[];
 	/** Distance ticks up every frame, and localStorage is not a per frame thing. */
 	private dirty: boolean = false;
 	private sinceSave: number = 0;
+	/** Goes up with every change that matters to keep: not the metres ticking up as you drive. */
+	public changes: number = 0;
 
 	constructor(world: World)
 	{
 		this.world = world;
 		this.state = this.load();
 		this.challenges = challengesFor(this.state.day);
+
+		// Written now rather than at the next flush when the tab goes
+		let flush = () =>
+		{
+			if (!this.dirty) return;
+			this.dirty = false;
+			this.write();
+		};
+		window.addEventListener('pagehide', flush);
+		document.addEventListener('visibilitychange', () =>
+		{
+			if (document.hidden) flush();
+		});
 	}
 
 	public get xp(): number
@@ -224,9 +239,9 @@ export class Progress
 		this.challenges = challengesFor(now);
 	}
 
-	private load(): Saved
+	private load(): ProgressState
 	{
-		let fresh: Saved = { xp: 0, day: today(), counters: {}, done: [] };
+		let fresh: ProgressState = { xp: 0, day: today(), counters: {}, done: [] };
 
 		try
 		{
@@ -234,7 +249,7 @@ export class Progress
 			if (raw === null) return fresh;
 
 			let saved = JSON.parse(raw);
-			let state: Saved = {
+			let state: ProgressState = {
 				xp: Number(saved.xp) || 0,
 				day: typeof saved.day === 'string' ? saved.day : fresh.day,
 				counters: saved.counters || {},
@@ -261,6 +276,32 @@ export class Progress
 	private save(): void
 	{
 		this.dirty = true;
+		this.changes++;
+	}
+
+	/** A copy of everything kept, for keeping somewhere else. */
+	public snapshot(): ProgressState
+	{
+		return JSON.parse(JSON.stringify(this.state));
+	}
+
+	/**
+	 * Everything kept, replaced: an account's copy, loaded on sign-in. A copy
+	 * from another day keeps its experience and starts today's challenges afresh.
+	 */
+	public adopt(state: ProgressState): void
+	{
+		let now = today();
+		let sameDay = state.day === now;
+		this.state = {
+			xp: Math.max(0, Number(state.xp) || 0),
+			day: now,
+			counters: sameDay && state.counters !== null && typeof state.counters === 'object' ? Object.assign({}, state.counters) : {},
+			done: sameDay && Array.isArray(state.done) ? state.done.slice() : []
+		};
+		this.challenges = challengesFor(now);
+		this.dirty = false;
+		this.write();
 	}
 
 	private write(): void

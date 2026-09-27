@@ -436,9 +436,10 @@ across the map with one message.
 
 ## Accounts
 
-Optional, and the party works without them. Signing in gets your kills and best
-laps counted against a name that persists, which is what the leaderboards and
-the unlocks are built on.
+Optional, and the game works without them. Signing in, with a name and password
+or with Google, keeps your money, guns, cars and level on the account, so they
+follow you to any device, and counts your kills and best laps against a name
+that persists, which is what the leaderboards and the unlocks are built on.
 
 The party server grows a few endpoints and a Postgres database:
 
@@ -450,6 +451,10 @@ The party server grows a few endpoints and a Postgres database:
 | `GET /leaderboard` | top players by kills |
 | `GET /leaderboard?track=` | best laps on one circuit |
 | `POST /race/lap` | `{track, ms}`, a new personal best. Only ever moves down |
+| `GET /save` | the signed-in player's kept progress and its revision |
+| `PUT /save` | `{data, revision}`, progress made from that revision. Refused with the newer copy if another device saved since |
+| `GET /auth/config` | whether the server offers Google sign-in, and the client id its button needs |
+| `POST /auth/google` | `{credential}` from Google's button, returns a token. With `link: true` and a token, puts Google on that account |
 
 Set `DATABASE_URL` on the relay to switch accounts on; without it the relay
 still runs parties and simply reports that accounts are unavailable. Set
@@ -458,6 +463,41 @@ still runs parties and simply reports that accounts are unavailable. Set
 Passwords are hashed with scrypt and tokens signed with an HMAC, both from
 Node's own crypto. Neither needs a dependency in a service whose job is
 forwarding small JSON messages.
+
+### Progress on the account
+
+Money, what it bought, experience and today's challenges live in the browser,
+and for a signed-in player on the account too. Signing in loads the account's
+copy and puts it together with the browser's: whichever has seen more play
+(money made plus experience) wins, and anything bought on either is kept. A
+browser whose progress belongs to another account doesn't lend it to this
+one. After that, changes are saved a few seconds after they stop, at most every
+fifteen seconds while they don't, and as the tab closes. Every save says which
+revision it was made from, so two devices can't quietly write over each other:
+the second is handed the newer copy, puts the two together and tries again.
+
+The server keeps only what the game reads, rebuilt from the expected fields
+with numbers made whole and capped, but it can't know a fare was really
+driven: the same trust as the rest of the game. Good for playing with friends.
+
+### Signing in with Google
+
+Set `GOOGLE_CLIENT_ID` on the relay and the menu offers "Sign in with Google";
+without it, nothing changes. A first Google sign-in makes an account named
+from the Google profile, the next free one if it's taken. Somebody already
+signed in with a name and password gets "Continue with Google" instead, which
+puts Google on the account they have. The browser's ID token is checked on the
+relay against Google's published keys with Node's crypto: signature, this
+game's client id, Google as the issuer, not expired, email verified.
+
+To get a client id, in the [Google Cloud console](https://console.cloud.google.com/):
+
+1. APIs & Services, OAuth consent screen: external, the game's name and a support email, then publish it
+2. Credentials, Create credentials, OAuth client ID, Web application
+3. Authorised JavaScript origins: the game's address, e.g. `https://game-amin.up.railway.app`, and `http://localhost:8080` for local play. No redirect URIs
+4. Put the client id, `….apps.googleusercontent.com`, in `GOOGLE_CLIENT_ID` on the relay
+
+The client id isn't a secret; it's what the button on the page is made with.
 
 Kills are recorded server side, from the same death message that awards a point
 in game, so they inherit its trust model: a client that lies about dying will

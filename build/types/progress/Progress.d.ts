@@ -1,5 +1,13 @@
 import { World } from '../world/World';
 import { Challenge } from './Challenges';
+export interface ProgressState {
+    xp: number;
+    day: string;
+    counters: {
+        [metric: string]: number;
+    };
+    done: string[];
+}
 /**
  * Experience, a level, and three things to do today.
  *
@@ -21,6 +29,8 @@ export declare class Progress {
     /** Distance ticks up every frame, and localStorage is not a per frame thing. */
     private dirty;
     private sinceSave;
+    /** Goes up with every change that matters to keep: not the metres ticking up as you drive. */
+    changes: number;
     constructor(world: World);
     get xp(): number;
     /** Levels widen as they go: 100 experience to reach two, 400 to reach three. */
@@ -56,5 +66,12 @@ export declare class Progress {
     private load;
     /** Marks it worth writing. The write itself waits for the next flush. */
     private save;
+    /** A copy of everything kept, for keeping somewhere else. */
+    snapshot(): ProgressState;
+    /**
+     * Everything kept, replaced: an account's copy, loaded on sign-in. A copy
+     * from another day keeps its experience and starts today's challenges afresh.
+     */
+    adopt(state: ProgressState): void;
     private write;
 }

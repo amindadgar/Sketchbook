@@ -9,9 +9,13 @@
 
 const crypto = require('crypto');
 const db = require('./db');
+const saves = require('./saves');
+const google = require('./google');
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_BODY_BYTES = 4096;
+/** A save is a few hundred bytes; this is room for a very long career. */
+const MAX_SAVE_BYTES = 32 * 1024;
 
 // Without a configured secret every restart invalidates outstanding tokens.
 // Fine for a hobby deployment, but it should be said out loud.
@@ -78,9 +82,13 @@ function verify(token)
 	}
 }
 
+/** Putting Google on an account needs a sign-in this recent: a token found on a shared machine a week later won't do. */
+const LINK_WINDOW_MS = 15 * 60 * 1000;
+
 function tokenFor(user)
 {
-	return sign({ uid: user.id, name: user.username, exp: Date.now() + TOKEN_TTL_MS });
+	let now = Date.now();
+	return sign({ uid: user.id, name: user.username, iat: now, exp: now + TOKEN_TTL_MS });
 }
 
 /** Who a request claims to be, or null. */
@@ -116,13 +124,13 @@ function send(response, status, body)
 		// request to protect and any origin may ask.
 		'Access-Control-Allow-Origin': '*',
 		'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-		'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+		'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
 		'Content-Length': Buffer.byteLength(text)
 	});
 	response.end(text);
 }
 
-function readBody(request)
+function readBody(request, limit = MAX_BODY_BYTES)
 {
 	return new Promise((resolve, reject) =>
 	{
@@ -132,7 +140,7 @@ function readBody(request)
 		request.on('data', (chunk) =>
 		{
 			size += chunk.length;
-			if (size > MAX_BODY_BYTES) { request.destroy(); reject(new Error('too large')); return; }
+			if (size > limit) { request.destroy(); reject(new Error('too large')); return; }
 			chunks += chunk;
 		});
 		request.on('end', () =>
@@ -156,7 +164,7 @@ async function handle(request, response, url)
 		return true;
 	}
 
-	if (!url.startsWith('/auth/') && url !== '/leaderboard' && url !== '/race/lap') return false;
+	if (!url.startsWith('/auth/') && url !== '/leaderboard' && url !== '/race/lap' && url !== '/save') return false;
 
 	if (!db.available())
 	{
@@ -204,6 +212,94 @@ async function handle(request, response, url)
 			if (profile === null) { send(response, 401, { error: 'Not signed in.' }); return true; }
 
 			send(response, 200, { user: profile });
+			return true;
+		}
+
+		// Whether the page should offer Google, and the id its button is made with
+		if (url === '/auth/config' && request.method === 'GET')
+		{
+			send(response, 200, { google: google.clientId() || null });
+			return true;
+		}
+
+		// Signing in with Google, or, from somebody already signed in, putting
+		// Google sign-in on the account they're in
+		if (url === '/auth/google' && request.method === 'POST')
+		{
+			if (google.clientId() === '') { send(response, 503, { error: 'Google sign-in is not set up on this server.' }); return true; }
+
+			const body = await readBody(request);
+			const person = await google.verifyIdToken(body.credential);
+			if (person === null) { send(response, 401, { error: 'Google could not confirm that sign-in.' }); return true; }
+
+			// Adding Google to an account is its own thing: it never turns into a
+			// sign-in, or a new account, because the session behind it has lapsed
+			if (body.link === true)
+			{
+				const claims = identify(request);
+				if (claims === null || typeof claims.iat !== 'number' || Date.now() - claims.iat > LINK_WINDOW_MS)
+				{
+					send(response, 401, { error: 'Sign in again, then add Google.' });
+					return true;
+				}
+				if (await db.getProfile(claims.uid) === null)
+				{
+					send(response, 401, { error: 'Sign in again, then add Google.' });
+					return true;
+				}
+				if (!await db.linkGoogle(claims.uid, person.sub, person.email))
+				{
+					send(response, 409, { error: 'That Google account is already signed in to another player, or this one has a different Google account.' });
+					return true;
+				}
+				send(response, 200, { token: tokenFor({ id: claims.uid, username: claims.name }), user: { id: claims.uid, username: claims.name } });
+				return true;
+			}
+
+			let user = await db.findGoogleUser(person.sub);
+			if (user === null) user = await db.createGoogleUser(person.sub, person.email, google.playerName(person.names));
+			if (user === null) { send(response, 409, { error: 'Could not find a free name to sign you in under.' }); return true; }
+
+			send(response, 200, { token: tokenFor(user), user: { id: user.id, username: user.username } });
+			return true;
+		}
+
+		// The player's kept progress: money and what it bought, experience
+		if (url === '/save' && request.method === 'GET')
+		{
+			const claims = identify(request);
+			if (claims === null) { send(response, 401, { error: 'Not signed in.' }); return true; }
+
+			const row = await db.getSave(claims.uid);
+			send(response, 200, { save: row === null ? null : { data: row.data, revision: row.revision } });
+			return true;
+		}
+
+		if (url === '/save' && (request.method === 'PUT' || request.method === 'POST'))
+		{
+			const claims = identify(request);
+			if (claims === null) { send(response, 401, { error: 'Not signed in.' }); return true; }
+
+			const body = await readBody(request, MAX_SAVE_BYTES);
+			const data = saves.clean(body.data);
+			const basedOn = Number(body.revision);
+			if (data === null || !Number.isInteger(basedOn) || basedOn < 0)
+			{
+				send(response, 400, { error: 'That is not a save.' });
+				return true;
+			}
+
+			const revision = await db.putSave(claims.uid, data, basedOn);
+			if (revision === null)
+			{
+				// Written from somewhere else since this one was loaded: here's what's
+				// there now, for the game to reconcile with before it tries again
+				const current = await db.getSave(claims.uid);
+				send(response, 409, { error: 'There is a newer save.', save: current === null ? null : { data: current.data, revision: current.revision } });
+				return true;
+			}
+
+			send(response, 200, { revision: revision });
 			return true;
 		}
 

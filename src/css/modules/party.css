@@ -378,3 +378,26 @@
 	font-size: 11px;
 	line-height: 1;
 }
+
+/* What an account keeps, under the account line */
+.party-account-note {
+	margin: 6px 0 0 0;
+	font-size: 12px;
+	color: #8a8a8a;
+	text-align: left;
+}
+
+/* Google's own button, which draws itself inside this */
+.party-google {
+	display: flex;
+	justify-content: center;
+	margin: 8px 0 4px 0;
+	min-height: 0;
+}
+
+.party-account-or {
+	margin: 4px 0 8px 0;
+	font-size: 12px;
+	color: #8a8a8a;
+	text-align: center;
+}

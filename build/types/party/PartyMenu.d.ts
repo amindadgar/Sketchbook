@@ -32,6 +32,23 @@ export declare class PartyMenu {
      * will be built on.
      */
     private static bindAccount;
+    private static googleScript;
+    private static googleClient;
+    private static googleMode;
+    /**
+     * Google's answer, used for what its button was shown for: adding Google
+     * to the account that was signed in then, or signing in. If the page has
+     * changed hands since, it's refused rather than guessed at.
+     */
+    private static googleAnswered;
+    /** Google's sign-in script, fetched the first time a server offers Google. */
+    private static loadGoogle;
+    /**
+     * Google's button, where it belongs: in the sign-in panel for somebody
+     * signed out, and under the account for somebody signed in without it,
+     * to put it on their account. Nothing at all if the server has no Google.
+     */
+    private static showGoogle;
     private static commitIdentity;
     private static serverUrl;
     private static bindSwatches;

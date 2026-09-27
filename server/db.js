@@ -1,10 +1,10 @@
 /**
  * Postgres for accounts and their tallies.
  *
- * The schema is created on boot rather than by a migration tool: there are two
- * tables and a hobby game doesn't need a migration framework to look after
- * them. If this ever grows a third table with a shape that changes, that's the
- * moment to bring one in.
+ * The schema is created on boot rather than by a migration tool: a handful of
+ * tables, and the one change to an existing one is written so it can run on
+ * every boot. If this grows changes that can't be, that's the moment to bring
+ * in a migration framework.
  */
 
 const { Pool } = require('pg');
@@ -33,6 +33,36 @@ CREATE TABLE IF NOT EXISTS stats (
 	played     INTEGER NOT NULL DEFAULT 0,
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS saves (
+	user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+	data       JSONB NOT NULL,
+	revision   INTEGER NOT NULL DEFAULT 1,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Signing in with Google: an account known by Google's id for the person, with
+-- no password of its own. Each change is made only if it hasn't been, since an
+-- ALTER locks the table even when it has nothing to do, on every boot
+DO $$
+BEGIN
+	IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'google_sub') THEN
+		ALTER TABLE users ADD COLUMN google_sub TEXT;
+	END IF;
+	IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'email') THEN
+		ALTER TABLE users ADD COLUMN email TEXT;
+	END IF;
+	IF EXISTS (SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'password' AND is_nullable = 'NO') THEN
+		ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
+	END IF;
+	IF NOT EXISTS (SELECT 1 FROM pg_indexes
+		WHERE schemaname = current_schema() AND indexname = 'users_google_sub') THEN
+		CREATE UNIQUE INDEX users_google_sub ON users (google_sub) WHERE google_sub IS NOT NULL;
+	END IF;
+END $$;
 `;
 
 let pool = null;
@@ -58,14 +88,31 @@ async function connect()
 	// gets it wrong for anything that isn't called localhost.
 	const wantsSsl = /sslmode=require/i.test(url) || process.env.PGSSLMODE === 'require';
 
-	pool = new Pool({
+	const candidate = new Pool({
 		connectionString: url,
 		// Managed providers present certificates the client can't chain
 		ssl: wantsSsl ? { rejectUnauthorized: false } : false,
 		max: 5
 	});
 
-	await pool.query(SCHEMA);
+	// On one connection, with a limit on waiting for a lock: a backup or an
+	// open transaction holding the table mustn't leave the relay unable to boot
+	const client = await candidate.connect();
+	try
+	{
+		await client.query("SET lock_timeout = '5s'");
+		await client.query(SCHEMA);
+	}
+	catch (error)
+	{
+		client.release(true);
+		await candidate.end().catch(() => undefined);
+		throw error;
+	}
+	client.release(true);
+
+	// Only now: accounts on a schema half made would fail in stranger ways than none
+	pool = candidate;
 	console.log('db: connected, accounts are enabled');
 	return true;
 }
@@ -102,7 +149,7 @@ async function findUser(username)
 async function getProfile(userId)
 {
 	const result = await pool.query(
-		`SELECT u.id, u.username, s.kills, s.deaths, s.played
+		`SELECT u.id, u.username, s.kills, s.deaths, s.played, (u.google_sub IS NOT NULL) AS google
 		 FROM users u LEFT JOIN stats s ON s.user_id = u.id
 		 WHERE u.id = $1`, [userId]);
 
@@ -139,6 +186,84 @@ async function leaderboard(limit)
 	return result.rows;
 }
 
+/** The player's kept progress and its revision, or null before the first save. */
+async function getSave(userId)
+{
+	const result = await pool.query('SELECT data, revision FROM saves WHERE user_id = $1', [userId]);
+	return result.rows[0] || null;
+}
+
+/**
+ * Writes a save made from a given revision. Only lands if that's still the
+ * latest, so a tab left open on an old copy, or a second device, can't write
+ * over something newer without first having seen it. Returns the new
+ * revision, or null when somebody got there first.
+ */
+async function putSave(userId, data, basedOn)
+{
+	if (basedOn === 0)
+	{
+		const inserted = await pool.query(
+			`INSERT INTO saves (user_id, data) VALUES ($1, $2)
+			 ON CONFLICT (user_id) DO NOTHING
+			 RETURNING revision`, [userId, JSON.stringify(data)]);
+		return inserted.rowCount === 1 ? inserted.rows[0].revision : null;
+	}
+
+	const updated = await pool.query(
+		`UPDATE saves SET data = $2, revision = revision + 1, updated_at = now()
+		 WHERE user_id = $1 AND revision = $3
+		 RETURNING revision`, [userId, JSON.stringify(data), basedOn]);
+	return updated.rowCount === 1 ? updated.rows[0].revision : null;
+}
+
+/** An account by the Google id of the person who signed in with it. */
+async function findGoogleUser(sub)
+{
+	const result = await pool.query('SELECT id, username FROM users WHERE google_sub = $1', [sub]);
+	return result.rows[0] || null;
+}
+
+/**
+ * A new account for somebody signing in with Google for the first time,
+ * under the first free name made from the one they gave: Amin, then Amin2.
+ */
+async function createGoogleUser(sub, email, baseName)
+{
+	for (let attempt = 0; attempt < 30; attempt++)
+	{
+		// The name, then numbered, then with a random number, which always finds room
+		const suffix = attempt === 0 ? '' : attempt < 6 ? String(attempt + 1) : String(1000 + Math.floor(Math.random() * 9000));
+		const name = baseName.slice(0, 16 - suffix.length) + suffix;
+		const result = await pool.query(
+			`INSERT INTO users (username, username_key, password, google_sub, email) VALUES ($1, $2, NULL, $3, $4)
+			 ON CONFLICT DO NOTHING
+			 RETURNING id, username`,
+			[name, key(name), sub, email]);
+		if (result.rowCount === 1)
+		{
+			const user = result.rows[0];
+			await pool.query('INSERT INTO stats (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [user.id]);
+			return user;
+		}
+		// Taken by the same person a moment ago, in another tab
+		const existing = await findGoogleUser(sub);
+		if (existing !== null) return existing;
+	}
+	return null;
+}
+
+/** Puts Google sign-in on an account that already exists. False if that Google account is on another. */
+async function linkGoogle(userId, sub, email)
+{
+	const result = await pool.query(
+		`UPDATE users SET google_sub = $2, email = COALESCE(email, $3)
+		 WHERE id = $1 AND (google_sub IS NULL OR google_sub = $2)
+		 AND NOT EXISTS (SELECT 1 FROM users other WHERE other.google_sub = $2 AND other.id <> $1)
+		 RETURNING id`, [userId, sub, email]);
+	return result.rowCount === 1;
+}
+
 /** Only ever moves down: a slower lap than the one on record is not news. */
 async function recordLap(userId, track, milliseconds)
 {
@@ -164,5 +289,6 @@ async function lapBoard(track, limit)
 module.exports = {
 	available, connect, createUser, findUser, getProfile,
 	recordKill, recordDeath, recordPlayed, leaderboard,
-	recordLap, lapBoard
+	recordLap, lapBoard, getSave, putSave,
+	findGoogleUser, createGoogleUser, linkGoogle
 };

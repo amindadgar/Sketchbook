@@ -252,11 +252,7 @@ export class CombatSystem implements IUpdatable
 		if (!this.restored && this.world.wallet !== undefined)
 		{
 			this.restored = true;
-			for (const id of this.world.wallet.guns)
-			{
-				let spec = findWeapon(id);
-				if (spec !== undefined && !this.carried.has(id)) this.carried.set(id, { ammo: spec.magazine, reserve: 0 });
-			}
+			this.restoreOwned();
 		}
 
 		let character = this.world.localCharacter;
@@ -369,6 +365,22 @@ export class CombatSystem implements IUpdatable
 		if (id === undefined || (character.weapon !== undefined && character.weapon.id === id)) return;
 		this.stow(character);
 		this.draw(character, id);
+	}
+
+	/**
+	 * Every gun the wallet says was bought, in the pockets if it isn't already,
+	 * with a magazine loaded: after a reload, or an account's guns arriving on
+	 * sign-in. Guns carried but no longer owned are left alone.
+	 */
+	public restoreOwned(): void
+	{
+		let character = this.world.localCharacter;
+		for (const id of this.world.wallet.guns)
+		{
+			let spec = findWeapon(id);
+			let held = character !== undefined && character.weapon !== undefined && character.weapon.id === id;
+			if (spec !== undefined && !held && !this.carried.has(id)) this.carried.set(id, { ammo: spec.magazine, reserve: 0 });
+		}
 	}
 
 	/**

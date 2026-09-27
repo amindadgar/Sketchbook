@@ -126,6 +126,12 @@ export declare class CombatSystem implements IUpdatable {
     /** Number key n: the nth gun carried. */
     selectSlot(n: number): void;
     /**
+     * Every gun the wallet says was bought, in the pockets if it isn't already,
+     * with a magazine loaded: after a reload, or an account's guns arriving on
+     * sign-in. Guns carried but no longer owned are left alone.
+     */
+    restoreOwned(): void;
+    /**
      * Q: the next gun carried, and empty hands after the last. Wrapping, it
      * goes round to the first instead: a phone switches guns by tapping the
      * gun's name, which empty hands would take away, and it has no Q.

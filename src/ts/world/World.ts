@@ -51,6 +51,7 @@ import { Sfx } from '../core/Sfx';
 import { Onboarding } from '../core/Onboarding';
 import { Progress } from '../progress/Progress';
 import { Wallet } from '../progress/Wallet';
+import { CloudSave } from '../progress/CloudSave';
 import { CashDrops } from '../economy/CashDrops';
 import { Dealership } from '../economy/Dealership';
 import { Mugging } from '../economy/Mugging';
@@ -127,6 +128,7 @@ export class World
 	public intro: Onboarding;
 	public progress: Progress;
 	public wallet: Wallet;
+	public cloudSave: CloudSave;
 	public cashDrops: CashDrops;
 	public mugging: Mugging;
 	/** What E does right here. */
@@ -250,6 +252,8 @@ export class World
 		this.intro = new Onboarding(this);
 		this.progress = new Progress(this);
 		this.wallet = new Wallet(this);
+		// Before the menu picks a stored session back up, so the account's copy is loaded when it does
+		this.cloudSave = new CloudSave(this);
 		this.interactions = new Interactions(this);
 		this.stunts = new StuntSystem(this);
 		this.chat = new Chat(this);

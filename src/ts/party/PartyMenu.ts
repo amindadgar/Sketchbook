@@ -100,7 +100,11 @@ export class PartyMenu
 			+ '<span id="party-account-current" class="party-server-current">Not signed in</span>'
 			+ '<button type="button" id="party-account-toggle" class="party-server-change">Sign in</button>'
 			+ '</div>'
+			+ '<div id="party-account-note" class="party-account-note"></div>'
+			+ '<div id="party-google-link" class="party-google"></div>'
 			+ '<div id="party-account-panel" class="party-server-panel">'
+			+ '<div id="party-google" class="party-google"></div>'
+			+ '<div id="party-google-or" class="party-account-or">or with a name and password</div>'
 			+ '<input id="party-account-name" class="party-input" maxlength="16" spellcheck="false" placeholder="Name">'
 			+ '<input id="party-account-password" class="party-input" type="password" placeholder="Password">'
 			+ '<div class="party-row">'
@@ -295,6 +299,7 @@ export class PartyMenu
 		let name = document.getElementById('party-account-name') as HTMLInputElement;
 		let password = document.getElementById('party-account-password') as HTMLInputElement;
 
+		let note = document.getElementById('party-account-note');
 		let render = () =>
 		{
 			if (Account.signedIn)
@@ -303,12 +308,15 @@ export class PartyMenu
 				line.textContent = profile.username + ' \u2014 ' + profile.kills + ' kills, ' + profile.deaths + ' deaths';
 				toggle.textContent = 'Sign out';
 				panel.classList.remove('open');
+				note.textContent = 'Your money, guns, cars and level are kept on this account.';
 			}
 			else
 			{
 				line.textContent = 'Not signed in';
 				toggle.textContent = 'Sign in';
+				note.textContent = 'Sign in to keep your money, guns, cars and level on any device.';
 			}
+			PartyMenu.showGoogle(panel.classList.contains('open'), attempt);
 		};
 
 		let fail = (error: Error) =>
@@ -351,6 +359,7 @@ export class PartyMenu
 			}
 
 			panel.classList.toggle('open');
+			PartyMenu.showGoogle(panel.classList.contains('open'), attempt);
 		}, false);
 
 		document.getElementById('party-account-login').addEventListener('click', () =>
@@ -362,6 +371,110 @@ export class PartyMenu
 		{
 			attempt(() => Account.register(PartyMenu.serverUrl(), name.value, password.value));
 		}, false);
+	}
+
+	private static googleScript: Promise<void>;
+	private static googleClient: string;
+	private static googleMode: { link: boolean, user: number } = { link: false, user: undefined };
+
+	/**
+	 * Google's answer, used for what its button was shown for: adding Google
+	 * to the account that was signed in then, or signing in. If the page has
+	 * changed hands since, it's refused rather than guessed at.
+	 */
+	private static googleAnswered(credential: string, server: string, attempt: (action: () => Promise<any>) => void): void
+	{
+		let mode = PartyMenu.googleMode;
+		let current = Account.signedIn ? Account.profile.id : undefined;
+		if (mode.link ? current !== mode.user : current !== undefined)
+		{
+			attempt(() => Promise.reject(new Error('Signed in or out in the meantime: try the Google button again.')));
+			return;
+		}
+		attempt(() => Account.google(server, credential, mode.link));
+	}
+
+	/** Google's sign-in script, fetched the first time a server offers Google. */
+	private static loadGoogle(): Promise<void>
+	{
+		if (PartyMenu.googleScript === undefined)
+		{
+			PartyMenu.googleScript = new Promise((resolve, reject) =>
+			{
+				let script = document.createElement('script');
+				script.src = 'https://accounts.google.com/gsi/client';
+				script.async = true;
+				script.onload = () => resolve();
+				script.onerror = () =>
+				{
+					PartyMenu.googleScript = undefined;
+					reject(new Error('Google sign-in could not load.'));
+				};
+				document.head.appendChild(script);
+			});
+		}
+		return PartyMenu.googleScript;
+	}
+
+	/**
+	 * Google's button, where it belongs: in the sign-in panel for somebody
+	 * signed out, and under the account for somebody signed in without it,
+	 * to put it on their account. Nothing at all if the server has no Google.
+	 */
+	private static showGoogle(panelOpen: boolean, attempt: (action: () => Promise<any>) => void): void
+	{
+		let signIn = document.getElementById('party-google');
+		let link = document.getElementById('party-google-link');
+		let or = document.getElementById('party-google-or');
+		let hide = () =>
+		{
+			signIn.style.display = 'none';
+			link.style.display = 'none';
+			or.style.display = 'none';
+		};
+		let server = PartyMenu.serverUrl();
+		// Only on this game's own relay. A Google sign-in is good on any relay
+		// with the same client id, so one handed to a relay typed into the box
+		// could be passed on and used here: those get names and passwords
+		if (Account.httpBase(server) !== Account.httpBase(NetworkClient.defaultUrl()))
+		{
+			hide();
+			return;
+		}
+		Account.config(server).then((config) =>
+		{
+			if (config.google === undefined)
+			{
+				hide();
+				return;
+			}
+			return PartyMenu.loadGoogle().then(() =>
+			{
+				let api = (window as any).google.accounts.id;
+				if (PartyMenu.googleClient !== config.google)
+				{
+					PartyMenu.googleClient = config.google;
+					api.initialize({
+						client_id: config.google,
+						callback: (response: any) => PartyMenu.googleAnswered(response.credential, server, attempt),
+						auto_select: false,
+						cancel_on_tap_outside: true
+					});
+				}
+				let linking = Account.signedIn && Account.profile.google !== true;
+				// What the button on screen was made to do, and for whom
+				PartyMenu.googleMode = linking ? { link: true, user: Account.profile.id } : { link: false, user: undefined };
+				let target = Account.signedIn ? (linking ? link : undefined) : (panelOpen ? signIn : undefined);
+				signIn.style.display = !Account.signedIn && panelOpen ? '' : 'none';
+				or.style.display = signIn.style.display;
+				link.style.display = linking ? '' : 'none';
+				if (target === undefined || target.childElementCount > 0 && target.dataset.mode === (linking ? 'link' : 'in')) return;
+				target.innerHTML = '';
+				target.dataset.mode = linking ? 'link' : 'in';
+				// In the game's language, not the browser's
+				api.renderButton(target, { theme: 'outline', size: 'large', shape: 'pill', text: linking ? 'continue_with' : 'signin_with', width: 260, locale: 'en' });
+			});
+		}).catch(() => hide());
 	}
 
 	private static commitIdentity(identity: PlayerIdentity): void

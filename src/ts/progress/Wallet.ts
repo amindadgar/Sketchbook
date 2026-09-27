@@ -8,7 +8,7 @@ export interface OwnedVehicle
 	color: number;
 }
 
-interface Saved
+export interface WalletState
 {
 	cash: number;
 	guns: string[];
@@ -34,10 +34,12 @@ export class Wallet
 	private static readonly DEATH_MAX: number = 1500;
 
 	private world: World;
-	private state: Saved;
+	private state: WalletState;
 	private dirty: boolean = false;
 	private sinceSave: number = 0;
 	private shown: number = -1;
+	/** Goes up with every change, for anything keeping its own copy to notice. */
+	public changes: number = 0;
 
 	constructor(world: World)
 	{
@@ -173,9 +175,9 @@ export class Wallet
 		UIManager.setCash('$' + Wallet.format(this.state.cash));
 	}
 
-	private load(): Saved
+	private load(): WalletState
 	{
-		let fresh: Saved = { cash: Wallet.STARTING_CASH, guns: [], vehicles: [], earned: 0 };
+		let fresh: WalletState = { cash: Wallet.STARTING_CASH, guns: [], vehicles: [], earned: 0 };
 		try
 		{
 			let raw = window.localStorage.getItem(Wallet.STORAGE_KEY);
@@ -200,7 +202,34 @@ export class Wallet
 	private save(): void
 	{
 		this.dirty = true;
+		this.changes++;
 		this.refresh();
+	}
+
+	/** A copy of everything kept, for keeping somewhere else. */
+	public snapshot(): WalletState
+	{
+		return JSON.parse(JSON.stringify(this.state));
+	}
+
+	/** Everything kept, replaced: an account's copy, loaded on sign-in. Written straight away. */
+	public adopt(state: WalletState): void
+	{
+		this.state = {
+			cash: Math.max(0, Math.round(Number(state.cash) || 0)),
+			guns: Array.isArray(state.guns) ? state.guns.filter((g) => typeof g === 'string') : [],
+			vehicles: Array.isArray(state.vehicles) ? state.vehicles.filter((v) => v !== null && typeof v.model === 'string').map((v) => ({ model: v.model, color: Number(v.color) || 0 })) : [],
+			earned: Math.max(0, Number(state.earned) || 0)
+		};
+		this.dirty = false;
+		this.write();
+		this.refresh();
+	}
+
+	/** Nothing done yet on this browser: what anyone starts with, and nothing earned. */
+	public get untouched(): boolean
+	{
+		return this.state.earned === 0 && this.state.cash === Wallet.STARTING_CASH && this.state.guns.length === 0 && this.state.vehicles.length === 0;
 	}
 
 	private write(): void
