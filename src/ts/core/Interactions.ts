@@ -1,5 +1,6 @@
 import { World } from '../world/World';
 import { IUpdatable } from '../interfaces/IUpdatable';
+import { onTap } from './Tap';
 
 /** Something the player could do right here: walk up to a counter, pull into a garage. */
 export interface Offer
@@ -36,17 +37,9 @@ export class Interactions implements IUpdatable
 		this.world = world;
 		this.prompt = document.getElementById('interaction-prompt');
 		this.promptText = document.getElementById('interaction-text');
-		if (this.prompt !== null)
-		{
-			let tap = (event: Event) =>
-			{
-				event.preventDefault();
-				event.stopPropagation();
-				this.trigger();
-			};
-			this.prompt.addEventListener('touchstart', tap, { passive: false });
-			this.prompt.addEventListener('mousedown', tap);
-		}
+		// A tap that lifts where it landed: a drag to turn the camera that happens
+		// to start on the prompt shouldn't buy anything
+		if (this.prompt !== null) onTap(this.prompt, () => this.trigger());
 		world.registerUpdatable(this);
 	}
 

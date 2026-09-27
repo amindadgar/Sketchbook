@@ -39,7 +39,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 * **Levels and daily challenges** — three a day, the same three for everyone
 * **A day that passes** — the sun crosses in seven minutes, and the cars have headlights
 * **Chat, kill feed, killstreaks, leaderboards and unlockable colours and hats**
-* **A minimap**, a speedometer in km/h, and settings folded behind a gear
+* **A minimap** that turns with the camera the way GTA's does, a speedometer in km/h, and settings folded behind a gear
 * **Free roam (everything)** — a scenario with a car, a helicopter and an aeroplane all in reach
 * **A world that downloads in 6MB** rather than 26, at the same picture
 
@@ -115,7 +115,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 * World
 	* A day and night cycle, with headlights after dark
 * HUD
-	* Round minimap with party markers
+	* Round minimap centred on you and turned with the camera, with party markers and an N that follows north round the rim
 	* Speed in km/h, nitro and condition meters, lap board, round clock
 	* Settings folded behind a gear
 

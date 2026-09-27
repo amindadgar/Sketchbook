@@ -69,6 +69,12 @@ export class RaceSystem implements IUpdatable
 		return this.countdown > 0;
 	}
 
+	/** On the grid, counting down, or under way: not yet over. */
+	public get racing(): boolean
+	{
+		return this.armed || this.countdown > 0 || this.running;
+	}
+
 	public get active(): boolean
 	{
 		return this.track !== undefined;

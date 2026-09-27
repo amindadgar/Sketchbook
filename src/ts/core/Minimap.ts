@@ -22,8 +22,10 @@ export interface Blip
 }
 
 /**
- * A round, north-up minimap centred on the player, which opens out into a map
- * of the whole world.
+ * A round minimap centred on the player and turned with the camera, the way
+ * GTA's is: whatever is straight ahead is up, the streets swing round as the
+ * view does, and an N on the rim says where north went. It opens out into a
+ * north-up map of the whole world.
  *
  * The whole world is rendered from overhead once when loading finishes and kept
  * as a still image; each frame just blits the patch of it around the player and
@@ -58,6 +60,9 @@ export class Minimap implements IUpdatable
 
 	/** Opened out to the whole world rather than the patch round the player. */
 	public expanded: boolean = false;
+
+	/** How far the corner map is turned, radians, so the camera's forward is up. */
+	private turn: number = 0;
 
 	private world: World;
 	private container: HTMLElement;
@@ -227,6 +232,11 @@ export class Minimap implements IUpdatable
 		let focus = new THREE.Vector3();
 		subject.getWorldPosition(focus);
 
+		// Map right is world +x and map down is world +z; turned so the camera's
+		// forward points up. Looking straight down, the last turn holds
+		let forward = this.world.camera.getWorldDirection(Minimap.scratch);
+		if (Math.hypot(forward.x, forward.z) > 0.01) this.turn = -Math.PI / 2 - Math.atan2(forward.z, forward.x);
+
 		context.save();
 		context.beginPath();
 		context.arc(centre, centre, centre, 0, Math.PI * 2);
@@ -246,8 +256,10 @@ export class Minimap implements IUpdatable
 
 		context.restore();
 
-		this.drawPlayer(subject, centre, centre, 1);
-		this.drawNorth(size / 2, 11);
+		this.drawPlayer(subject, centre, centre, 1, this.turn);
+		// North, wherever the turn has put it, just inside the rim
+		let rim = centre - 11;
+		this.drawNorth(centre + Math.sin(this.turn) * rim, centre - Math.cos(this.turn) * rim);
 	}
 
 	private drawTerrain(focus: THREE.Vector3): void
@@ -257,14 +269,22 @@ export class Minimap implements IUpdatable
 		let bounds = this.world.worldBounds;
 		let sourceWidth = 2 * Minimap.VIEW_RADIUS * this.snapshotScaleX;
 		let sourceHeight = 2 * Minimap.VIEW_RADIUS * this.snapshotScaleZ;
+		let centre = Minimap.SIZE / 2;
 
-		this.context.drawImage(
+		// Turned about the middle: the square's inscribed circle is the view,
+		// so however it's turned the round window stays filled
+		let context = this.context;
+		context.save();
+		context.translate(centre, centre);
+		context.rotate(this.turn);
+		context.drawImage(
 			this.snapshot,
 			(focus.x - bounds.minX) * this.snapshotScaleX - sourceWidth / 2,
 			(focus.z - bounds.minZ) * this.snapshotScaleZ - sourceHeight / 2,
 			sourceWidth, sourceHeight,
-			0, 0, Minimap.SIZE, Minimap.SIZE
+			-centre, -centre, Minimap.SIZE, Minimap.SIZE
 		);
+		context.restore();
 	}
 
 	private drawMarkers(focus: THREE.Vector3): void
@@ -297,8 +317,13 @@ export class Minimap implements IUpdatable
 		let centre = Minimap.SIZE / 2;
 		let scale = centre / Minimap.VIEW_RADIUS;
 
-		let x = (position.x - focus.x) * scale;
-		let y = (position.z - focus.z) * scale;
+		// Turned with the map
+		let dx = (position.x - focus.x) * scale;
+		let dy = (position.z - focus.z) * scale;
+		let cos = Math.cos(this.turn);
+		let sin = Math.sin(this.turn);
+		let x = dx * cos - dy * sin;
+		let y = dx * sin + dy * cos;
 		let distance = Math.sqrt(x * x + y * y);
 		let limit = centre - radius - 3;
 
@@ -422,7 +447,7 @@ export class Minimap implements IUpdatable
 		}
 
 		this.drawNorth(size - 22, 22);
-		this.label('N  close map', size / 2, size - 16, 12, 'rgba(255, 255, 255, 0.8)');
+		this.label(document.body.classList.contains('touch') ? 'Tap MAP to close' : 'N  close map', size / 2, size - 16, 12, 'rgba(255, 255, 255, 0.8)');
 	}
 
 	private drawPlaces(toMap: (x: number, z: number) => number[], size: number): void
@@ -494,7 +519,8 @@ export class Minimap implements IUpdatable
 		return 'rgba(255, 255, 255, ' + (alpha !== undefined ? alpha : 0.55) + ')';
 	}
 
-	private drawPlayer(subject: THREE.Object3D, x: number, y: number, scale: number): void
+	/** @param turn how far the map under the arrow is turned; the big map isn't. */
+	private drawPlayer(subject: THREE.Object3D, x: number, y: number, scale: number, turn: number = 0): void
 	{
 		let quaternion = new THREE.Quaternion();
 		subject.getWorldQuaternion(quaternion);
@@ -504,8 +530,8 @@ export class Minimap implements IUpdatable
 		context.save();
 		context.translate(x, y);
 		context.scale(scale, scale);
-		// North is up, so world -Z is the zero angle
-		context.rotate(Math.atan2(forward.x, -forward.z));
+		// World -Z is the zero angle on a north-up map, then as far again as the map is turned
+		context.rotate(Math.atan2(forward.x, -forward.z) + turn);
 
 		context.beginPath();
 		context.moveTo(0, -8);

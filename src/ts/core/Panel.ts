@@ -1,3 +1,5 @@
+import { onTap } from './Tap';
+
 /** A line in a panel: a thing to buy, a job to take. */
 export interface PanelRow
 {
@@ -42,7 +44,7 @@ export class Panel
 		Panel.fill(rows);
 		Panel.root.style.display = '';
 		// The buttons want the mouse
-		if (document.pointerLockElement !== null) document.exitPointerLock();
+		if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock();
 	}
 
 	/** New rows and a new line of context, for a panel that's already open. */
@@ -107,11 +109,10 @@ export class Panel
 				button.className = 'panel-button';
 				button.textContent = row.button;
 				button.disabled = row.enabled === false;
-				button.addEventListener('click', (event) =>
+				onTap(button, () =>
 				{
-					event.stopPropagation();
-					Panel.press(i);
-				});
+					if (!button.disabled) Panel.press(i);
+				}, Panel.root);
 				line.appendChild(button);
 			}
 
@@ -140,7 +141,7 @@ export class Panel
 		let close = document.createElement('span');
 		close.className = 'panel-close';
 		close.textContent = '×';
-		close.addEventListener('click', () => Panel.close());
+		onTap(close, () => Panel.close(), root);
 		head.appendChild(title);
 		head.appendChild(close);
 		root.appendChild(head);

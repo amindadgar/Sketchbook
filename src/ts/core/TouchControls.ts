@@ -2,6 +2,7 @@ import { World } from '../world/World';
 import { EntityType } from '../enums/EntityType';
 import { SeatType } from '../enums/SeatType';
 import { DeviceProfile } from './DeviceProfile';
+import { Panel } from './Panel';
 
 /** One on screen button: a label and the input it stands in for. */
 interface TouchButtonSpec
@@ -87,6 +88,8 @@ export class TouchControls
 	private knob: HTMLElement;
 	private buttonBar: HTMLElement;
 	private context: string;
+	/** A panel is open over the game. */
+	private frozen: boolean = false;
 
 	private pressed: { [code: string]: boolean } = {};
 	private stickTouch: number = null;
@@ -219,6 +222,23 @@ export class TouchControls
 	/** Called every frame by the world; swapping the buttons is the rare case. */
 	public update(): void
 	{
+		// A shop or the job board open: the thumbs are on it, not on the game.
+		// Whatever was held lets go, so a stick pushed on the way in doesn't
+		// walk the player out of the shop, and the buttons get out of the way
+		let open = Panel.isOpen;
+		if (open !== this.frozen)
+		{
+			this.frozen = open;
+			document.body.classList.toggle('panel-open', open);
+			if (open)
+			{
+				this.releaseAll();
+				this.stickTouch = null;
+				this.lookTouch = null;
+				this.moveKnob(0, 0);
+			}
+		}
+
 		let context = this.readContext();
 		if (context !== this.context) this.applyContext(context);
 	}
@@ -277,7 +297,7 @@ export class TouchControls
 		event.preventDefault();
 		event.stopPropagation();
 
-		if (this.stickTouch !== null) return;
+		if (this.stickTouch !== null || this.frozen) return;
 
 		let touch = event.changedTouches[0];
 		this.stickTouch = touch.identifier;
@@ -351,7 +371,7 @@ export class TouchControls
 	{
 		event.preventDefault();
 
-		if (this.lookTouch !== null) return;
+		if (this.lookTouch !== null || this.frozen) return;
 
 		let touch = event.changedTouches[0];
 		this.lookTouch = touch.identifier;

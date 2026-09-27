@@ -104,17 +104,27 @@ body.touch #scoreboard {
 	padding: 6px 8px;
 }
 
-/* Lifted clear of the stick and the buttons. The stick's top edge is 150px up,
-   so anything below that ends up under a thumb. */
+/* On the right, just above the buttons: clear of the crosshair and the
+   hold-up ring in the middle, and of the thumb on the stick */
 body.touch #combat-hud {
-	width: 200px;
-	bottom: 202px;
+	left: auto;
+	right: 18px;
+	transform: none;
+	width: 190px;
+	bottom: 186px;
 }
 
+/* Just the party's code, at the bottom in the middle, where nothing else is:
+   the scoreboard on the right already lists everybody */
 body.touch #party-hud {
-	top: 8px;
-	padding: 5px 10px;
+	top: auto;
+	bottom: 6px;
+	padding: 3px 10px;
 	font-size: 12px;
+}
+
+body.touch #party-players {
+	display: none;
 }
 
 /* Held upright, the game is unplayable rather than merely cramped: the stick
@@ -168,13 +178,20 @@ body.touch #health-badge {
 }
 
 body.touch #cash-badge {
-	right: 196px;
+	right: 212px;
 	padding: 4px 9px;
 	font-size: 15px;
 }
 
+/* A thumb-sized target round it, without moving it */
+body.touch #cash-badge::before {
+	content: '';
+	position: absolute;
+	inset: -9px -6px;
+}
+
 body.touch #fps-badge {
-	right: 128px;
+	right: 134px;
 	padding: 4px 8px;
 	font-size: 15px;
 }
@@ -184,9 +201,10 @@ body.touch #fps-badge {
 	display: none;
 }
 
+/* High enough to stay clear of the chat button below it on a short screen */
 body.touch #minimap-toggle {
 	position: fixed;
-	top: 106px;
+	top: 62px;
 	left: 14px;
 	width: 46px;
 	height: 46px;
@@ -285,6 +303,15 @@ body.touch #stunt-what {
 
 body.touch #notices {
 	top: 48px;
+	/* Over an open shop, so what was just bought is seen */
+	z-index: 47;
+}
+
+/* With a job running, the notices go to the right of its panel, not over it */
+body.touch.job-running #notices {
+	left: 252px;
+	right: 118px;
+	transform: none;
 }
 
 /* Wrapped rather than run long, so a notice stays clear of the job panel */
@@ -333,4 +360,46 @@ body.touch #condition {
 	bottom: 2px;
 	transform: none;
 	width: 120px;
+}
+
+/* A shop or the job board has the thumbs; the buttons get out of their way */
+body.touch.panel-open #touch-buttons {
+	visibility: hidden;
+}
+
+/* A few at a time: a column of wrapped toasts would run down over the prompt */
+body.touch #notices {
+	max-height: 130px;
+	overflow: hidden;
+}
+
+/* Round a notch or a rounded corner: whatever sits on an edge keeps its usual
+   margin, or the screen's own safe margin where that's more */
+body.touch #touch-stick { left: max(18px, env(safe-area-inset-left, 0px)); bottom: max(56px, calc(38px + env(safe-area-inset-bottom, 0px))); }
+body.touch #touch-buttons { right: max(18px, env(safe-area-inset-right, 0px)); bottom: max(18px, env(safe-area-inset-bottom, 0px)); }
+body.touch #minimap-toggle { left: max(14px, env(safe-area-inset-left, 0px)); }
+body.touch #chat-open, body.touch #chat { left: max(18px, env(safe-area-inset-left, 0px)); }
+body.touch #speed-badge { left: max(18px, env(safe-area-inset-left, 0px)); bottom: max(26px, calc(8px + env(safe-area-inset-bottom, 0px))); }
+body.touch #boost { left: max(18px, env(safe-area-inset-left, 0px)); bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
+body.touch #condition { left: max(18px, env(safe-area-inset-left, 0px)); bottom: max(2px, calc(env(safe-area-inset-bottom, 0px) - 8px)); }
+body.touch #job-hud { left: max(80px, calc(62px + env(safe-area-inset-left, 0px))); }
+body.touch #settings-gear { right: max(14px, env(safe-area-inset-right, 0px)); }
+body.touch #health-badge { right: max(62px, calc(48px + env(safe-area-inset-right, 0px))); }
+body.touch #fps-badge { right: max(134px, calc(120px + env(safe-area-inset-right, 0px))); }
+body.touch #cash-badge { right: max(212px, calc(198px + env(safe-area-inset-right, 0px))); }
+body.touch #scoreboard, body.touch #kill-feed { right: max(12px, env(safe-area-inset-right, 0px)); }
+body.touch #combat-hud { right: max(18px, env(safe-area-inset-right, 0px)); }
+body.touch #party-hud { bottom: max(6px, env(safe-area-inset-bottom, 0px)); }
+
+body.touch #party-code {
+	font-size: 11px;
+}
+
+body.touch #party-code-value {
+	font-size: 13px;
+}
+
+/* Under the big map, the money isn't a button: the map sits over it */
+body.map-open #cash-badge {
+	pointer-events: none;
 }

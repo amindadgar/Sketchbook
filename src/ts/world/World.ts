@@ -55,6 +55,7 @@ import { CashDrops } from '../economy/CashDrops';
 import { Dealership } from '../economy/Dealership';
 import { Mugging } from '../economy/Mugging';
 import { Interactions } from '../core/Interactions';
+import { onTap } from '../core/Tap';
 import { ShopSystem } from '../economy/ShopSystem';
 import { JobSystem } from '../jobs/JobSystem';
 import { registerJobs } from '../jobs/registerJobs';
@@ -810,21 +811,13 @@ export class World
 		let tap = (id: string, action: () => void) =>
 		{
 			let element = document.getElementById(id);
-			if (element === null) return;
-			let handler = (event: Event) =>
-			{
-				event.preventDefault();
-				event.stopPropagation();
-				action();
-			};
-			element.addEventListener('touchstart', handler, { passive: false });
-			element.addEventListener('mousedown', handler);
+			if (element !== null) onTap(element, action);
 		};
 		tap('cash-badge', () => this.jobs.toggleBoard());
 		tap('weapon-name', () =>
 		{
 			let character = this.localCharacter;
-			if (character !== undefined && !character.isBusyWithVehicle()) this.combat.cycleWeapon();
+			if (character !== undefined && !character.isBusyWithVehicle()) this.combat.cycleWeapon(true);
 		});
 	}
 
@@ -1169,7 +1162,8 @@ export class World
 	{
 		if (this.lastScenarioID !== undefined)
 		{
-			document.exitPointerLock();
+			// A phone has no pointer lock to let go of
+			if (document.exitPointerLock) document.exitPointerLock();
 			this.launchScenario(this.lastScenarioID);
 		}
 		else

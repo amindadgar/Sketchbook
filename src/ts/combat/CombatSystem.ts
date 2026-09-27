@@ -341,6 +341,8 @@ export class CombatSystem implements IUpdatable
 		let entry = this.carried.get(id);
 		if (entry === undefined) return false;
 		entry.reserve += spec.magazine;
+		// Empty handed, the gun just loaded comes out: every gun may have run dry
+		if (character.weapon === undefined && character.health > 0 && !character.isBusyWithVehicle()) this.draw(character, id);
 		return true;
 	}
 
@@ -369,18 +371,24 @@ export class CombatSystem implements IUpdatable
 		this.draw(character, id);
 	}
 
-	/** Q: the next gun carried, and empty hands after the last. */
-	public cycleWeapon(): void
+	/**
+	 * Q: the next gun carried, and empty hands after the last. Wrapping, it
+	 * goes round to the first instead: a phone switches guns by tapping the
+	 * gun's name, which empty hands would take away, and it has no Q.
+	 */
+	public cycleWeapon(wrap: boolean = false): void
 	{
 		let character = this.world.localCharacter;
 		if (character === undefined || character.health <= 0 || character.isBusyWithVehicle()) return;
 		let ids = this.carriedIds();
 		if (ids.length === 0) return;
 		let at = character.weapon !== undefined ? ids.indexOf(character.weapon.id) : -1;
+		if (wrap && ids.length === 1 && at === 0) return;
 		this.stow(character);
 		if (at + 1 >= ids.length)
 		{
-			character.unequipWeapon();
+			if (wrap) this.draw(character, ids[0]);
+			else character.unequipWeapon();
 			return;
 		}
 		this.draw(character, ids[at + 1]);

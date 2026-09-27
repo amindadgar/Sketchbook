@@ -116,6 +116,12 @@ export class JobSystem implements IUpdatable
 	public active: Job;
 	public time: number = 0;
 
+	/**
+	 * Where the job wants the player next, when it knows better than the
+	 * nearest mark on the map: the next checkpoint, not the one after it.
+	 */
+	public wayTo: THREE.Vector3;
+
 	private markers: JobMarker[] = [];
 	private people: Character[] = [];
 	private vehicles: Vehicle[] = [];
@@ -188,7 +194,17 @@ export class JobSystem implements IUpdatable
 			this.world.notices.say('Not now', 'bad', 'come back to life first');
 			return;
 		}
+		// A circuit race has its own clock and board where a job's would go:
+		// not while it's on, and a finished one's board is put away
+		let race = this.world.race;
+		if (race !== undefined && race.racing)
+		{
+			this.world.notices.say(job.title, 'bad', 'finish the race first');
+			return;
+		}
+		if (race !== undefined && race.active) race.stop();
 		this.active = job;
+		this.wayTo = undefined;
 		this.generation = this.world.scenarioGeneration;
 		this.character = character;
 		let reason = job.start();
@@ -244,6 +260,7 @@ export class JobSystem implements IUpdatable
 		this.active = undefined;
 		this.run++;
 		this.arrivals = [];
+		this.wayTo = undefined;
 		if (job !== undefined) job.cleanup();
 		for (const marker of this.markers.slice()) this.removeMarker(marker);
 		for (const person of this.people.slice()) this.removePerson(person);
@@ -295,20 +312,23 @@ export class JobSystem implements IUpdatable
 		let way = document.getElementById('job-way');
 		if (way === null) return;
 		let here = this.playerPosition();
-		let nearest: Blip;
-		let best = Infinity;
-		for (const blip of this.world.blips)
+		let target: THREE.Vector3 = this.wayTo;
+		let best = target !== undefined ? Math.hypot(target.x - here.x, target.z - here.z) : Infinity;
+		if (target === undefined)
 		{
-			if (blip.pin !== true) continue;
-			let d = Math.hypot(blip.position.x - here.x, blip.position.z - here.z);
-			if (d < best)
+			for (const blip of this.world.blips)
 			{
-				best = d;
-				nearest = blip;
+				if (blip.pin !== true) continue;
+				let d = Math.hypot(blip.position.x - here.x, blip.position.z - here.z);
+				if (d < best)
+				{
+					best = d;
+					target = blip.position;
+				}
 			}
 		}
 		// Nothing to point at, or already there
-		if (nearest === undefined || best < 6)
+		if (target === undefined || best < 6)
 		{
 			if (way.style.display !== 'none') way.style.display = 'none';
 			return;
@@ -317,7 +337,7 @@ export class JobSystem implements IUpdatable
 
 		let forward = this.world.camera.getWorldDirection(new THREE.Vector3());
 		let facing = Math.atan2(forward.x, forward.z);
-		let bearing = Math.atan2(nearest.position.x - here.x, nearest.position.z - here.z);
+		let bearing = Math.atan2(target.x - here.x, target.z - here.z);
 		// Clockwise on screen is to the right, which is the negative way round from above
 		let turn = (facing - bearing) * 180 / Math.PI;
 		document.getElementById('job-arrow').style.transform = 'rotate(' + (turn - 90).toFixed(1) + 'deg)';
@@ -341,9 +361,11 @@ export class JobSystem implements IUpdatable
 		if (objective === undefined || this.active === undefined)
 		{
 			hud.style.display = 'none';
+			document.body.classList.remove('job-running');
 			this.shownHud = '';
 			return;
 		}
+		document.body.classList.add('job-running');
 		let timer = secondsLeft !== undefined ? JobSystem.clock(secondsLeft) : '';
 		let key = objective + '|' + (detail || '') + '|' + timer;
 		if (key === this.shownHud) return;

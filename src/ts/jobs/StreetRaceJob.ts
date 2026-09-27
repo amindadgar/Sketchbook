@@ -399,6 +399,9 @@ export class StreetRaceJob extends Job
 		this.system.removeMarker(this.aheadMarker);
 		this.nextMarker = this.checkpointMarker(this.next, StreetRaceJob.COLOR);
 		this.aheadMarker = this.next + 1 < this.checkpoints.length ? this.checkpointMarker(this.next + 1, StreetRaceJob.AHEAD_COLOR) : undefined;
+		// The panel's arrow is for the one to drive through now
+		this.system.wayTo = this.nextMarker.position;
+		if (this.aheadMarker !== undefined) this.aheadMarker.blip.pin = false;
 	}
 
 	private checkpointMarker(n: number, color: string): JobMarker

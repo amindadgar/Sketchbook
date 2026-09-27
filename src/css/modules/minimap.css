@@ -20,6 +20,8 @@
    keeps running behind it, so it's something to glance at and put away. */
 #minimap.expanded,
 body.touch #minimap.expanded {
+	/* Over the badges and the job panel, under the controls and any shop */
+	z-index: 29;
 	display: block;
 	top: 50%;
 	left: 50%;

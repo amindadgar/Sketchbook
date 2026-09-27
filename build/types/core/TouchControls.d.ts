@@ -27,6 +27,8 @@ export declare class TouchControls {
     private knob;
     private buttonBar;
     private context;
+    /** A panel is open over the game. */
+    private frozen;
     private pressed;
     private stickTouch;
     private stickOrigin;

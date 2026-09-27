@@ -108,3 +108,8 @@
 .race-result-row span:last-child {
 	font-variant-numeric: tabular-nums;
 }
+
+/* A job's panel goes where this board does; the job has it while it runs */
+body.job-running #race-hud {
+	display: none !important;
+}

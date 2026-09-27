@@ -6,6 +6,7 @@
 	transform: translate(-50%, -50%);
 	width: min(560px, calc(100vw - 32px));
 	max-height: 78vh;
+	box-sizing: border-box;
 	overflow-y: auto;
 	padding: 16px 20px 12px;
 	background: rgba(8, 10, 14, 0.88);
@@ -17,11 +18,19 @@
 	pointer-events: auto;
 }
 
+/* Stays at the top while the rows scroll, so the close is always in reach */
 #game-panel .panel-head {
+	position: sticky;
+	top: -16px;
+	z-index: 1;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: 20px;
+	margin: -16px -20px 0;
+	padding: 16px 20px 2px;
+	background: rgb(10, 12, 16);
+	border-radius: 10px 10px 0 0;
 }
 
 #game-panel .panel-title {
@@ -133,6 +142,38 @@ body.touch #game-panel .panel-foot {
 /* The numbers are keys to press, and a phone has none */
 body.touch #game-panel .panel-key {
 	display: none;
+}
+
+/* Nearly the whole height of a landscape phone, with room to scroll: the
+   visible height where the browser knows it, not counting its address bar */
+body.touch #game-panel {
+	max-height: calc(100vh - 16px);
+	max-height: calc(100dvh - 16px);
+	padding: 12px 14px 10px;
+}
+
+body.touch #game-panel .panel-head {
+	top: -12px;
+	margin: -12px -14px 0;
+	padding: 12px 14px 2px;
+}
+
+/* A thumb-sized close and buttons */
+body.touch #game-panel .panel-close {
+	padding: 6px 12px;
+	margin: -6px -12px;
+	font-size: 30px;
+	color: rgba(255, 255, 255, 0.75);
+}
+
+body.touch #game-panel .panel-row {
+	min-height: 44px;
+}
+
+body.touch #game-panel .panel-button {
+	min-height: 38px;
+	padding: 8px 12px;
+	font-size: 14px;
 }
 
 /* What E does here, above the speedometer */

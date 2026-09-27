@@ -17,8 +17,10 @@ export interface Blip {
     bigMapOnly?: boolean;
 }
 /**
- * A round, north-up minimap centred on the player, which opens out into a map
- * of the whole world.
+ * A round minimap centred on the player and turned with the camera, the way
+ * GTA's is: whatever is straight ahead is up, the streets swing round as the
+ * view does, and an N on the rim says where north went. It opens out into a
+ * north-up map of the whole world.
  *
  * The whole world is rendered from overhead once when loading finishes and kept
  * as a still image; each frame just blits the patch of it around the player and
@@ -38,6 +40,8 @@ export declare class Minimap implements IUpdatable {
     private static readonly PLACES;
     /** Opened out to the whole world rather than the patch round the player. */
     expanded: boolean;
+    /** How far the corner map is turned, radians, so the camera's forward is up. */
+    private turn;
     private world;
     private container;
     private canvas;
@@ -79,6 +83,7 @@ export declare class Minimap implements IUpdatable {
     private dot;
     private label;
     private static vehicleColor;
+    /** @param turn how far the map under the arrow is turned; the big map isn't. */
     private drawPlayer;
     private drawNorth;
     /** What the map is centred on and pointed by: the vehicle if driving, else the character. */

@@ -1,5 +1,8 @@
 /* Party chat, bottom left above the controls list */
+/* Only the box being typed in takes touches: the log over the MAP button,
+   faded out or not, would otherwise swallow them */
 #chat {
+	pointer-events: none;
 	position: fixed;
 	left: 18px;
 	bottom: 260px;
@@ -41,6 +44,7 @@
 }
 
 #chat-input {
+	pointer-events: auto;
 	display: none;
 	width: 100%;
 	padding: 7px 10px;

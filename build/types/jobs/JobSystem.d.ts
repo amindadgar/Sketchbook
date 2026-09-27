@@ -41,6 +41,11 @@ export declare class JobSystem implements IUpdatable {
     jobs: Job[];
     active: Job;
     time: number;
+    /**
+     * Where the job wants the player next, when it knows better than the
+     * nearest mark on the map: the next checkpoint, not the one after it.
+     */
+    wayTo: THREE.Vector3;
     private markers;
     private people;
     private vehicles;

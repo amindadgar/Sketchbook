@@ -37,6 +37,8 @@ export declare class RaceSystem implements IUpdatable {
     constructor(world: World);
     /** True while the lights are still on, which is what holds the grid. */
     get holding(): boolean;
+    /** On the grid, counting down, or under way: not yet over. */
+    get racing(): boolean;
     get active(): boolean;
     /** Which circuit is being driven, for the board that goes with it. */
     get trackId(): string;

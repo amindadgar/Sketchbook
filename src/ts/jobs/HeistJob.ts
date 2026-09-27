@@ -275,6 +275,7 @@ export class HeistJob extends Job
 			return;
 		}
 
+		this.system.wayTo = this.safehouse.position;
 		if (this.safehouse.contains(this.system.playerPosition(), 1.5))
 		{
 			this.system.pay(HeistJob.BONUS * this.bagsTaken, 'cash bags to the safehouse');

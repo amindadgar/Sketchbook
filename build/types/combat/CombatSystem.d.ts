@@ -125,8 +125,12 @@ export declare class CombatSystem implements IUpdatable {
     carriedIds(): string[];
     /** Number key n: the nth gun carried. */
     selectSlot(n: number): void;
-    /** Q: the next gun carried, and empty hands after the last. */
-    cycleWeapon(): void;
+    /**
+     * Q: the next gun carried, and empty hands after the last. Wrapping, it
+     * goes round to the first instead: a phone switches guns by tapping the
+     * gun's name, which empty hands would take away, and it has no Q.
+     */
+    cycleWeapon(wrap?: boolean): void;
     /** What's in the hand, put back in the pocket with what it has left. */
     private stow;
     private draw;
