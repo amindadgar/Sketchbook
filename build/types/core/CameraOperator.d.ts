@@ -30,7 +30,8 @@ export declare class CameraOperator implements IInputReceiver, IUpdatable {
     /** How close the camera pulls in over the shoulder, and how far it slides across. */
     private static readonly AIM_RADIUS;
     private static readonly AIM_SHOULDER;
-    private static readonly AIM_FOV;
+    /** How far the view narrows while aiming: a scope narrows it further. */
+    aimFov: number;
     private aimBlend;
     private static readonly BASE_FOV;
     private static scratch;

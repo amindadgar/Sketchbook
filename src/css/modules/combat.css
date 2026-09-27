@@ -140,6 +140,59 @@
 	opacity: 0.75;
 }
 
+/* Money, at the left of the row along the top: green, the colour of the notes */
+#cash-badge {
+	position: fixed;
+	top: 16px;
+	right: 222px;
+	padding: 5px 11px;
+	background: rgba(0, 0, 0, 0.45);
+	border-radius: 16px;
+	font-family: 'Solway', serif;
+	font-size: 17px;
+	font-weight: 700;
+	color: #7fe39a;
+	cursor: pointer;
+	user-select: none;
+	z-index: 25;
+	font-variant-numeric: tabular-nums;
+}
+
+/* The badge doubles as the way to the job board, which a phone has no J for */
+#cash-jobs {
+	display: none;
+	margin-left: 8px;
+	padding-left: 8px;
+	border-left: 1px solid rgba(255, 255, 255, 0.25);
+	font-size: 12px;
+	letter-spacing: 0.06em;
+	color: #fff;
+}
+
+body.touch #cash-jobs {
+	display: inline;
+}
+
+.cash-flash {
+	position: absolute;
+	right: 8px;
+	top: 100%;
+	margin-top: 2px;
+	font-size: 15px;
+	white-space: nowrap;
+	animation: cash-flash 1.6s ease-out forwards;
+}
+
+.cash-flash.gain { color: #7fe39a; }
+.cash-flash.loss { color: #ff7a7a; }
+
+@keyframes cash-flash {
+	0% { opacity: 0; transform: translateY(-6px); }
+	15% { opacity: 1; transform: translateY(0); }
+	75% { opacity: 1; }
+	100% { opacity: 0; transform: translateY(10px); }
+}
+
 #fps-badge.good #fps-number { color: #6ee07a; }
 #fps-badge.fair #fps-number { color: #ffc93c; }
 #fps-badge.poor #fps-number { color: #ff5a5a; }
@@ -168,6 +221,46 @@
 	color: #fff;
 	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 	visibility: hidden;
+}
+
+/* Every gun carried, by the number key that draws it */
+#weapon-slots {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 4px 8px;
+	margin-top: 4px;
+	font-family: 'Solway', serif;
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.55);
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.weapon-slot.held {
+	color: #FFB900;
+	font-weight: 700;
+}
+
+body.touch #weapon-slots {
+	display: none;
+}
+
+/* Tapped to switch guns */
+#weapon-name {
+	pointer-events: auto;
+	cursor: pointer;
+}
+
+/* A thumb-sized target round a short word, without moving anything */
+body.touch #weapon-name {
+	padding: 8px 10px;
+	margin: -8px -10px;
+}
+
+/* On a phone the numbered row is hidden, so the name says it can be tapped */
+body.touch #combat-hud.several #weapon-name::after {
+	content: ' \21C4';
+	color: #FFB900;
 }
 
 #weapon-ammo {

@@ -1,5 +1,21 @@
+import * as THREE from 'three';
 import { World } from '../world/World';
 import { IUpdatable } from '../interfaces/IUpdatable';
+/**
+ * Something marked on the map: a shop, where a job wants you to go.
+ * Pinned ones stay on the rim of the corner map pointing the way when they're
+ * further off than it shows, which is all the directions a job needs to give.
+ */
+export interface Blip {
+    position: THREE.Vector3;
+    color: string;
+    label?: string;
+    /** Kept on the corner map's rim, pointing the way, however far off. */
+    pin?: boolean;
+    shape?: 'dot' | 'square' | 'diamond';
+    /** On the big map only, not cluttering the corner one. */
+    bigMapOnly?: boolean;
+}
 /**
  * A round, north-up minimap centred on the player, which opens out into a map
  * of the whole world.
@@ -58,6 +74,8 @@ export declare class Minimap implements IUpdatable {
      */
     private drawFull;
     private drawPlaces;
+    /** A marker's outline, about the origin. */
+    private shapePath;
     private dot;
     private label;
     private static vehicleColor;

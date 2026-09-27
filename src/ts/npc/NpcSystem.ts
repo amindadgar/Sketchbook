@@ -8,6 +8,8 @@ import { Navigation, Lane, Walk, Crossing, Route } from './Navigation';
 import { Pedestrian, PedestrianClips } from './Pedestrian';
 import { TrafficCar } from './TrafficCar';
 import { createGLTFLoader } from '../core/Loaders';
+import { Motorbike } from '../vehicles/Motorbike';
+import { VehicleModel, VEHICLE_MODELS, findVehicleModel } from '../vehicles/VehicleCatalogue';
 import { HumanModel } from '../characters/HumanModel';
 import { DeviceProfile } from '../core/DeviceProfile';
 import { mulberry32 } from '../city/CityPlan';
@@ -52,6 +54,9 @@ export class NpcSystem implements IUpdatable
 	private city: City;
 	private ready: boolean = false;
 	private models: THREE.Object3D[] = [];
+	private playerClips: THREE.AnimationClip[];
+	private playerHips: number = 0.55;
+	private fullClips: THREE.AnimationClip[][] = [];
 	private clips: PedestrianClips[] = [];
 	private carTemplate: THREE.Object3D;
 	private lampTexture: THREE.Texture;
@@ -66,8 +71,15 @@ export class NpcSystem implements IUpdatable
 
 	// Taking cars out of the traffic
 	/** A car model loaded and waiting, so taking a car happens the moment the key goes down. */
-	private spareCar: any;
-	private loadingSpare: boolean = false;
+	/**
+	 * A fresh copy of each model the traffic drives, loaded ahead, so a car
+	 * can be stolen the moment it's asked for: the real vehicle has to exist
+	 * in that frame for the player to climb into.
+	 */
+	private spares: { [model: string]: any } = {};
+	private loadingSpare: Set<string> = new Set();
+	/** The models the traffic drives, in catalogue order, and what each looks like. */
+	private trafficModels: { model: string, template: THREE.Object3D }[] = [];
 	private stolenCount: number = 0;
 	/** Cars taken from the traffic, here or by other players, oldest first. */
 	private stolen: Vehicle[] = [];
@@ -76,6 +88,8 @@ export class NpcSystem implements IUpdatable
 	/** Traffic taken here but maybe still in the next snapshot from whoever simulates it. */
 	private taken: Map<number, number> = new Map();
 	private stolenTimer: number = 0;
+	/** Jobs' cars, kept however far away they are. */
+	private held: Set<Vehicle> = new Set();
 
 	private maxCars: number;
 	private maxPedestrians: number;
@@ -106,9 +120,21 @@ export class NpcSystem implements IUpdatable
 		let playerHips = 0.55;
 		let loaded: THREE.Object3D[] = [];
 
+		let traffic = VEHICLE_MODELS.filter((model) => model.traffic);
+		let templates: THREE.Object3D[] = [];
+		pending += traffic.length;
+
 		let finish = () =>
 		{
 			if (--pending > 0) return;
+			// Every client has the same files, so the same list, in the same order:
+			// a car's number picks its model identically everywhere
+			traffic.forEach((model, i) =>
+			{
+				if (templates[i] !== undefined) this.trafficModels.push({ model: model.id, template: templates[i] });
+			});
+			if (this.trafficModels.length === 0 && this.carTemplate !== undefined) this.trafficModels.push({ model: 'car', template: this.carTemplate });
+			for (const entry of this.trafficModels) this.loadSpare(entry.model);
 			NpcSystem.VARIANTS.forEach((_, i) =>
 			{
 				let model = loaded[i];
@@ -123,6 +149,8 @@ export class NpcSystem implements IUpdatable
 		{
 			playerClips = gltf.animations;
 			playerHips = NpcSystem.hipsHeight(gltf.scene);
+			this.playerClips = playerClips;
+			this.playerHips = playerHips;
 			finish();
 		}, undefined, () => finish());
 
@@ -143,19 +171,75 @@ export class NpcSystem implements IUpdatable
 		{
 			this.carTemplate = gltf.scene;
 			finish();
-			this.loadSpare();
 		}, undefined, () => finish());
+
+		traffic.forEach((model, i) =>
+		{
+			loader.load('build/assets/' + model.file + '.glb', (gltf) =>
+			{
+				templates[i] = gltf.scene;
+				finish();
+			}, undefined, () => finish());
+		});
 	}
 
-	private loadSpare(): void
+	private loadSpare(model: string): void
 	{
-		if (this.spareCar !== undefined || this.loadingSpare) return;
-		this.loadingSpare = true;
-		createGLTFLoader().load('build/assets/car.glb', (gltf) =>
+		if (this.spares[model] !== undefined || this.loadingSpare.has(model)) return;
+		let kind = findVehicleModel(model);
+		if (kind === undefined) return;
+		this.loadingSpare.add(model);
+		createGLTFLoader().load('build/assets/' + kind.file + '.glb', (gltf) =>
 		{
-			this.spareCar = gltf;
-			this.loadingSpare = false;
-		}, undefined, () => this.loadingSpare = false);
+			this.spares[model] = gltf;
+			this.loadingSpare.delete(model);
+		}, undefined, () => this.loadingSpare.delete(model));
+	}
+
+	/** The loaded copy of a model, taken, and another sent for. */
+	private takeSpare(model: string): any
+	{
+		let gltf = this.spares[model];
+		if (gltf === undefined) return undefined;
+		this.spares[model] = undefined;
+		this.loadSpare(model);
+		return gltf;
+	}
+
+
+	/** How many different bodies there are to choose from. */
+	public get bodies(): number
+	{
+		return this.models.length;
+	}
+
+	/**
+	 * Somebody for a job: one of the pedestrians' bodies, copied, with every
+	 * one of the player's animations fitted to its height, ready to be made a
+	 * full Character that can walk up to a car, sit in it and get out again.
+	 */
+	public personModel(variant: number): { scene: THREE.Object3D, animations: THREE.AnimationClip[] }
+	{
+		if (!this.ready || this.playerClips === undefined || this.models.length === 0) return undefined;
+		let index = ((variant % this.models.length) + this.models.length) % this.models.length;
+		let model = this.models[index];
+		if (this.fullClips[index] === undefined)
+		{
+			let scale = NpcSystem.hipsHeight(model) / this.playerHips;
+			this.fullClips[index] = this.playerClips.map((clip) =>
+			{
+				let copy = clip.clone();
+				copy.tracks = copy.tracks.map((track) =>
+				{
+					if (!track.name.endsWith('.position')) return track;
+					let scaled = track.clone();
+					for (let i = 0; i < scaled.values.length; i++) scaled.values[i] *= scale;
+					return scaled;
+				});
+				return copy;
+			});
+		}
+		return { scene: SkeletonUtils.clone(model), animations: this.fullClips[index] };
 	}
 
 	private static hipsHeight(root: THREE.Object3D): number
@@ -356,7 +440,9 @@ export class NpcSystem implements IUpdatable
 
 	private spawnCar(lane: Lane, distance: number, color: number, id?: number): TrafficCar
 	{
-		let car = new TrafficCar(id !== undefined ? id : this.nextId++, color, this.carTemplate, this.lampTexture);
+		let number = id !== undefined ? id : this.nextId++;
+		let look = this.trafficModels[number % this.trafficModels.length];
+		let car = new TrafficCar(number, color, look.template, this.lampTexture, look.model);
 		if (lane !== undefined)
 		{
 			car.lane = lane;
@@ -945,16 +1031,21 @@ export class NpcSystem implements IUpdatable
 		for (const other of this.pedestrians)
 		{
 			if (!other.alive || other.position.distanceTo(from) > radius) continue;
-			if (other.route instanceof Crossing) continue;
-			let walk = other.route as Walk;
-			let ahead = new THREE.Vector3();
-			walk.sample(other.distance + other.direction * 2, ahead);
-			// Run whichever way round the block takes them further away
-			if (ahead.distanceTo(from) < other.position.distanceTo(from)) other.direction *= -1;
-			other.state = 'flee';
-			other.timer = 5 + this.random() * 4;
-			other.pendingCrossing = undefined;
+			this.flee(other, from);
 		}
+	}
+
+	private flee(other: Pedestrian, from: THREE.Vector3): void
+	{
+		if (other.route instanceof Crossing) return;
+		let walk = other.route as Walk;
+		let ahead = new THREE.Vector3();
+		walk.sample(other.distance + other.direction * 2, ahead);
+		// Run whichever way round the block takes them further away
+		if (ahead.distanceTo(from) < other.position.distanceTo(from)) other.direction *= -1;
+		other.state = 'flee';
+		other.timer = 5 + this.random() * 4;
+		other.pendingCrossing = undefined;
 	}
 
 	// Combat hooks
@@ -997,6 +1088,31 @@ export class NpcSystem implements IUpdatable
 		return best;
 	}
 
+	/**
+	 * A gun held on a pedestrian: they stop where they are, for as long as it
+	 * stays on them. Only where they're simulated; on anyone else's screen
+	 * they carry on, and the hold-up still counts.
+	 */
+	public holdUp(pedestrian: Pedestrian): void
+	{
+		if (!this.authority || !pedestrian.alive || pedestrian.state === 'flee' || pedestrian.route instanceof Crossing) return;
+		pedestrian.state = 'idle';
+		pedestrian.timer = Math.max(pedestrian.timer, 0.4);
+	}
+
+	/** Let go after a hold-up, and running. */
+	public scare(pedestrian: Pedestrian, from: THREE.Vector3): void
+	{
+		if (!pedestrian.alive) return;
+		if (!this.authority)
+		{
+			// A shot that does no harm is what makes them run on the simulating client
+			this.world.party.sendNpcHit(pedestrian.id, 0, from);
+			return;
+		}
+		this.flee(pedestrian, from);
+	}
+
 	/** A bullet landed on a pedestrian, here or, arriving over the network, on someone else's screen. */
 	public damagePedestrian(id: number, damage: number, from: THREE.Vector3): void
 	{
@@ -1019,7 +1135,7 @@ export class NpcSystem implements IUpdatable
 	/** The car in the traffic someone standing here could take, if there is one. */
 	public stealable(from: THREE.Vector3): TrafficCar
 	{
-		if (!this.ready || this.spareCar === undefined) return undefined;
+		if (!this.ready) return undefined;
 		// Without a relay that passes the word on, the client driving the traffic
 		// would never hear the car had gone, and it would come back
 		if (!this.authority && !this.world.party.hasFeature('steal')) return undefined;
@@ -1028,6 +1144,7 @@ export class NpcSystem implements IUpdatable
 		for (const car of this.cars)
 		{
 			let speed = car.knocked ? car.body.velocity.length() : car.speed;
+			if (this.spares[car.model] === undefined) continue;
 			if (car.wrecked || car.reportedWreck > 0 || (car.knocked && !car.upright)) continue;
 			if (speed > NpcSystem.STEAL_SPEED || Math.abs(car.position.y - from.y) > 2) continue;
 			let d = Math.hypot(car.position.x - from.x, car.position.z - from.z);
@@ -1047,14 +1164,12 @@ export class NpcSystem implements IUpdatable
 	 */
 	public steal(car: TrafficCar): Vehicle
 	{
-		let gltf = this.spareCar;
+		let gltf = this.takeSpare(car.model);
 		if (gltf === undefined) return undefined;
-		this.spareCar = undefined;
-		this.loadSpare();
 
 		let party = this.world.party;
 		let tag = party !== undefined && party.active ? String(party.client.id) : NpcSystem.SESSION_TAG;
-		let name = NpcSystem.STOLEN_PREFIX + tag + ':' + (++this.stolenCount) + ':' + car.color;
+		let name = NpcSystem.STOLEN_PREFIX + tag + ':' + (++this.stolenCount) + ':' + car.color + ':' + car.model;
 		let position = car.object.position.clone();
 		let rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), car.heading);
 		let vehicle = this.makeStolen(gltf, name, position, rotation);
@@ -1119,7 +1234,7 @@ export class NpcSystem implements IUpdatable
 
 		let generation = this.world.scenarioGeneration;
 		this.stolenLoading.add(name);
-		createGLTFLoader().load('build/assets/car.glb', (gltf) =>
+		createGLTFLoader().load('build/assets/' + NpcSystem.modelOf(name).file + '.glb', (gltf) =>
 		{
 			this.stolenLoading.delete(name);
 			if (this.world.scenarioGeneration !== generation) return;
@@ -1129,9 +1244,66 @@ export class NpcSystem implements IUpdatable
 		return true;
 	}
 
+	/** The model a taken car's name says it is: the fifth part, or the original car for a name from before there were others. */
+	private static modelOf(name: string): VehicleModel
+	{
+		return findVehicleModel(name.split(':')[4]) || findVehicleModel('car');
+	}
+
+	/**
+	 * A car for a job, made the way a taken one is so everyone in a party sees
+	 * it: parked here, facing along a heading, in one of the traffic's colours.
+	 * Kept, however far off, for as long as it's held; let go of, it's cleared
+	 * away like any taken car once nobody is near it.
+	 */
+	public spawnJobCar(position: THREE.Vector3, heading: number, color: number, ready: (vehicle: Vehicle) => void, model: string = 'car'): void
+	{
+		let kind = findVehicleModel(model) || findVehicleModel('car');
+		let generation = this.world.scenarioGeneration;
+		let made = (gltf: any) =>
+		{
+			if (this.world.scenarioGeneration !== generation) return;
+			let party = this.world.party;
+			let tag = party !== undefined && party.active ? String(party.client.id) : NpcSystem.SESSION_TAG;
+			let name = NpcSystem.STOLEN_PREFIX + tag + ':' + (++this.stolenCount) + ':' + Math.max(0, Math.round(color)) + ':' + kind.id;
+			let rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), heading);
+			let vehicle = this.makeStolen(gltf, name, position, rotation);
+			this.held.add(vehicle);
+			// Not announced: a job is this screen's alone, and nobody else needs a
+			// parked copy of its cars. One the player drives off in turns up on
+			// everyone's screen from its first report, like any taken car
+			ready(vehicle);
+		};
+		let spare = this.takeSpare(kind.id);
+		if (spare !== undefined)
+		{
+			made(spare);
+			return;
+		}
+		// A model that won't load still gets the job its car: the original one
+		createGLTFLoader().load('build/assets/' + kind.file + '.glb', made, undefined, () =>
+		{
+			if (kind.file !== 'car') createGLTFLoader().load('build/assets/car.glb', made);
+		});
+	}
+
+	/** Whether a job is holding on to this car: this screen's alone, not the party's. */
+	public isHeld(vehicle: Vehicle): boolean
+	{
+		return this.held.has(vehicle);
+	}
+
+	/** Done with a job's car: it's cleared away with the rest once it's out of everyone's way. */
+	public letGo(vehicle: Vehicle): void
+	{
+		this.held.delete(vehicle);
+	}
+
 	private makeStolen(gltf: any, name: string, position: THREE.Vector3, rotation: THREE.Quaternion): Vehicle
 	{
-		let vehicle = new Car(gltf);
+		let model = NpcSystem.modelOf(name);
+		let vehicle: Car = model.kind === 'bike' ? new Motorbike(gltf) : new Car(gltf);
+		vehicle.tune(model.gearing, model.power);
 
 		// Named for the party, which knows vehicles by their spawn point's name
 		let spawn = new THREE.Object3D();
@@ -1145,7 +1317,7 @@ export class NpcSystem implements IUpdatable
 		let paint = new THREE.Color(TrafficCar.COLORS[(isFinite(color) ? color : 0) % TrafficCar.COLORS.length]);
 		vehicle.traverse((child: any) =>
 		{
-			if (child.isMesh && child.material !== undefined && child.material.name === 'Car')
+			if (model.paintable && child.isMesh && child.material !== undefined && child.material.name === 'Car')
 			{
 				child.material = child.material.clone();
 				child.material.color.copy(paint);
@@ -1218,13 +1390,14 @@ export class NpcSystem implements IUpdatable
 		{
 			if (this.world.vehicles.indexOf(vehicle) >= 0) continue;
 			this.stolen.splice(this.stolen.indexOf(vehicle), 1);
+			this.held.delete(vehicle);
 			NpcSystem.dispose(vehicle);
 		}
 
 		let players = this.playerPositions();
 		let party = this.world.party;
 		// Sat in, being climbed into or walked up to, here or by anyone in the party
-		let inUse = (vehicle: Vehicle) => vehicle.controllingCharacter !== undefined
+		let inUse = (vehicle: Vehicle) => this.held.has(vehicle) || vehicle.controllingCharacter !== undefined
 			|| vehicle.seats.some((seat) => seat.occupiedBy !== null || (party !== undefined && party.seatHolder(seat) !== undefined))
 			|| this.world.characters.some((character) =>
 			{
@@ -1234,7 +1407,7 @@ export class NpcSystem implements IUpdatable
 
 		for (const vehicle of this.stolen.slice())
 		{
-			let tooMany = this.stolen.length > NpcSystem.MAX_STOLEN;
+			let tooMany = this.stolen.length - this.held.size > NpcSystem.MAX_STOLEN;
 			let far = this.nearestPlayer(players, vehicle.position) > NpcSystem.STOLEN_KEEP;
 			if (inUse(vehicle) || (!far && !tooMany)) continue;
 			this.world.remove(vehicle);

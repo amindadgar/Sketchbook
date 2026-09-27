@@ -2,7 +2,7 @@ import { World } from '../world/World';
 import { DeviceProfile } from './DeviceProfile';
 
 /**
- * The four things somebody needs to know in their first ten seconds.
+ * The few things somebody needs to know in their first ten seconds.
  *
  * Desktop has the whole control list down the left hand side, so this is mostly
  * for a phone, where the keyboard hints are hidden and the buttons are the only
@@ -82,6 +82,7 @@ export class Onboarding
 				['Stick', 'Drive and walk. Drag anywhere to look'],
 				['ENTER', 'Get into a car you are standing next to'],
 				['BOOST', 'Nitro. Ramps are worth points'],
+				['$', 'Tap your money for jobs that pay more of it'],
 				['MAP', 'Where you are, when you need it']
 			];
 		}
@@ -90,6 +91,7 @@ export class Onboarding
 			['W A S D', 'Move, and steer'],
 			['F', 'Get into a car you are standing next to'],
 			['Shift', 'Nitro. Ramps are worth points'],
+			['J', 'Jobs, for money to spend at the shops on the map'],
 			['L', 'Your level, today\'s challenges and the boards']
 		];
 	}

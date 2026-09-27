@@ -19,7 +19,8 @@ export class Sitting extends CharacterStateBase
 		this.seat = seat;
 		this.canFindVehiclesToEnter = false;
 
-		this.character.world.updateControls([
+		// The controls list is the player's: a fare in the back doesn't change it
+		if (this.character.isLocalPlayer()) this.character.world.updateControls([
 			{
 				keys: ['X'],
 				desc: 'Switch seats',

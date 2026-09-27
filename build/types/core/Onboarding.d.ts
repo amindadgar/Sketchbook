@@ -1,6 +1,6 @@
 import { World } from '../world/World';
 /**
- * The four things somebody needs to know in their first ten seconds.
+ * The few things somebody needs to know in their first ten seconds.
  *
  * Desktop has the whole control list down the left hand side, so this is mostly
  * for a phone, where the keyboard hints are hidden and the buttons are the only

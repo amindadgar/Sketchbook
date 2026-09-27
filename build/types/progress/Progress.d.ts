@@ -37,6 +37,10 @@ export declare class Progress {
     addDistance(metres: number): void;
     addAirtime(seconds: number): void;
     addFlightTime(seconds: number): void;
+    /** A job done, or a part of one: experience for it, and a count towards today's challenges. */
+    addJob(kind: string, xp: number): void;
+    /** Somebody held up in the street. */
+    addMugging(): void;
     addPickup(): void;
     /** A high water mark rather than a total, for the "go this fast" sort. */
     noteSpeed(metresPerSecond: number): void;

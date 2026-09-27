@@ -37,6 +37,9 @@ export declare class NpcSystem implements IUpdatable {
     private city;
     private ready;
     private models;
+    private playerClips;
+    private playerHips;
+    private fullClips;
     private clips;
     private carTemplate;
     private lampTexture;
@@ -49,8 +52,15 @@ export declare class NpcSystem implements IUpdatable {
     private walkSpots;
     private lightsOn;
     /** A car model loaded and waiting, so taking a car happens the moment the key goes down. */
-    private spareCar;
+    /**
+     * A fresh copy of each model the traffic drives, loaded ahead, so a car
+     * can be stolen the moment it's asked for: the real vehicle has to exist
+     * in that frame for the player to climb into.
+     */
+    private spares;
     private loadingSpare;
+    /** The models the traffic drives, in catalogue order, and what each looks like. */
+    private trafficModels;
     private stolenCount;
     /** Cars taken from the traffic, here or by other players, oldest first. */
     private stolen;
@@ -59,11 +69,26 @@ export declare class NpcSystem implements IUpdatable {
     /** Traffic taken here but maybe still in the next snapshot from whoever simulates it. */
     private taken;
     private stolenTimer;
+    /** Jobs' cars, kept however far away they are. */
+    private held;
     private maxCars;
     private maxPedestrians;
     constructor(world: World, city: City);
     private load;
     private loadSpare;
+    /** The loaded copy of a model, taken, and another sent for. */
+    private takeSpare;
+    /** How many different bodies there are to choose from. */
+    get bodies(): number;
+    /**
+     * Somebody for a job: one of the pedestrians' bodies, copied, with every
+     * one of the player's animations fitted to its height, ready to be made a
+     * full Character that can walk up to a car, sit in it and get out again.
+     */
+    personModel(variant: number): {
+        scene: THREE.Object3D;
+        animations: THREE.AnimationClip[];
+    };
     private static hipsHeight;
     /**
      * The player's animations, fitted to a body of a different height. Every
@@ -133,6 +158,7 @@ export declare class NpcSystem implements IUpdatable {
     private checkImpacts;
     private kill;
     private scatter;
+    private flee;
     /** A gun went off: people nearby run. */
     onGunshot(origin: THREE.Vector3): void;
     /**
@@ -143,6 +169,14 @@ export declare class NpcSystem implements IUpdatable {
         pedestrian: Pedestrian;
         distance: number;
     };
+    /**
+     * A gun held on a pedestrian: they stop where they are, for as long as it
+     * stays on them. Only where they're simulated; on anyone else's screen
+     * they carry on, and the hold-up still counts.
+     */
+    holdUp(pedestrian: Pedestrian): void;
+    /** Let go after a hold-up, and running. */
+    scare(pedestrian: Pedestrian, from: THREE.Vector3): void;
     /** A bullet landed on a pedestrian, here or, arriving over the network, on someone else's screen. */
     damagePedestrian(id: number, damage: number, from: THREE.Vector3): void;
     /** The car in the traffic someone standing here could take, if there is one. */
@@ -160,6 +194,19 @@ export declare class NpcSystem implements IUpdatable {
      * it is: made from its name, which carries its colour, at that spot.
      */
     spawnStolen(name: string, message: any): boolean;
+    /** The model a taken car's name says it is: the fifth part, or the original car for a name from before there were others. */
+    private static modelOf;
+    /**
+     * A car for a job, made the way a taken one is so everyone in a party sees
+     * it: parked here, facing along a heading, in one of the traffic's colours.
+     * Kept, however far off, for as long as it's held; let go of, it's cleared
+     * away like any taken car once nobody is near it.
+     */
+    spawnJobCar(position: THREE.Vector3, heading: number, color: number, ready: (vehicle: Vehicle) => void, model?: string): void;
+    /** Whether a job is holding on to this car: this screen's alone, not the party's. */
+    isHeld(vehicle: Vehicle): boolean;
+    /** Done with a job's car: it's cleared away with the rest once it's out of everyone's way. */
+    letGo(vehicle: Vehicle): void;
     private makeStolen;
     /** The driver, out of the door and running for the pavement. */
     private bailOut;

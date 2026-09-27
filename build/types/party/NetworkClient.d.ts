@@ -39,6 +39,8 @@ export declare class NetworkClient {
     onNpcHit: (message: any) => void;
     onNpcSteal: (message: any) => void;
     onBreak: (message: any) => void;
+    onDrop: (message: any) => void;
+    onTaken: (message: any) => void;
     onError: (message: string) => void;
     onDisconnect: () => void;
     private socket;

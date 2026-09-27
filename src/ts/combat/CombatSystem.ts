@@ -10,6 +10,7 @@ import { UIManager } from '../core/UIManager';
 import { CollisionGroups } from '../enums/CollisionGroups';
 import { WEAPONS, WeaponSpec, findWeapon, getFlashTexture } from './Weapons';
 import { WeaponPickup } from './WeaponPickup';
+import { Wallet } from '../progress/Wallet';
 
 /**
  * Guns, health and kills.
@@ -73,6 +74,17 @@ export class CombatSystem implements IUpdatable
 	private aiming: boolean = false;
 	private respawnPoints: THREE.Vector3[] = [];
 	private gunBuffers: { [id: string]: AudioBuffer } = {};
+	/**
+	 * Every gun the player has, and what's left in each; the one in the hand
+	 * is the character's own. Bought guns stay through a death, ones picked
+	 * up off the street go with it.
+	 */
+	private carried: Map<string, { ammo: number, reserve: number }> = new Map();
+	private restored: boolean = false;
+	/** When each gun in the pocket may fire again, in seconds of page time. */
+	private readyAt: Map<string, number> = new Map();
+	private static readonly DRAW_TIME: number = 0.2;
+	private shownSlots: string = '';
 	private audioPool: THREE.PositionalAudio[] = [];
 	private audioCursor: number = 0;
 	private hitSound: THREE.Audio;
@@ -110,7 +122,9 @@ export class CombatSystem implements IUpdatable
 	{
 		let loader = new THREE.AudioLoader();
 
-		WEAPONS.forEach((weapon) =>
+		// Guns without a report of their own borrow another's, pitched differently
+		let own = WEAPONS.filter((weapon) => weapon.sound === undefined);
+		own.forEach((weapon) =>
 		{
 			loader.load('build/assets/gun_' + weapon.id + '.wav',
 				(buffer: AudioBuffer) =>
@@ -148,7 +162,8 @@ export class CombatSystem implements IUpdatable
 
 	private playGunSound(weaponId: string, position: THREE.Vector3): void
 	{
-		let buffer = this.gunBuffers[weaponId];
+		let spec = findWeapon(weaponId);
+		let buffer = this.gunBuffers[spec !== undefined && spec.sound !== undefined ? spec.sound : weaponId];
 		if (buffer === undefined || this.audioPool.length === 0) return;
 
 		let sound = this.audioPool[this.audioCursor];
@@ -158,6 +173,7 @@ export class CombatSystem implements IUpdatable
 
 		sound.position.copy(position);
 		sound.setBuffer(buffer);
+		sound.setPlaybackRate(spec !== undefined && spec.soundPitch !== undefined ? spec.soundPitch : 1);
 		sound.play();
 		// The panner only follows the matrix while playing, so move it after
 		sound.updateMatrixWorld(true);
@@ -218,9 +234,10 @@ export class CombatSystem implements IUpdatable
 		this.pickups.forEach((pickup) => pickup.dispose());
 		this.pickups = [];
 
+		let lying = WEAPONS.filter((weapon) => weapon.pickup !== false);
 		anchors.forEach((anchor, index) =>
 		{
-			this.pickups.push(new WeaponPickup(this.world, WEAPONS[index % WEAPONS.length], anchor));
+			this.pickups.push(new WeaponPickup(this.world, lying[index % lying.length], anchor));
 		});
 	}
 
@@ -230,6 +247,17 @@ export class CombatSystem implements IUpdatable
 		if (this.protection > 0) this.protection -= unscaledTimeStep;
 		if (this.respawnCooldown > 0) this.respawnCooldown -= unscaledTimeStep;
 		if (this.markerCooldown > 0) this.markerCooldown -= unscaledTimeStep;
+
+		// Guns bought in an earlier visit, back in the pockets with a magazine each
+		if (!this.restored && this.world.wallet !== undefined)
+		{
+			this.restored = true;
+			for (const id of this.world.wallet.guns)
+			{
+				let spec = findWeapon(id);
+				if (spec !== undefined && !this.carried.has(id)) this.carried.set(id, { ammo: spec.magazine, reserve: 0 });
+			}
+		}
 
 		let character = this.world.localCharacter;
 		if (character !== this.knownCharacter) this.onCharacterReplaced(character);
@@ -260,6 +288,8 @@ export class CombatSystem implements IUpdatable
 		this.setAiming(character.actions.secondary.isPressed === true
 			&& character.weapon !== undefined
 			&& onFoot);
+		// Switched guns with the sights up: the scope, or the lack of one, is the new gun's
+		if (this.aiming) this.world.cameraOperator.aimFov = character.weapon.zoomFov !== undefined ? character.weapon.zoomFov : 55;
 		this.updateTrigger(character, unscaledTimeStep);
 
 		// The gun is stowed while driving, so the readout goes with it rather than
@@ -272,6 +302,181 @@ export class CombatSystem implements IUpdatable
 			character.ammo,
 			character.reserve
 		);
+		this.showSlots(character, onFoot);
+	}
+
+	// ---------------------------------------------------------------- the guns
+
+	/**
+	 * Into the player's hands: a new gun with its full load, or, for one
+	 * already carried, a magazine's worth more for it, or the lot for a
+	 * purchase. Then it's the one held.
+	 */
+	public giveWeapon(id: string, bought: boolean): void
+	{
+		let spec = findWeapon(id);
+		let character = this.world.localCharacter;
+		if (spec === undefined || character === undefined) return;
+
+		this.stow(character);
+		let entry = this.carried.get(id);
+		if (entry === undefined) entry = { ammo: spec.magazine, reserve: spec.reserve };
+		else if (bought) entry.reserve = Math.max(entry.reserve, spec.reserve);
+		else entry.reserve += spec.magazine;
+		this.carried.set(id, entry);
+		this.draw(character, id);
+	}
+
+	/** A magazine's worth more for a gun carried. False if it isn't. */
+	public addAmmo(id: string): boolean
+	{
+		let spec = findWeapon(id);
+		let character = this.world.localCharacter;
+		if (spec === undefined || character === undefined) return false;
+		if (character.weapon !== undefined && character.weapon.id === id)
+		{
+			character.reserve += spec.magazine;
+			return true;
+		}
+		let entry = this.carried.get(id);
+		if (entry === undefined) return false;
+		entry.reserve += spec.magazine;
+		return true;
+	}
+
+	public carries(id: string): boolean
+	{
+		let character = this.world.localCharacter;
+		return this.carried.has(id) || (character !== undefined && character.weapon !== undefined && character.weapon.id === id);
+	}
+
+	/** The guns carried, in the order the number keys pick them. */
+	public carriedIds(): string[]
+	{
+		let character = this.world.localCharacter;
+		let held = character !== undefined && character.weapon !== undefined ? character.weapon.id : undefined;
+		return WEAPONS.map((w) => w.id).filter((id) => this.carried.has(id) || id === held);
+	}
+
+	/** Number key n: the nth gun carried. */
+	public selectSlot(n: number): void
+	{
+		let character = this.world.localCharacter;
+		if (character === undefined || character.health <= 0 || character.isBusyWithVehicle()) return;
+		let id = this.carriedIds()[n - 1];
+		if (id === undefined || (character.weapon !== undefined && character.weapon.id === id)) return;
+		this.stow(character);
+		this.draw(character, id);
+	}
+
+	/** Q: the next gun carried, and empty hands after the last. */
+	public cycleWeapon(): void
+	{
+		let character = this.world.localCharacter;
+		if (character === undefined || character.health <= 0 || character.isBusyWithVehicle()) return;
+		let ids = this.carriedIds();
+		if (ids.length === 0) return;
+		let at = character.weapon !== undefined ? ids.indexOf(character.weapon.id) : -1;
+		this.stow(character);
+		if (at + 1 >= ids.length)
+		{
+			character.unequipWeapon();
+			return;
+		}
+		this.draw(character, ids[at + 1]);
+	}
+
+	/** What's in the hand, put back in the pocket with what it has left. */
+	private stow(character: Character): void
+	{
+		if (character.weapon === undefined) return;
+		this.carried.set(character.weapon.id, { ammo: character.ammo, reserve: character.reserve });
+		// Its own wait between shots carries on in the pocket, so swapping back
+		// and forth can't fire a slow gun faster than it fires
+		this.readyAt.set(character.weapon.id, performance.now() / 1000 + Math.max(0, this.cooldown));
+	}
+
+	private draw(character: Character, id: string): void
+	{
+		let spec = findWeapon(id);
+		let entry = this.carried.get(id);
+		if (spec === undefined || entry === undefined) return;
+		character.equipWeapon(spec);
+		character.ammo = entry.ammo;
+		character.reserve = entry.reserve;
+		this.carried.delete(id);
+		// A moment to bring it up, or longer if it still had a shot to wait out
+		let waiting = (this.readyAt.get(id) || 0) - performance.now() / 1000;
+		this.cooldown = Math.max(CombatSystem.DRAW_TIME, waiting);
+		this.reloadTimer = 0;
+		this.triggerWasDown = false;
+		if (character.ammo <= 0 && character.reserve > 0) this.reloadTimer = spec.reloadTime;
+	}
+
+	/** The best gun carried with anything in it, or the first owned one. */
+	private drawBest(character: Character): void
+	{
+		if (character.weapon !== undefined) return;
+		let ids = this.carriedIds();
+		let loaded = ids.filter((id) => { let e = this.carried.get(id); return e !== undefined && e.ammo + e.reserve > 0; });
+		let pick = loaded.length > 0 ? loaded[loaded.length - 1] : undefined;
+		if (pick !== undefined) this.draw(character, pick);
+	}
+
+	/**
+	 * Out of rounds altogether. A gun that was picked up is thrown away; one
+	 * that was bought is kept, empty, for the shop to fill again. Either way
+	 * the next gun with anything in it comes out.
+	 */
+	private spent(character: Character): void
+	{
+		let weapon = character.weapon;
+		if (weapon === undefined) return;
+		character.unequipWeapon();
+		if (this.world.wallet.ownsGun(weapon.id)) this.carried.set(weapon.id, { ammo: 0, reserve: 0 });
+		else this.carried.delete(weapon.id);
+		this.drawBest(character);
+	}
+
+	/** Dying: guns picked up are lost, bought ones kept with what they had. */
+	private dropOnDeath(character: Character): void
+	{
+		this.stow(character);
+		character.unequipWeapon();
+		for (const id of Array.from(this.carried.keys()))
+		{
+			if (!this.world.wallet.ownsGun(id)) this.carried.delete(id);
+		}
+	}
+
+	/**
+	 * What dying costs. Killed by another player in a party, it's dropped where
+	 * the body falls, for whoever gets there first: the killer, most likely,
+	 * or the dead player on the way back. Otherwise the hospital has it.
+	 * After the death is reported, since the relay only takes a drop from
+	 * somebody it knows has just died.
+	 */
+	private chargeForDeath(character: Character, attackerId: number): void
+	{
+		let share = this.world.wallet.payHospital();
+		if (share <= 0) return;
+		if (attackerId !== undefined && this.world.party.hasFeature('cash'))
+		{
+			this.world.party.sendDrop(character.getWorldPosition(new THREE.Vector3()), share);
+			this.world.notices.say('Dropped $' + Wallet.format(share), 'bad', 'pick it up before they do');
+		}
+		else this.world.notices.say('Hospital bill', 'bad', '-$' + Wallet.format(share));
+	}
+
+	/** The guns carried, along the bottom of the weapon readout, the one in hand picked out. */
+	private showSlots(character: Character, onFoot: boolean): void
+	{
+		let ids = onFoot && character.health > 0 ? this.carriedIds() : [];
+		let held = character.weapon !== undefined ? character.weapon.id : '';
+		let key = ids.join(',') + '|' + held;
+		if (key === this.shownSlots) return;
+		this.shownSlots = key;
+		UIManager.setWeaponSlots(ids.map((id) => findWeapon(id).name), ids.indexOf(held));
 	}
 
 	/**
@@ -281,6 +486,8 @@ export class CombatSystem implements IUpdatable
 	 */
 	private onCharacterReplaced(character: Character): void
 	{
+		// What the last body had in its hands goes back in the pocket, for the new one
+		if (this.knownCharacter !== undefined && this.knownCharacter.health > 0) this.stow(this.knownCharacter);
 		this.knownCharacter = character;
 
 		this.deathTimer = 0;
@@ -298,6 +505,8 @@ export class CombatSystem implements IUpdatable
 		{
 			this.life++;
 			this.protection = CombatSystem.SPAWN_PROTECTION;
+			// A new body after a restart: the guns kept come with it
+			this.drawBest(character);
 		}
 	}
 
@@ -310,6 +519,9 @@ export class CombatSystem implements IUpdatable
 
 		this.aiming = value;
 		this.world.cameraOperator.aiming = value;
+		// A scope narrows the view further
+		let weapon = this.world.localCharacter !== undefined ? this.world.localCharacter.weapon : undefined;
+		this.world.cameraOperator.aimFov = weapon !== undefined && weapon.zoomFov !== undefined ? weapon.zoomFov : 55;
 		UIManager.setReticleVisible(value);
 	}
 
@@ -444,7 +656,7 @@ export class CombatSystem implements IUpdatable
 	{
 		if (character.reserve <= 0)
 		{
-			character.unequipWeapon();
+			this.spent(character);
 			return;
 		}
 
@@ -461,7 +673,7 @@ export class CombatSystem implements IUpdatable
 		character.ammo += taken;
 		character.reserve -= taken;
 
-		if (character.ammo <= 0) character.unequipWeapon();
+		if (character.ammo <= 0) this.spent(character);
 	}
 
 	/**
@@ -645,19 +857,6 @@ export class CombatSystem implements IUpdatable
 	}
 
 	/**
-	 * Damage from driving into something, rather than from being shot. Nobody
-	 * gets the point for it, so there's no attacker to name.
-	 */
-	public applyCrashDamage(damage: number): void
-	{
-		let character = this.world.localCharacter;
-		if (character === undefined || character.health <= 0) return;
-
-		this.applyDamage(character, damage, undefined);
-		UIManager.flashDamage();
-	}
-
-	/**
 	 * A hit arriving from somebody else's client.
 	 *
 	 * The relay has already checked what it can, but it has never seen the map
@@ -682,6 +881,29 @@ export class CombatSystem implements IUpdatable
 		// Tells the shooter it counted, which is what lights their hit marker
 		this.world.party.publishHurt(attackerId, damage, character.health <= 0);
 		this.feelHit(character, from);
+	}
+
+	/**
+	 * Shot by somebody in the city rather than by a player: a guard, a
+	 * target's bodyguard. Cover counts the same, and so does the red at the
+	 * edges, but nobody is credited with anything. False if it didn't land.
+	 */
+	public hurtByNpc(damage: number, from: THREE.Vector3, weapon?: string): boolean
+	{
+		let character = this.world.localCharacter;
+		if (character === undefined || character.health <= 0 || this.protection > 0) return false;
+		if (this.behindCover(from, character)) return false;
+
+		this.lastWeapon = weapon;
+		this.applyDamage(character, damage, undefined);
+		this.feelHit(character, from);
+		return true;
+	}
+
+	/** Whether the player is holding a gun up at something, on foot. */
+	public get isAiming(): boolean
+	{
+		return this.aiming;
 	}
 
 	/** The red at the edges, a wedge toward the shooter, and a thump. */
@@ -803,12 +1025,13 @@ export class CombatSystem implements IUpdatable
 			// Whatever was held at the moment of death stays held otherwise, and
 			// the body walks off under its own steam
 			target.resetControls();
-			target.unequipWeapon();
+			this.dropOnDeath(target);
 			// Dead at the wheel, the body comes out of the car rather than
 			// driving on or respawning in the car's own coordinates
 			if (target.isBusyWithVehicle()) this.pendingEject = true;
 			this.world.party.publishDeath(attackerId, this.lastWeapon);
 			this.world.party.reportOwnDeath(attackerId, this.lastWeapon);
+			this.chargeForDeath(target, attackerId);
 		}
 	}
 
@@ -852,6 +1075,7 @@ export class CombatSystem implements IUpdatable
 
 		character.health = Character.MAX_HEALTH;
 		character.ammo = 0;
+		this.drawBest(character);
 
 		this.placeAtRespawnPoint(character);
 		this.protection = CombatSystem.SPAWN_PROTECTION;
@@ -913,7 +1137,7 @@ export class CombatSystem implements IUpdatable
 			let pickup = this.pickups[i];
 			if (!pickup.covers(here)) continue;
 
-			character.equipWeapon(pickup.spec);
+			this.giveWeapon(pickup.spec.id, false);
 			pickup.consume();
 			this.world.party.publishPickup(i);
 			this.world.progress.addPickup();

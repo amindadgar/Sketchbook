@@ -5,6 +5,23 @@ import { IUpdatable } from '../interfaces/IUpdatable';
 import { EntityType } from '../enums/EntityType';
 
 /**
+ * Something marked on the map: a shop, where a job wants you to go.
+ * Pinned ones stay on the rim of the corner map pointing the way when they're
+ * further off than it shows, which is all the directions a job needs to give.
+ */
+export interface Blip
+{
+	position: THREE.Vector3;
+	color: string;
+	label?: string;
+	/** Kept on the corner map's rim, pointing the way, however far off. */
+	pin?: boolean;
+	shape?: 'dot' | 'square' | 'diamond';
+	/** On the big map only, not cluttering the corner one. */
+	bigMapOnly?: boolean;
+}
+
+/**
  * A round, north-up minimap centred on the player, which opens out into a map
  * of the whole world.
  *
@@ -221,6 +238,11 @@ export class Minimap implements IUpdatable
 
 		this.drawTerrain(focus);
 		this.drawMarkers(focus);
+		for (const blip of this.world.blips)
+		{
+			if (blip.bigMapOnly) continue;
+			this.drawMarker(focus, blip.position, blip.color, blip.pin ? 5 : 4, blip.pin === true, blip.shape);
+		}
 
 		context.restore();
 
@@ -270,7 +292,7 @@ export class Minimap implements IUpdatable
 	 * @param pinToRim keeps a marker on the edge of the circle pointing the way
 	 * it lies once it's further off than the view radius, instead of dropping it.
 	 */
-	private drawMarker(focus: THREE.Vector3, position: THREE.Vector3, color: string, radius: number, pinToRim: boolean): void
+	private drawMarker(focus: THREE.Vector3, position: THREE.Vector3, color: string, radius: number, pinToRim: boolean, shape?: string): void
 	{
 		let centre = Minimap.SIZE / 2;
 		let scale = centre / Minimap.VIEW_RADIUS;
@@ -306,8 +328,7 @@ export class Minimap implements IUpdatable
 		}
 		else
 		{
-			context.beginPath();
-			context.arc(0, 0, radius, 0, Math.PI * 2);
+			this.shapePath(shape, radius);
 		}
 
 		context.fillStyle = color;
@@ -376,6 +397,13 @@ export class Minimap implements IUpdatable
 			if (character.playerName !== undefined) this.label(character.playerName, x, y - 13, 11, '#ffffff');
 		});
 
+		for (const blip of this.world.blips)
+		{
+			let [x, y] = toMap(blip.position.x, blip.position.z);
+			this.dot(x, y, blip.pin ? 7 : 6, blip.color, '#ffffff', blip.shape);
+			if (blip.label !== undefined) this.label(blip.label, x, y - 14, 11, '#ffffff');
+		}
+
 		let subject = this.subject();
 		if (subject !== undefined)
 		{
@@ -407,11 +435,33 @@ export class Minimap implements IUpdatable
 		}
 	}
 
-	private dot(x: number, y: number, radius: number, fill: string, stroke: string): void
+	/** A marker's outline, about the origin. */
+	private shapePath(shape: string, radius: number): void
 	{
 		let context = this.context;
 		context.beginPath();
-		context.arc(x, y, radius, 0, Math.PI * 2);
+		if (shape === 'square')
+		{
+			context.rect(-radius, -radius, radius * 2, radius * 2);
+		}
+		else if (shape === 'diamond')
+		{
+			context.moveTo(0, -radius * 1.3);
+			context.lineTo(radius * 1.3, 0);
+			context.lineTo(0, radius * 1.3);
+			context.lineTo(-radius * 1.3, 0);
+			context.closePath();
+		}
+		else context.arc(0, 0, radius, 0, Math.PI * 2);
+	}
+
+	private dot(x: number, y: number, radius: number, fill: string, stroke: string, shape?: string): void
+	{
+		let context = this.context;
+		context.save();
+		context.translate(x, y);
+		this.shapePath(shape, radius);
+		context.restore();
 		context.fillStyle = fill;
 		context.fill();
 		context.lineWidth = 1.5;

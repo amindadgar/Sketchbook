@@ -44,6 +44,8 @@ export class TrafficCar
 
 	public id: number;
 	public color: number;
+	/** Which of the catalogue's vehicles it is: what it turns into when it's stolen. */
+	public model: string;
 	public object: THREE.Object3D;
 	public body: CANNON.Body;
 
@@ -95,10 +97,11 @@ export class TrafficCar
 	private wheels: THREE.Object3D[] = [];
 	private lamps: THREE.Object3D;
 
-	constructor(id: number, color: number, template: THREE.Object3D, lampTexture: THREE.Texture)
+	constructor(id: number, color: number, template: THREE.Object3D, lampTexture: THREE.Texture, model: string = 'car')
 	{
 		this.id = id;
 		this.color = color;
+		this.model = model;
 		this.object = template.clone(true);
 		this.object.name = 'traffic ' + id;
 
@@ -130,14 +133,23 @@ export class TrafficCar
 		});
 
 		// Glowing headlamps for after dark
+		// Where the model marks its headlamps, or where the original car has them
+		let spots: THREE.Vector3[] = [];
+		for (const name of ['headlight_l', 'headlight_r'])
+		{
+			let marker = template.getObjectByName(name);
+			if (marker !== undefined) spots.push(marker.position.clone());
+		}
+		if (spots.length === 0) spots = [new THREE.Vector3(-0.52, 0.32, 1.32), new THREE.Vector3(0.52, 0.32, 1.32)];
+
 		this.lamps = new THREE.Group();
-		for (const side of [-0.52, 0.52])
+		for (const spot of spots)
 		{
 			let lamp = new THREE.Sprite(new THREE.SpriteMaterial({
 				map: lampTexture, color: 0xfff3d0, blending: THREE.AdditiveBlending,
 				transparent: true, depthWrite: false, opacity: 0.75
 			}));
-			lamp.position.set(side, 0.32, 1.32);
+			lamp.position.copy(spot);
 			lamp.scale.setScalar(0.45);
 			this.lamps.add(lamp);
 		}

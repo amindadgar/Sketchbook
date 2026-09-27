@@ -18,6 +18,13 @@ export class Car extends Vehicle implements IControllable
 
 	// Top gear's max speed, what the speedometer fills up to
 	public topSpeed: number = 22;
+	/**
+	 * How this model differs from the original car: every gear's top speed
+	 * scaled by gearing, and the engine's pull by power. Set from the vehicle
+	 * catalogue when a model is made.
+	 */
+	public gearing: number = 1;
+	public power: number = 1;
 
 	get speed(): number {
 		return this._speed;
@@ -61,9 +68,9 @@ export class Car extends Vehicle implements IControllable
 	public boosting: boolean = false;
 	private boostPuff: number = 0;
 
-	constructor(gltf: any)
+	constructor(gltf: any, handling?: any)
 	{
-		super(gltf, {
+		super(gltf, Object.assign({
 			radius: 0.25,
 			suspensionStiffness: 20,
 			suspensionRestLength: 0.35,
@@ -72,7 +79,7 @@ export class Car extends Vehicle implements IControllable
 			dampingRelaxation: 2,
 			dampingCompression: 2,
 			rollInfluence: 0.8
-		});
+		}, handling));
 
 		this.readCarData(gltf);
 
@@ -92,6 +99,14 @@ export class Car extends Vehicle implements IControllable
 		};
 
 		this.steeringSimulator = new SpringSimulator(60, 10, 0.6);
+	}
+
+	/** A model's own feel, from the catalogue. */
+	public tune(gearing: number, power: number): void
+	{
+		this.gearing = gearing;
+		this.power = power;
+		this.topSpeed = 22 * gearing;
 	}
 
 	/** Pedal braking: reverse held while still rolling forward at speed. */
@@ -136,16 +151,17 @@ export class Car extends Vehicle implements IControllable
 		}
 
 		// Engine
-		const engineForce = 500;
+		const engineForce = 500 * this.power;
 		const maxGears = 5;
+		const g = this.gearing;
 		const gearsMaxSpeeds = {
 			'R': -4,
 			'0': 0,
-			'1': 5,
-			'2': 9,
-			'3': 13,
-			'4': 17,
-			'5': 22,
+			'1': 5 * g,
+			'2': 9 * g,
+			'3': 13 * g,
+			'4': 17 * g,
+			'5': 22 * g,
 		};
 
 		if (this.shiftTimer > 0)
@@ -158,8 +174,11 @@ export class Car extends Vehicle implements IControllable
 			// Transmission 
 			if (this.actions.reverse.isPressed)
 			{
-				const powerFactor = (gearsMaxSpeeds['R'] - this.speed) / Math.abs(gearsMaxSpeeds['R']);
-				const force = (engineForce / this.gear) * (Math.abs(powerFactor) ** 1);
+				// Full pull from a standstill down to nothing at reverse's top
+				// speed. Taken as an absolute this used to pull again past it, so
+				// reversing never stopped getting faster
+				const powerFactor = Math.max(0, (this.speed - gearsMaxSpeeds['R']) / Math.abs(gearsMaxSpeeds['R']));
+				const force = (engineForce / this.gear) * powerFactor * this.damagePower;
 
 				this.applyEngineForce(force);
 			}
@@ -171,7 +190,7 @@ export class Car extends Vehicle implements IControllable
 				else if (this.gear > 1 && powerFactor > 1.2) this.shiftDown();
 				else if (this.actions.throttle.isPressed)
 				{
-					const force = (engineForce / this.gear) * (powerFactor ** 1);
+					const force = (engineForce / this.gear) * (powerFactor ** 1) * this.damagePower;
 					this.applyEngineForce(-force);
 				}
 			}
@@ -291,7 +310,7 @@ export class Car extends Vehicle implements IControllable
 		// three seconds of a constant shove would put the car into orbit.
 		if (this.boosting)
 		{
-			let room = THREE.MathUtils.clamp(1 - Math.abs(this.speed) / Car.BOOST_TOP, 0, 1);
+			let room = THREE.MathUtils.clamp(1 - Math.abs(this.speed) / (Car.BOOST_TOP * this.gearing), 0, 1);
 			let shove = Utils.cannonVector(forward.clone().multiplyScalar(Car.BOOST_FORCE * room));
 
 			this.collision.applyForce(shove, new CANNON.Vec3());

@@ -42,22 +42,21 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 	private originalColors: { [uuid: string]: THREE.Color } = {};
 	private static readonly UNPAINTED: string[] = [
 		'wheel', 'tire', 'tyre', 'window', 'glass', 'headlight',
-		'taillight', 'light', 'black', 'grey', 'gray', 'chrome'
+		'taillight', 'light', 'black', 'grey', 'gray', 'chrome', 'livery'
 	];
 	private enginePitch: number = 1;
 	private engineVolume: number = 0;
 
 	/**
-	 * Condition, 100 down to 0. Nothing about the handling depends on it: it
-	 * decides how hard the wreck smokes, which is the whole point of it. A
-	 * number the player can't see quietly throttling their engine would just
-	 * feel like the car had gone wrong.
+	 * Condition, 100 down to 0, shown under the speed while driving. It
+	 * decides how hard the wreck smokes, and from a third of the way down the
+	 * engine starts to lose its power, which a garage puts right.
 	 */
 	public integrity: number = 100;
+	/** Below this the engine weakens, to a limp at nothing. */
+	public static readonly WEAK_BELOW: number = 35;
 	/** Slower than this along the contact normal and it's a nudge, not a crash. */
 	private static readonly IMPACT_FLOOR: number = 6;
-	/** Health lost per metre a second over the floor. */
-	private static readonly IMPACT_DAMAGE: number = 3.2;
 	/** Condition lost per metre a second over the floor. */
 	private static readonly IMPACT_WEAR: number = 5;
 	private static readonly SMOKE_BELOW: number = 45;
@@ -197,6 +196,23 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		}
 
 		this.updateMatrixWorld();
+	}
+
+	/** A share of the engine's power the damage leaves it: all of it, down to a limp. */
+	public get damagePower(): number
+	{
+		if (this.integrity >= Vehicle.WEAK_BELOW) return 1;
+		return 0.35 + 0.65 * Math.max(0, this.integrity) / Vehicle.WEAK_BELOW;
+	}
+
+	/** Put right at a garage: full condition, no smoke, back on its wheels. */
+	public repair(): void
+	{
+		this.integrity = 100;
+		this.impactCooldown = 0;
+		this.smokeTimer = 0;
+		let up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.quaternion);
+		if (up.y < 0.5) this.recover();
 	}
 
 	/** Braking with the pedal rather than a locked wheel, which only a car has. */
@@ -788,7 +804,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		{
 			this.headlights = new THREE.Group();
 
-			for (const side of [-0.52, 0.52])
+			for (const spot of this.lampSpots())
 			{
 				let lamp = new THREE.Sprite(new THREE.SpriteMaterial({
 					map: Vehicle.getLampTexture(),
@@ -799,7 +815,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 					opacity: 0.7
 				}));
 
-				lamp.position.set(side, 0.32, 1.32);
+				lamp.position.copy(spot);
 				lamp.scale.setScalar(0.42);
 				this.headlights.add(lamp);
 			}
@@ -808,6 +824,18 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		}
 
 		this.headlights.visible = on;
+	}
+
+	/** Where the headlamps are: where the model marks them, or where the original car has them. */
+	protected lampSpots(): THREE.Vector3[]
+	{
+		let spots: THREE.Vector3[] = [];
+		for (const name of ['headlight_l', 'headlight_r'])
+		{
+			let marker = this.getObjectByName(name);
+			if (marker !== undefined) spots.push(marker.position.clone());
+		}
+		return spots.length > 0 ? spots : [new THREE.Vector3(-0.52, 0.32, 1.32), new THREE.Vector3(0.52, 0.32, 1.32)];
 	}
 
 	private static getLampTexture(): THREE.Texture
@@ -851,14 +879,9 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		let over = impact - Vehicle.IMPACT_FLOOR;
 		this.integrity = Math.max(0, this.integrity - over * Vehicle.IMPACT_WEAR);
 
+		// The car takes the knock, not whoever's in it: a crash costs condition
+		// and, past a point, power, never health
 		this.world.sfx.thud(this.position, Math.min(1, over / 14));
-
-		// Only the local player's own client decides what a crash did to them,
-		// the same way it already owns everything else about their health
-		if (this.controllingCharacter === undefined) return;
-		if (this.controllingCharacter !== this.world.localCharacter) return;
-
-		this.world.combat.applyCrashDamage(over * Vehicle.IMPACT_DAMAGE);
 	}
 
 	/**

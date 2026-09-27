@@ -1,0 +1,297 @@
+/* Shops, the dealership and the job board all open this, in the middle */
+#game-panel {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: min(560px, calc(100vw - 32px));
+	max-height: 78vh;
+	overflow-y: auto;
+	padding: 16px 20px 12px;
+	background: rgba(8, 10, 14, 0.88);
+	border-radius: 10px;
+	font-family: 'Solway', serif;
+	color: #fff;
+	z-index: 46;
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+	pointer-events: auto;
+}
+
+#game-panel .panel-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+}
+
+#game-panel .panel-title {
+	font-size: 21px;
+	font-weight: 700;
+	color: #FFB900;
+}
+
+#game-panel .panel-close {
+	font-size: 24px;
+	line-height: 1;
+	color: rgba(255, 255, 255, 0.5);
+	cursor: pointer;
+}
+
+#game-panel .panel-close:hover {
+	color: #fff;
+}
+
+#game-panel .panel-subtitle {
+	margin: 4px 0 10px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+	font-size: 13px;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+#game-panel .panel-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 7px 6px;
+	border-radius: 6px;
+}
+
+#game-panel .panel-row:nth-child(odd) {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+#game-panel .panel-row.highlight {
+	background: rgba(255, 185, 0, 0.16);
+}
+
+#game-panel .panel-row.disabled .panel-text {
+	opacity: 0.55;
+}
+
+#game-panel .panel-key {
+	width: 16px;
+	flex: none;
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.45);
+	text-align: center;
+}
+
+#game-panel .panel-text {
+	flex: 1;
+	min-width: 0;
+}
+
+#game-panel .panel-row-title {
+	font-size: 15px;
+	font-weight: 700;
+}
+
+#game-panel .panel-row-detail {
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.65);
+}
+
+#game-panel .panel-aside {
+	flex: none;
+	font-size: 14px;
+	color: #7fe39a;
+	font-variant-numeric: tabular-nums;
+}
+
+#game-panel .panel-button {
+	flex: none;
+	min-width: 64px;
+	padding: 5px 10px;
+	border: 0;
+	border-radius: 5px;
+	background: #FFB900;
+	color: #111;
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+#game-panel .panel-button:disabled {
+	background: rgba(255, 255, 255, 0.18);
+	color: rgba(255, 255, 255, 0.5);
+	cursor: default;
+}
+
+#game-panel .panel-foot {
+	margin-top: 8px;
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.4);
+	text-align: center;
+}
+
+body.touch #game-panel .panel-foot {
+	display: none;
+}
+
+/* The numbers are keys to press, and a phone has none */
+body.touch #game-panel .panel-key {
+	display: none;
+}
+
+/* What E does here, above the speedometer */
+#interaction-prompt {
+	position: fixed;
+	left: 50%;
+	bottom: 96px;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 14px 6px 8px;
+	background: rgba(0, 0, 0, 0.62);
+	border-radius: 18px;
+	font-family: 'Solway', serif;
+	font-size: 15px;
+	color: #fff;
+	white-space: nowrap;
+	user-select: none;
+	z-index: 30;
+	pointer-events: auto;
+	cursor: pointer;
+}
+
+#interaction-key {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 22px;
+	height: 22px;
+	border-radius: 5px;
+	background: #FFB900;
+	color: #111;
+	font-weight: 700;
+	font-size: 13px;
+}
+
+body.touch #interaction-key {
+	display: none;
+}
+
+body.touch #interaction-prompt {
+	bottom: auto;
+	top: 58%;
+	padding: 10px 16px;
+	font-size: 15px;
+	border: 2px solid #FFB900;
+}
+
+/* The job in hand: what to do next, how long is left, what it pays */
+#job-hud {
+	position: fixed;
+	top: 14px;
+	left: 130px;
+	min-width: 190px;
+	max-width: 300px;
+	padding: 9px 12px;
+	background: rgba(0, 0, 0, 0.5);
+	border-radius: 6px;
+	font-family: 'Solway', serif;
+	color: #fff;
+	pointer-events: none;
+	user-select: none;
+	z-index: 25;
+}
+
+#job-title {
+	font-size: 12px;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	color: #FFB900;
+}
+
+#job-objective {
+	margin-top: 2px;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+#job-detail {
+	margin-top: 2px;
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.72);
+}
+
+#job-timer {
+	margin-top: 4px;
+	font-size: 18px;
+	font-variant-numeric: tabular-nums;
+}
+
+#job-timer:empty {
+	display: none;
+}
+
+/* Which way, and how far, to the next thing the job wants */
+#job-way {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	margin-top: 4px;
+	font-size: 13px;
+	color: rgba(255, 255, 255, 0.85);
+	font-variant-numeric: tabular-nums;
+}
+
+#job-arrow {
+	display: inline-block;
+	font-size: 17px;
+	line-height: 1;
+	color: #FFB900;
+}
+
+#job-timer.urgent {
+	color: #ff6a5a;
+}
+
+/* Narrower and smaller on a phone: the middle of the top is where notices
+   come in, and the panel mustn't sit over them */
+body.touch #job-hud {
+	top: 8px;
+	left: 80px;
+	min-width: 0;
+	max-width: 148px;
+	padding: 5px 8px;
+}
+
+body.touch #job-title {
+	font-size: 10px;
+}
+
+body.touch #job-objective {
+	font-size: 13px;
+}
+
+body.touch #job-detail {
+	font-size: 11px;
+	line-height: 1.25;
+}
+
+body.touch #job-timer {
+	margin-top: 2px;
+	font-size: 15px;
+}
+
+/* Holding somebody up: a green ring filling round the crosshair */
+#holdup-ring {
+	--fill: 0;
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	width: 64px;
+	height: 64px;
+	margin: -32px 0 0 -32px;
+	border-radius: 50%;
+	pointer-events: none;
+	z-index: 25;
+	background: conic-gradient(#7fe39a calc(var(--fill) * 1%), rgba(255, 255, 255, 0.12) 0);
+	-webkit-mask: radial-gradient(circle, transparent 26px, #000 27px);
+	mask: radial-gradient(circle, transparent 26px, #000 27px);
+	filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+}

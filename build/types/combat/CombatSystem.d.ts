@@ -58,6 +58,17 @@ export declare class CombatSystem implements IUpdatable {
     private aiming;
     private respawnPoints;
     private gunBuffers;
+    /**
+     * Every gun the player has, and what's left in each; the one in the hand
+     * is the character's own. Bought guns stay through a death, ones picked
+     * up off the street go with it.
+     */
+    private carried;
+    private restored;
+    /** When each gun in the pocket may fire again, in seconds of page time. */
+    private readyAt;
+    private static readonly DRAW_TIME;
+    private shownSlots;
     private audioPool;
     private audioCursor;
     private hitSound;
@@ -101,6 +112,44 @@ export declare class CombatSystem implements IUpdatable {
     /** One weapon per anchor, cycling the types so no corner is all shotguns. */
     placePickups(anchors: THREE.Vector3[]): void;
     update(timeStep: number, unscaledTimeStep: number): void;
+    /**
+     * Into the player's hands: a new gun with its full load, or, for one
+     * already carried, a magazine's worth more for it, or the lot for a
+     * purchase. Then it's the one held.
+     */
+    giveWeapon(id: string, bought: boolean): void;
+    /** A magazine's worth more for a gun carried. False if it isn't. */
+    addAmmo(id: string): boolean;
+    carries(id: string): boolean;
+    /** The guns carried, in the order the number keys pick them. */
+    carriedIds(): string[];
+    /** Number key n: the nth gun carried. */
+    selectSlot(n: number): void;
+    /** Q: the next gun carried, and empty hands after the last. */
+    cycleWeapon(): void;
+    /** What's in the hand, put back in the pocket with what it has left. */
+    private stow;
+    private draw;
+    /** The best gun carried with anything in it, or the first owned one. */
+    private drawBest;
+    /**
+     * Out of rounds altogether. A gun that was picked up is thrown away; one
+     * that was bought is kept, empty, for the shop to fill again. Either way
+     * the next gun with anything in it comes out.
+     */
+    private spent;
+    /** Dying: guns picked up are lost, bought ones kept with what they had. */
+    private dropOnDeath;
+    /**
+     * What dying costs. Killed by another player in a party, it's dropped where
+     * the body falls, for whoever gets there first: the killer, most likely,
+     * or the dead player on the way back. Otherwise the hospital has it.
+     * After the death is reported, since the relay only takes a drop from
+     * somebody it knows has just died.
+     */
+    private chargeForDeath;
+    /** The guns carried, along the bottom of the weapon readout, the one in hand picked out. */
+    private showSlots;
     /**
      * A new local character: a scenario launch, or the player's own restart.
      * Whatever was going on with the last one, a countdown to respawning, a
@@ -159,11 +208,6 @@ export declare class CombatSystem implements IUpdatable {
     /** The player we shot says it counted. */
     confirmHit(dead: boolean): void;
     /**
-     * Damage from driving into something, rather than from being shot. Nobody
-     * gets the point for it, so there's no attacker to name.
-     */
-    applyCrashDamage(damage: number): void;
-    /**
      * A hit arriving from somebody else's client.
      *
      * The relay has already checked what it can, but it has never seen the map
@@ -172,6 +216,14 @@ export declare class CombatSystem implements IUpdatable {
      * last word on whether a bullet could have arrived is here.
      */
     takeRemoteHit(damage: number, attackerId: number, from?: THREE.Vector3, weapon?: string, life?: number): void;
+    /**
+     * Shot by somebody in the city rather than by a player: a guard, a
+     * target's bodyguard. Cover counts the same, and so does the red at the
+     * edges, but nobody is credited with anything. False if it didn't land.
+     */
+    hurtByNpc(damage: number, from: THREE.Vector3, weapon?: string): boolean;
+    /** Whether the player is holding a gun up at something, on foot. */
+    get isAiming(): boolean;
     /** The red at the edges, a wedge toward the shooter, and a thump. */
     private feelHit;
     /**

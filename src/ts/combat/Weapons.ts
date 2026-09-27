@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createGLTFLoader } from '../core/Loaders';
 
 import catalogue from '../../../shared/weapons.json';
 
@@ -24,12 +25,25 @@ export interface WeaponSpec
 	/** Degrees the view kicks up per shot, and settles back down from. */
 	recoil: number;
 	color: string;
+	/** Dollars at a gun shop, and for another magazine's worth of spare rounds. */
+	price: number;
+	ammoPrice: number;
+	/** Held and aimed in one hand. Everything longer gets the other hand under it. */
+	oneHanded?: boolean;
+	/** The view narrows to this while aiming, for a scope. */
+	zoomFov?: number;
+	/** Another gun's report, played at a different pitch, when this one has none of its own. */
+	sound?: string;
+	soundPitch?: number;
+	/** False for guns only ever sold, never lying about to be picked up. */
+	pickup?: boolean;
 }
 
 /**
- * Four weapons that want to be used differently: the rifle rewards aim, the
- * shotgun rewards closing the distance, the automatic rewards holding an angle,
- * and the handgun is the one you always have something better than.
+ * Guns that want to be used differently: the rifles reward aim, the shotgun
+ * rewards closing the distance, the automatics reward holding an angle, and
+ * the handgun is the one you always have something better than. The first
+ * four lie about the map to be picked up; the rest are only sold.
  *
  * The numbers live in shared/weapons.json because the relay checks incoming
  * hits against them. A second copy over there would drift from this one and
@@ -47,14 +61,67 @@ export function findWeapon(id: string): WeaponSpec
 	return undefined;
 }
 
+/** Each gun's model, loaded once and copied for every hand and pickup that shows it. */
+const gunModels: { [id: string]: Promise<THREE.Object3D> } = {};
+
+function loadGunModel(id: string): Promise<THREE.Object3D>
+{
+	if (gunModels[id] === undefined)
+	{
+		gunModels[id] = new Promise((resolve, reject) =>
+		{
+			createGLTFLoader().load('build/assets/guns/' + id + '.glb', (gltf) =>
+			{
+				gltf.scene.traverse((child: any) =>
+				{
+					if (child.isMesh) child.castShadow = true;
+				});
+				resolve(gltf.scene);
+			}, undefined, reject);
+		});
+	}
+	return gunModels[id];
+}
+
 /**
- * Guns built out of boxes rather than modelled, since the project ships no
- * weapon art. At the size they're actually seen, silhouette and colour are what
- * make them tellable apart, so each one gets a distinct one.
+ * A gun: the modelled one, from the CC0 guns pack, once it has loaded, and
+ * until then one built out of boxes in its shape and colour, so a gun is in
+ * the hand the moment it's picked up. Both share an origin at the top of the
+ * grip, the barrel along +z, so the swap doesn't move it.
  *
  * The group carries a 'muzzle' child marking where shots leave the barrel.
  */
 export function buildWeaponModel(spec: WeaponSpec): THREE.Group
+{
+	let group = buildBoxModel(spec);
+
+	loadGunModel(spec.id).then((model) =>
+	{
+		for (const child of group.children.slice())
+		{
+			group.remove(child);
+			let mesh = child as THREE.Mesh;
+			if (mesh.isMesh)
+			{
+				mesh.geometry.dispose();
+				(mesh.material as THREE.Material).dispose();
+			}
+		}
+		// Shares the loaded geometry and textures, which nothing ever frees
+		group.add(model.clone(true));
+	}).catch(() =>
+	{
+		// Offline or missing: the boxes will do
+	});
+
+	return group;
+}
+
+/**
+ * Guns built out of boxes. At the size they're actually seen, silhouette and
+ * colour are what make them tellable apart, so each one gets a distinct one.
+ */
+function buildBoxModel(spec: WeaponSpec): THREE.Group
 {
 	let group = new THREE.Group();
 
@@ -101,6 +168,43 @@ export function buildWeaponModel(spec: WeaponSpec): THREE.Group
 			add(metal, 0.09, 0.06, 0.54, 0, 0.01, 0.10);
 			add(accent, 0.05, 0.10, 0.22, 0, -0.04, -0.24);
 			add(metal, 0.05, 0.09, 0.05, 0, -0.07, -0.02);
+			break;
+
+		case 'heavy_pistol':
+			barrelLength = 0.25;
+			add(metal, 0.055, 0.1, 0.27, 0, 0, 0.03);
+			add(accent, 0.05, 0.14, 0.065, 0, -0.11, -0.05);
+			add(metal, 0.03, 0.03, 0.05, 0, 0.065, -0.08);
+			break;
+
+		case 'smg':
+			barrelLength = 0.3;
+			add(metal, 0.05, 0.08, 0.3, 0, 0, 0.05);
+			add(metal, 0.035, 0.18, 0.045, 0, -0.12, 0.08);
+			add(accent, 0.04, 0.12, 0.06, 0, -0.09, -0.04);
+			add(metal, 0.02, 0.05, 0.16, 0, 0.0, -0.17);
+			break;
+
+		case 'assault_rifle':
+			barrelLength = 0.58;
+			add(metal, 0.05, 0.085, 0.5, 0, 0, 0.08);
+			add(metal, 0.03, 0.03, 0.22, 0, 0.005, 0.42);
+			add(accent, 0.045, 0.16, 0.06, 0, -0.12, 0.1);
+			add(metal, 0.035, 0.1, 0.05, 0, -0.08, -0.05);
+			add(accent, 0.045, 0.09, 0.22, 0, -0.03, -0.26);
+			add(metal, 0.03, 0.035, 0.12, 0, 0.065, 0.06);
+			break;
+
+		case 'sniper':
+			barrelLength = 0.78;
+			add(metal, 0.045, 0.075, 0.62, 0, 0, 0.12);
+			add(metal, 0.025, 0.025, 0.32, 0, 0.005, 0.58);
+			add(accent, 0.045, 0.1, 0.26, 0, -0.03, -0.3);
+			add(metal, 0.035, 0.11, 0.05, 0, -0.09, -0.04);
+			// A long scope, fatter at the ends
+			add(metal, 0.035, 0.035, 0.26, 0, 0.085, 0.08);
+			add(metal, 0.05, 0.05, 0.05, 0, 0.085, 0.22);
+			add(metal, 0.045, 0.045, 0.05, 0, 0.085, -0.06);
 			break;
 
 		default:

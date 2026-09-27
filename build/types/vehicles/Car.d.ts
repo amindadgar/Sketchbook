@@ -7,6 +7,13 @@ export declare class Car extends Vehicle implements IControllable {
     drive: string;
     protected engineSoundPath: string;
     topSpeed: number;
+    /**
+     * How this model differs from the original car: every gear's top speed
+     * scaled by gearing, and the engine's pull by power. Set from the vehicle
+     * catalogue when a model is made.
+     */
+    gearing: number;
+    power: number;
     get speed(): number;
     private _speed;
     private steeringWheel;
@@ -37,7 +44,9 @@ export declare class Car extends Vehicle implements IControllable {
     boostLeft: number;
     boosting: boolean;
     private boostPuff;
-    constructor(gltf: any);
+    constructor(gltf: any, handling?: any);
+    /** A model's own feel, from the catalogue. */
+    tune(gearing: number, power: number): void;
     /** Pedal braking: reverse held while still rolling forward at speed. */
     protected isFootBraking(): boolean;
     protected reapplyHeldBrakes(): void;

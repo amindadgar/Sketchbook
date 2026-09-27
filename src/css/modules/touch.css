@@ -111,11 +111,6 @@ body.touch #combat-hud {
 	bottom: 202px;
 }
 
-body.touch #speedometer {
-	width: 200px;
-	bottom: 168px;
-}
-
 body.touch #party-hud {
 	top: 8px;
 	padding: 5px 10px;
@@ -172,6 +167,12 @@ body.touch #health-badge {
 	font-size: 15px;
 }
 
+body.touch #cash-badge {
+	right: 196px;
+	padding: 4px 9px;
+	font-size: 15px;
+}
+
 body.touch #fps-badge {
 	right: 128px;
 	padding: 4px 8px;
@@ -216,48 +217,30 @@ body.touch #minimap {
 /* The MAP button opens the whole-world map, centred: a landscape phone is
    only ~390px tall, so any corner a map sits in is one a thumb is using. */
 
-/* A figure under the stick rather than a bar across the screen. At 390px tall
-   the bar was both hard to read and in the way of a thumb. */
-#speed-badge {
-	display: none;
-}
-
+/* The speed figure goes under the stick, where a thumb isn't: the bottom
+   middle is between the two thumbs and the buttons, and short of room */
 body.touch #speed-badge {
-	position: fixed;
 	left: 18px;
 	bottom: 26px;
 	width: 132px;
-	display: flex;
-	align-items: baseline;
-	justify-content: center;
+	min-width: 0;
+	padding: 0;
 	gap: 4px;
-	visibility: hidden;
-	font-family: 'Solway', serif;
-	color: #fff;
-	pointer-events: none;
-	user-select: none;
-	z-index: 25;
+	transform: none;
+	background: none;
 }
 
-#speed-number {
+body.touch #speed-number {
 	font-size: 20px;
-	font-weight: 700;
 }
 
-#speed-unit {
+body.touch #speed-unit {
 	font-size: 11px;
-	color: rgba(255, 255, 255, 0.7);
 }
 
 /* Lifted to make room for the figure and the boost meter beneath it */
 body.touch #touch-stick {
 	bottom: 56px;
-}
-
-body.touch #speedometer {
-	/* The HUD writes display inline when a car is entered, which a plain rule
-	   here would lose to. The figure under the stick replaces this entirely. */
-	display: none !important;
 }
 
 /* The lap board shares the top left with the map button, so it moves across */
@@ -304,7 +287,14 @@ body.touch #notices {
 	top: 48px;
 }
 
+/* Wrapped rather than run long, so a notice stays clear of the job panel */
 body.touch .notice {
+	max-width: 250px;
+	flex-wrap: wrap;
+	justify-content: center;
+	row-gap: 0;
+	white-space: normal;
+	text-align: center;
 	padding: 4px 11px;
 	font-size: 13px;
 }
@@ -336,4 +326,11 @@ body.touch .intro-line {
 
 body.touch .intro-key {
 	min-width: 56px;
+}
+
+body.touch #condition {
+	left: 18px;
+	bottom: 2px;
+	transform: none;
+	width: 120px;
 }

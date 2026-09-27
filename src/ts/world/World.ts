@@ -34,11 +34,12 @@ import { VehicleSpawnPoint } from './VehicleSpawnPoint';
 import { Sky } from './Sky';
 import { Water } from './Water';
 import { City } from '../city/City';
+import { CityPlan } from '../city/CityPlan';
 import { NpcSystem } from '../npc/NpcSystem';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartyMenu } from '../party/PartyMenu';
 import { PartySession } from '../party/PartySession';
-import { Minimap } from '../core/Minimap';
+import { Minimap, Blip } from '../core/Minimap';
 import { TouchControls } from '../core/TouchControls';
 import { DeviceProfile } from '../core/DeviceProfile';
 import { Effects } from '../core/Effects';
@@ -49,6 +50,14 @@ import { Notices } from '../core/Notices';
 import { Sfx } from '../core/Sfx';
 import { Onboarding } from '../core/Onboarding';
 import { Progress } from '../progress/Progress';
+import { Wallet } from '../progress/Wallet';
+import { CashDrops } from '../economy/CashDrops';
+import { Dealership } from '../economy/Dealership';
+import { Mugging } from '../economy/Mugging';
+import { Interactions } from '../core/Interactions';
+import { ShopSystem } from '../economy/ShopSystem';
+import { JobSystem } from '../jobs/JobSystem';
+import { registerJobs } from '../jobs/registerJobs';
 import { StuntSystem } from '../stunts/StuntSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 
@@ -64,6 +73,9 @@ export class World
 	public water: Water;
 	public city: City;
 	public npcs: NpcSystem;
+	public shops: ShopSystem;
+	public dealership: Dealership;
+	public jobs: JobSystem;
 	private islandPickups: THREE.Vector3[] = [];
 	private islandRespawns: THREE.Vector3[] = [];
 	public physicsWorld: CANNON.World;
@@ -113,6 +125,13 @@ export class World
 	public skidMarks: SkidMarks;
 	public intro: Onboarding;
 	public progress: Progress;
+	public wallet: Wallet;
+	public cashDrops: CashDrops;
+	public mugging: Mugging;
+	/** What E does right here. */
+	public interactions: Interactions;
+	/** Things marked on the map, by whatever wants them there: shops, job targets. */
+	public blips: Blip[] = [];
 	public stunts: StuntSystem;
 	private headlightsOn: boolean = false;
 	private beam: THREE.SpotLight;
@@ -140,7 +159,9 @@ export class World
 	};
 
 
-	private speedometerFill: number = 0;
+	/** The speed figure as shown, eased so it doesn't flicker at a steady speed. */
+	private shownSpeed: number = 0;
+	private speedShown: boolean = false;
 	private boundResumeAudio: (evt: any) => void;
 
 	constructor(worldScenePath?: any)
@@ -227,6 +248,8 @@ export class World
 		this.sfx.load();
 		this.intro = new Onboarding(this);
 		this.progress = new Progress(this);
+		this.wallet = new Wallet(this);
+		this.interactions = new Interactions(this);
 		this.stunts = new StuntSystem(this);
 		this.chat = new Chat(this);
 		this.leaderboard = new Leaderboard(this);
@@ -311,6 +334,7 @@ export class World
 		this.intro.update(unscaledTimeStep);
 		this.updateProgress(unscaledTimeStep);
 		this.progress.update(unscaledTimeStep);
+		this.wallet.update(unscaledTimeStep);
 		this.updateHeadlights();
 
 		// Physics debug
@@ -549,33 +573,24 @@ export class World
 	}
 
 	/**
-	 * Shows the speed bar only while the local player is at the wheel of a car,
-	 * and eases the fill so it climbs rather than snapping.
+	 * The speed in kilometres an hour, only while the local player is at the
+	 * wheel of a car or on a bike, with the nitro and the car's condition under it.
 	 */
 	private updateSpeedometer(): void
 	{
 		let car = this.getLocallyDrivenCar();
 		let driving = car !== undefined;
+		if (!driving && !this.speedShown) return;
+		this.speedShown = driving;
 
-		if (driving)
-		{
-			let target = THREE.MathUtils.clamp(Math.abs(car.speed) / car.topSpeed, 0, 1);
-			this.speedometerFill = THREE.MathUtils.lerp(this.speedometerFill, target, 0.12);
-		}
-		else if (this.speedometerFill === 0)
-		{
-			return;
-		}
-		else
-		{
-			this.speedometerFill = 0;
-		}
+		// World units a second, a metre being CityPlan.METRE of them
+		let kmh = driving ? Math.abs(car.speed) / CityPlan.METRE * 3.6 : 0;
+		this.shownSpeed = driving ? THREE.MathUtils.lerp(this.shownSpeed, kmh, 0.25) : 0;
 
 		UIManager.setSpeedometerVisible(driving);
-		// The units are invented, but a number that moves reads better than a
-		// bar at the size a phone can spare for it
-		UIManager.setSpeedometerFill(this.speedometerFill, driving ? Math.abs(car.speed) * 10 : 0);
+		UIManager.setSpeed(this.shownSpeed);
 		UIManager.setBoost(driving ? car.boostLeft : 0, driving && car.boosting);
+		UIManager.setCondition(driving ? Math.max(0, car.integrity) / 100 : undefined);
 	}
 
 	/**
@@ -786,6 +801,33 @@ export class World
 		_.pull(this.updatables, registree);
 	}
 
+	/**
+	 * A phone has no J or number keys: the money opens the job board, and the
+	 * gun's name switches to the next gun. Both work with a mouse too.
+	 */
+	private bindEconomyTaps(): void
+	{
+		let tap = (id: string, action: () => void) =>
+		{
+			let element = document.getElementById(id);
+			if (element === null) return;
+			let handler = (event: Event) =>
+			{
+				event.preventDefault();
+				event.stopPropagation();
+				action();
+			};
+			element.addEventListener('touchstart', handler, { passive: false });
+			element.addEventListener('mousedown', handler);
+		};
+		tap('cash-badge', () => this.jobs.toggleBoard());
+		tap('weapon-name', () =>
+		{
+			let character = this.localCharacter;
+			if (character !== undefined && !character.isBusyWithVehicle()) this.combat.cycleWeapon();
+		});
+	}
+
 	public loadScene(loadingManager: LoadingManager, gltf: any): void
 	{
 		gltf.scene.traverse((child) => {
@@ -860,6 +902,13 @@ export class World
 		// The city on the mainland, which is where a game starts now
 		this.city = new City(this, loadingManager);
 		this.npcs = new NpcSystem(this, this.city);
+		this.shops = new ShopSystem(this, this.city);
+		this.dealership = new Dealership(this, this.shops);
+		this.cashDrops = new CashDrops(this);
+		this.mugging = new Mugging(this);
+		this.jobs = new JobSystem(this, this.city);
+		registerJobs(this.jobs);
+		this.bindEconomyTaps();
 		this.scenarios.forEach((scenario) => scenario.default = scenario.id === 'city');
 		this.prepareCityCombat();
 
@@ -1186,6 +1235,10 @@ export class World
 			+ '<span class="ctrl-desc">Mute music</span></div>';
 		html += '<div class="ctrl-row"><span class="ctrl-key">N</span>'
 			+ '<span class="ctrl-desc">Big map</span></div>';
+		html += '<div class="ctrl-row"><span class="ctrl-key">J</span>'
+			+ '<span class="ctrl-desc">Jobs</span></div>';
+		html += '<div class="ctrl-row"><span class="ctrl-key">E</span>'
+			+ '<span class="ctrl-desc">Shops, and what a job asks</span></div>';
 		html += '<div class="ctrl-row"><span class="ctrl-key">C</span>'
 			+ '<span class="ctrl-desc">Center camera</span></div>';
 		html += '<div class="ctrl-row"><span class="ctrl-key">L</span>'
@@ -1294,6 +1347,7 @@ export class World
 						</g>
 					</svg>
 				</div>
+				<div id="holdup-ring" style="display: none"></div>
 				<div id="hit-marker">
 					<svg viewBox="0 0 100 100">
 						<g stroke="#ffffff" stroke-width="7" stroke-linecap="round">
@@ -1307,9 +1361,19 @@ export class World
 				<div id="settings-gear" title="Settings">&#9881;</div>
 				<div id="health-badge"><span id="health-heart">&#10084;</span><span id="health-number">100</span></div>
 				<div id="fps-badge" class="good"><span id="fps-number">60</span><span id="fps-unit">FPS</span></div>
+				<div id="cash-badge" title="Jobs (J)"><span id="cash-number">$0</span><span id="cash-jobs">JOBS</span></div>
+				<div id="interaction-prompt" style="display: none"><span id="interaction-key">E</span><span id="interaction-text"></span></div>
+				<div id="job-hud" style="display: none">
+					<div id="job-title"></div>
+					<div id="job-objective"></div>
+					<div id="job-detail"></div>
+					<div id="job-timer"></div>
+					<div id="job-way"><span id="job-arrow">&#10148;</span><span id="job-distance"></span></div>
+				</div>
 				<div id="minimap-toggle">MAP</div>
 				<div id="speed-badge"><span id="speed-number">0</span><span id="speed-unit">km/h</span></div>
 				<div id="boost"><div id="boost-fill"></div></div>
+				<div id="condition" title="Condition"><div id="condition-fill"></div></div>
 				<div id="scoreboard">
 					<div class="scoreboard-title">Players</div>
 					<div id="match-clock"></div>
@@ -1356,6 +1420,7 @@ export class World
 					<div id="weapon-readout">
 						<span id="weapon-name"></span><span id="weapon-ammo"></span>
 					</div>
+					<div id="weapon-slots"></div>
 				</div>
 				<div id="minimap">
 					<canvas id="minimap-canvas"></canvas>
@@ -1375,13 +1440,6 @@ export class World
 					<div id="race-result-place"></div>
 					<div class="race-result-row"><span>Total</span><span id="race-result-total"></span></div>
 					<div class="race-result-row"><span>Best lap</span><span id="race-result-best"></span></div>
-				</div>
-				<div id="speedometer">
-					<div id="speedometer-track">
-						<div id="speedometer-fill"></div>
-						<div class="speedometer-split" style="left: 33.33%;"></div>
-						<div class="speedometer-split" style="left: 66.66%;"></div>
-					</div>
 				</div>
 			</div>
 		`).appendTo('body');

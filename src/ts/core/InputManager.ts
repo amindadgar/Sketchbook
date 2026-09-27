@@ -172,10 +172,43 @@ export class InputManager implements IUpdatable
 				return;
 			}
 
+			if (event.code === 'KeyJ' && this.world.jobs !== undefined)
+			{
+				this.world.jobs.toggleBoard();
+				return;
+			}
+
 			if (event.code === 'KeyN' && this.world.minimap !== undefined)
 			{
 				this.world.minimap.toggleExpanded();
 				return;
+			}
+
+			// E does whatever's on offer here, on foot or at the wheel. Only
+			// taken while there's something on offer, and only from the player
+			// themselves, so aircraft yaw and the free camera keep it otherwise
+			if (event.code === 'KeyE' && this.world.interactions !== undefined && this.world.interactions.available
+				&& this.inputReceiver === (this.world.localCharacter as any))
+			{
+				this.world.interactions.trigger();
+				return;
+			}
+
+			// On foot: the number keys draw a gun carried, Q the next one
+			let player = this.world.localCharacter;
+			if (player !== undefined && this.inputReceiver === (player as any) && !player.isBusyWithVehicle())
+			{
+				let digit = /^Digit([1-9])$/.exec(event.code);
+				if (digit !== null)
+				{
+					this.world.combat.selectSlot(Number(digit[1]));
+					return;
+				}
+				if (event.code === 'KeyQ')
+				{
+					this.world.combat.cycleWeapon();
+					return;
+				}
 			}
 
 			if (event.code === 'Escape' && this.world.minimap !== undefined && this.world.minimap.expanded)

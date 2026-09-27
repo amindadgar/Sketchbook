@@ -91,6 +91,10 @@ export declare class PartySession implements IUpdatable {
     sendNpcSteal(id: number, door: THREE.Vector3): void;
     /** A lamp or sign this player's car knocked over, so it falls on everyone's screen. */
     sendBreak(id: number, velocity: THREE.Vector3): void;
+    /** Money the local player dropped on dying, for anyone in the party to pick up. */
+    sendDrop(at: THREE.Vector3, amount: number): void;
+    /** Asking for money on the ground; the relay says who got it. */
+    sendTake(id: number): void;
     /** Whether the relay supports something beyond the original protocol. */
     hasFeature(name: string): boolean;
     /**

@@ -34,16 +34,15 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     private enginePitch;
     private engineVolume;
     /**
-     * Condition, 100 down to 0. Nothing about the handling depends on it: it
-     * decides how hard the wreck smokes, which is the whole point of it. A
-     * number the player can't see quietly throttling their engine would just
-     * feel like the car had gone wrong.
+     * Condition, 100 down to 0, shown under the speed while driving. It
+     * decides how hard the wreck smokes, and from a third of the way down the
+     * engine starts to lose its power, which a garage puts right.
      */
     integrity: number;
+    /** Below this the engine weakens, to a limp at nothing. */
+    static readonly WEAK_BELOW: number;
     /** Slower than this along the contact normal and it's a nudge, not a crash. */
     private static readonly IMPACT_FLOOR;
-    /** Health lost per metre a second over the floor. */
-    private static readonly IMPACT_DAMAGE;
     /** Condition lost per metre a second over the floor. */
     private static readonly IMPACT_WEAR;
     private static readonly SMOKE_BELOW;
@@ -86,6 +85,10 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
     constructor(gltf: any, handlingSetup?: any);
     noDirectionPressed(): boolean;
     update(timeStep: number): void;
+    /** A share of the engine's power the damage leaves it: all of it, down to a limp. */
+    get damagePower(): number;
+    /** Put right at a garage: full condition, no smoke, back on its wheels. */
+    repair(): void;
     /** Braking with the pedal rather than a locked wheel, which only a car has. */
     protected isFootBraking(): boolean;
     /**
@@ -160,6 +163,8 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
      * point is that a car is visible in the dark, not that it lights the road.
      */
     setHeadlights(on: boolean): void;
+    /** Where the headlamps are: where the model marks them, or where the original car has them. */
+    protected lampSpots(): THREE.Vector3[];
     private static getLampTexture;
     /**
      * Cannon reports a collision once, on the frame the two bodies first touch,

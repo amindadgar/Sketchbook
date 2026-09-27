@@ -21,7 +21,7 @@ import { City } from '../city/City';
 import { NpcSystem } from '../npc/NpcSystem';
 import { PlayerIdentity } from '../party/PlayerIdentity';
 import { PartySession } from '../party/PartySession';
-import { Minimap } from '../core/Minimap';
+import { Minimap, Blip } from '../core/Minimap';
 import { TouchControls } from '../core/TouchControls';
 import { Effects } from '../core/Effects';
 import { RaceSystem } from '../race/RaceSystem';
@@ -31,6 +31,13 @@ import { Notices } from '../core/Notices';
 import { Sfx } from '../core/Sfx';
 import { Onboarding } from '../core/Onboarding';
 import { Progress } from '../progress/Progress';
+import { Wallet } from '../progress/Wallet';
+import { CashDrops } from '../economy/CashDrops';
+import { Dealership } from '../economy/Dealership';
+import { Mugging } from '../economy/Mugging';
+import { Interactions } from '../core/Interactions';
+import { ShopSystem } from '../economy/ShopSystem';
+import { JobSystem } from '../jobs/JobSystem';
 import { StuntSystem } from '../stunts/StuntSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 export declare class World {
@@ -44,6 +51,9 @@ export declare class World {
     water: Water;
     city: City;
     npcs: NpcSystem;
+    shops: ShopSystem;
+    dealership: Dealership;
+    jobs: JobSystem;
     private islandPickups;
     private islandRespawns;
     physicsWorld: CANNON.World;
@@ -93,6 +103,13 @@ export declare class World {
     skidMarks: SkidMarks;
     intro: Onboarding;
     progress: Progress;
+    wallet: Wallet;
+    cashDrops: CashDrops;
+    mugging: Mugging;
+    /** What E does right here. */
+    interactions: Interactions;
+    /** Things marked on the map, by whatever wants them there: shops, job targets. */
+    blips: Blip[];
     stunts: StuntSystem;
     private headlightsOn;
     private beam;
@@ -117,7 +134,9 @@ export declare class World {
          */
         waterLevel: number;
     };
-    private speedometerFill;
+    /** The speed figure as shown, eased so it doesn't flicker at a steady speed. */
+    private shownSpeed;
+    private speedShown;
     private boundResumeAudio;
     constructor(worldScenePath?: any);
     update(timeStep: number, unscaledTimeStep: number): void;
@@ -158,8 +177,8 @@ export declare class World {
      */
     private getLocallyDrivenCar;
     /**
-     * Shows the speed bar only while the local player is at the wheel of a car,
-     * and eases the fill so it climbs rather than snapping.
+     * The speed in kilometres an hour, only while the local player is at the
+     * wheel of a car or on a bike, with the nitro and the car's condition under it.
      */
     private updateSpeedometer;
     /**
@@ -216,6 +235,11 @@ export declare class World {
     registerUpdatable(registree: IUpdatable): void;
     remove(worldEntity: IWorldEntity): void;
     unregisterUpdatable(registree: IUpdatable): void;
+    /**
+     * A phone has no J or number keys: the money opens the job board, and the
+     * gun's name switches to the next gun. Both work with a mouse too.
+     */
+    private bindEconomyTaps;
     loadScene(loadingManager: LoadingManager, gltf: any): void;
     /**
      * Adds a scenario with a car, a helicopter and an aeroplane all within reach.

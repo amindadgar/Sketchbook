@@ -44,6 +44,8 @@ export class NetworkClient
 	public onNpcHit: (message: any) => void;
 	public onNpcSteal: (message: any) => void;
 	public onBreak: (message: any) => void;
+	public onDrop: (message: any) => void;
+	public onTaken: (message: any) => void;
 	public onError: (message: string) => void;
 	public onDisconnect: () => void;
 
@@ -299,6 +301,12 @@ export class NetworkClient
 				break;
 			case 'break':
 				if (this.onBreak !== undefined) this.onBreak(message);
+				break;
+			case 'drop':
+				if (this.onDrop !== undefined) this.onDrop(message);
+				break;
+			case 'taken':
+				if (this.onTaken !== undefined) this.onTaken(message);
 				break;
 			case 'death':
 				if (this.onDeath !== undefined) this.onDeath(message);

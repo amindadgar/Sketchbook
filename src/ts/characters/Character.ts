@@ -530,7 +530,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		Character.pointBone(fore, direction);
 		Character.pointBone(hand, direction);
 
-		let twoHanded = this.weapon !== undefined && this.weapon.id !== 'handgun';
+		let twoHanded = this.weapon !== undefined && this.weapon.oneHanded !== true;
 		if (!twoHanded) return;
 
 		// The left hand forward of the right, under the barrel
@@ -549,6 +549,13 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		let elbow = shoulder.clone().addScaledVector(toGrip, reach / 2).addScaledVector(bend, lift * 0.6);
 		Character.pointBone(leftUpper, elbow.clone().sub(shoulder).normalize());
 		Character.pointBone(leftFore, grip.clone().sub(elbow).normalize());
+	}
+
+	/** One bone of the skeleton, by name, pointed along a world direction, over whatever the animation did. */
+	public pointBoneAlong(name: string, direction: THREE.Vector3): void
+	{
+		let bone = this.modelContainer.getObjectByName(name);
+		if (bone !== undefined) Character.pointBone(bone, direction);
 	}
 
 	/** Turns a bone, keeping its parent where it is, so its length points along a world direction. */
@@ -804,6 +811,14 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		{
 			this.updateMatrixWorld(true);
 			this.poseAim(this.aimAlong);
+		}
+
+		// Astride something rather than sat in it: the vehicle says where the legs go
+		let ride = this.occupyingSeat !== null ? this.occupyingSeat.vehicle as any : undefined;
+		if (ride !== undefined && typeof ride.poseRider === 'function' && this.health > 0)
+		{
+			this.updateMatrixWorld(true);
+			ride.poseRider(this);
 		}
 
 		// Sync physics/graphics
@@ -1375,7 +1390,9 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	
 			this.controlledObject = vehicle;
 			this.controlledObject.allowSleep(false);
-			vehicle.inputReceiverInit();
+			// The camera and the controls list are the player's: somebody else
+			// taking a wheel, a driver in a job or a race, leaves them alone
+			if (this.isLocalPlayer()) vehicle.inputReceiverInit();
 	
 			vehicle.controllingCharacter = this;
 
@@ -1384,6 +1401,12 @@ export class Character extends THREE.Object3D implements IWorldEntity
 				(vehicle as unknown as Vehicle).setPlayerTint(this.playerColor);
 			}
 		}
+	}
+
+	/** The one the keyboard drives: this screen's player, not someone the game moves. */
+	public isLocalPlayer(): boolean
+	{
+		return this.world !== undefined && (this.world.localCharacter === this || this.world.inputManager.inputReceiver === this);
 	}
 
 	public transferControls(entity: IControllable): void
@@ -1423,7 +1446,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			this.controlledObject.resetControls();
 			(this.controlledObject as unknown as Vehicle).clearPlayerTint();
 			this.controlledObject = undefined;
-			this.inputReceiverInit();
+			if (this.isLocalPlayer()) this.inputReceiverInit();
 		}
 	}
 

@@ -16,6 +16,43 @@ export class UIManager
 		document.getElementById('dat-gui-container').style.top = value ? '48px' : '0px';
 	}
 
+	/** What's in the wallet, formatted, top right beside the health. */
+	public static setCash(text: string): void
+	{
+		let number = document.getElementById('cash-number');
+		if (number !== null) number.textContent = text;
+	}
+
+	/** A payment or a purchase, floated off the cash readout. */
+	public static flashCash(text: string, gain: boolean): void
+	{
+		let badge = document.getElementById('cash-badge');
+		if (badge === null) return;
+		let flash = document.createElement('div');
+		flash.className = 'cash-flash ' + (gain ? 'gain' : 'loss');
+		flash.textContent = text;
+		badge.appendChild(flash);
+		setTimeout(() => flash.remove(), 1600);
+	}
+
+	/** The guns carried, by number key, the one in hand picked out. */
+	public static setWeaponSlots(names: string[], held: number): void
+	{
+		let slots = document.getElementById('weapon-slots');
+		if (slots === null) return;
+		// More than one to switch between, which a phone shows beside the gun's name
+		let hud = document.getElementById('combat-hud');
+		if (hud !== null) hud.classList.toggle('several', names.length > 1);
+		while (slots.firstChild) slots.removeChild(slots.firstChild);
+		names.forEach((name, i) =>
+		{
+			let slot = document.createElement('span');
+			slot.className = 'weapon-slot' + (i === held ? ' held' : '');
+			slot.textContent = (i + 1) + ' ' + name;
+			slots.appendChild(slot);
+		});
+	}
+
 	/** @param health 0 to 1. Weapon name undefined means empty handed. */
 	public static setCombatHud(health: number, weapon: string, ammo: number, reserve: number): void
 	{
@@ -406,7 +443,6 @@ export class UIManager
 
 	public static setSpeedometerVisible(value: boolean): void
 	{
-		document.getElementById('speedometer').style.display = value ? 'block' : 'none';
 		document.getElementById('speed-badge').style.visibility = value ? 'visible' : 'hidden';
 		document.getElementById('boost').style.visibility = value ? 'visible' : 'hidden';
 	}
@@ -418,11 +454,30 @@ export class UIManager
 		document.getElementById('boost').classList.toggle('spending', spending);
 	}
 
-	/** @param fill 0 at a standstill, 1 at the vehicle's top speed. */
-	public static setSpeedometerFill(fill: number, speed: number): void
+	/** The car's condition under the speed, 0 to 1, or hidden with undefined. Reddens and pulses as it goes. */
+	public static setCondition(condition: number): void
 	{
-		document.getElementById('speedometer-fill').style.width = (fill * 100).toFixed(1) + '%';
-		// The phone layout shows a figure under the stick instead of a bar
-		document.getElementById('speed-number').textContent = String(Math.round(speed));
+		let bar = document.getElementById('condition');
+		if (bar === null) return;
+		if (condition === undefined)
+		{
+			bar.style.visibility = 'hidden';
+			return;
+		}
+		bar.style.visibility = 'visible';
+		let fill = document.getElementById('condition-fill');
+		fill.style.width = (condition * 100).toFixed(1) + '%';
+		let hue = Math.round(Math.max(0, Math.min(1, condition)) * 120);
+		fill.style.background = 'hsl(' + hue + ', 70%, 50%)';
+		bar.classList.toggle('weak', condition < 0.35);
 	}
+
+	/** The figure in kilometres an hour, rewritten only when the whole number changes. */
+	public static setSpeed(kmh: number): void
+	{
+		let text = String(Math.round(kmh));
+		let number = document.getElementById('speed-number');
+		if (number !== null && number.textContent !== text) number.textContent = text;
+	}
+
 }

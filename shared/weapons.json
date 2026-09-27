@@ -1,5 +1,5 @@
 {
-	"_": "Shared by the game and the relay. The relay checks incoming hits against these numbers, so a copy on each side would drift and start rejecting honest shots.",
+	"_": "Shared by the game and the relay. The relay checks incoming hits against these numbers, so a copy on each side would drift and start rejecting honest shots. Prices are dollars for the gun and for a magazine's worth of spare rounds. Guns with pickup false are only sold, never lying about.",
 	"weapons": [
 		{
 			"id": "handgun",
@@ -14,7 +14,10 @@
 			"spread": 0.012,
 			"range": 90,
 			"pellets": 1,
-			"recoil": 1.2
+			"recoil": 1.2,
+			"price": 250,
+			"ammoPrice": 30,
+			"oneHanded": true
 		},
 		{
 			"id": "automatic",
@@ -29,7 +32,9 @@
 			"spread": 0.035,
 			"range": 70,
 			"pellets": 1,
-			"recoil": 0.65
+			"recoil": 0.65,
+			"price": 1400,
+			"ammoPrice": 90
 		},
 		{
 			"id": "rifle",
@@ -44,7 +49,9 @@
 			"spread": 0.002,
 			"range": 250,
 			"pellets": 1,
-			"recoil": 2.8
+			"recoil": 2.8,
+			"price": 2200,
+			"ammoPrice": 120
 		},
 		{
 			"id": "shotgun",
@@ -59,7 +66,91 @@
 			"spread": 0.085,
 			"range": 35,
 			"pellets": 8,
-			"recoil": 3.4
+			"recoil": 3.4,
+			"price": 900,
+			"ammoPrice": 60
+		},
+		{
+			"id": "heavy_pistol",
+			"name": "Heavy Pistol",
+			"color": "#c7ccd4",
+			"damage": 38,
+			"fireInterval": 0.42,
+			"automatic": false,
+			"magazine": 8,
+			"reserve": 32,
+			"reloadTime": 1.4,
+			"spread": 0.01,
+			"range": 95,
+			"pellets": 1,
+			"recoil": 2.2,
+			"price": 700,
+			"ammoPrice": 45,
+			"oneHanded": true,
+			"sound": "handgun",
+			"soundPitch": 0.82,
+			"pickup": false
+		},
+		{
+			"id": "smg",
+			"name": "SMG",
+			"color": "#56d67f",
+			"damage": 10,
+			"fireInterval": 0.068,
+			"automatic": true,
+			"magazine": 32,
+			"reserve": 128,
+			"reloadTime": 1.5,
+			"spread": 0.045,
+			"range": 55,
+			"pellets": 1,
+			"recoil": 0.5,
+			"price": 1100,
+			"ammoPrice": 70,
+			"sound": "automatic",
+			"soundPitch": 1.18,
+			"pickup": false
+		},
+		{
+			"id": "assault_rifle",
+			"name": "Assault Rifle",
+			"color": "#d98a3a",
+			"damage": 17,
+			"fireInterval": 0.1,
+			"automatic": true,
+			"magazine": 30,
+			"reserve": 120,
+			"reloadTime": 2.0,
+			"spread": 0.022,
+			"range": 120,
+			"pellets": 1,
+			"recoil": 0.9,
+			"price": 2600,
+			"ammoPrice": 110,
+			"sound": "automatic",
+			"soundPitch": 0.86,
+			"pickup": false
+		},
+		{
+			"id": "sniper",
+			"name": "Sniper Rifle",
+			"color": "#4a78d8",
+			"damage": 95,
+			"fireInterval": 1.4,
+			"automatic": false,
+			"magazine": 5,
+			"reserve": 20,
+			"reloadTime": 2.6,
+			"spread": 0.0008,
+			"range": 320,
+			"pellets": 1,
+			"recoil": 4.2,
+			"price": 3800,
+			"ammoPrice": 150,
+			"zoomFov": 20,
+			"sound": "rifle",
+			"soundPitch": 0.8,
+			"pickup": false
 		}
 	]
 }

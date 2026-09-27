@@ -92,7 +92,14 @@ const MAX_CACHED_STOLEN = 8;
 const RATE_PER_SECOND = 150;
 const RATE_BURST = 300;
 /** What this relay understands beyond the original protocol, sent in 'joined'. */
-const FEATURES = ['seats', 'vehicles', 'scenarioEcho', 'hurt', 'pickup', 'npcs', 'breakables', 'steal'];
+const FEATURES = ['seats', 'vehicles', 'scenarioEcho', 'hurt', 'pickup', 'npcs', 'breakables', 'steal', 'cash'];
+/** The most a dying player can drop, which is the most the game takes off them. */
+const MAX_DROP = 1500;
+/** A dead player's money lies about this long before nobody can have it. */
+const DROP_LIFE_MS = 120 * 1000;
+/** Only just after dying, once. */
+const DROP_WINDOW_MS = 5000;
+const MAX_DROPS = 32;
 
 /** @type {Map<string, {code: string, players: Set<object>, scenario: string}>} */
 const rooms = new Map();
@@ -625,6 +632,8 @@ wss.on('connection', (ws) =>
 		position: null,
 		damageWindow: [],
 		lastDeath: 0,
+		/** When this player last dropped money, which has to be after their last death. */
+		lastDrop: 0,
 		lastChat: 0,
 		/** When the last movement update arrived. A seat is let go after SEAT_STALE_MS without one. */
 		lastState: Date.now(),
@@ -689,7 +698,10 @@ wss.on('connection', (ws) =>
 					/** Vehicle id to its last reported pose, for late joiners */
 					vehicles: new Map(),
 					/** Victim id to the last hit on them this relay let through, for crediting kills */
-					lastHit: new Map()
+					lastHit: new Map(),
+					/** Money on the ground, by number, until someone takes it */
+					drops: new Map(),
+					nextDrop: 1
 				};
 				rooms.set(code, room);
 				joinRoom(player, room);
@@ -953,6 +965,51 @@ wss.on('connection', (ws) =>
 				const id = readInt(msg.b, 0, 1e6);
 				if (id === null) break;
 				broadcast(player.room, { t: 'break', b: id, v: readPoint(msg.v) || undefined, id: player.id }, player);
+				break;
+			}
+
+			case 'drop':
+			{
+				// A player who has just died lets go of some money. Once a death,
+				// and only a little: what the game itself takes off a dead player.
+				if (player.room === null) break;
+				const room = player.room;
+				const now = Date.now();
+				const amount = readInt(msg.a, 1, MAX_DROP);
+				const at = readPoint(msg.p);
+				if (amount === null || at === null) break;
+				if (now - player.lastDeath > DROP_WINDOW_MS || player.lastDrop >= player.lastDeath) break;
+				player.lastDrop = now;
+
+				for (const [id, drop] of room.drops)
+				{
+					if (now - drop.at > DROP_LIFE_MS) room.drops.delete(id);
+				}
+				if (room.drops.size >= MAX_DROPS) room.drops.delete(room.drops.keys().next().value);
+
+				const id = room.nextDrop++;
+				room.drops.set(id, { amount, at: now });
+				broadcast(room, { t: 'drop', n: id, a: amount, p: at, id: player.id });
+				break;
+			}
+
+			case 'take':
+			{
+				// First to ask gets it; everyone hears who did, and a late asker
+				// hears it's gone
+				if (player.room === null) break;
+				const room = player.room;
+				const id = readInt(msg.n, 1, 1e9);
+				if (id === null) break;
+				const drop = room.drops.get(id);
+				if (drop === undefined || Date.now() - drop.at > DROP_LIFE_MS)
+				{
+					room.drops.delete(id);
+					send(player, { t: 'taken', n: id, id: 0 });
+					break;
+				}
+				room.drops.delete(id);
+				broadcast(room, { t: 'taken', n: id, id: player.id });
 				break;
 			}
 

@@ -40,6 +40,8 @@ export declare class TrafficCar {
     private static material;
     id: number;
     color: number;
+    /** Which of the catalogue's vehicles it is: what it turns into when it's stolen. */
+    model: string;
     object: THREE.Object3D;
     body: CANNON.Body;
     lane: Lane;
@@ -81,7 +83,7 @@ export declare class TrafficCar {
     fresh: boolean;
     private wheels;
     private lamps;
-    constructor(id: number, color: number, template: THREE.Object3D, lampTexture: THREE.Texture);
+    constructor(id: number, color: number, template: THREE.Object3D, lampTexture: THREE.Texture, model?: string);
     /**
      * The model's own collision boxes, the ones the player's car of the same
      * model has, and a ball at each wheel for it to stand and slide on once

@@ -37,7 +37,8 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 	/** How close the camera pulls in over the shoulder, and how far it slides across. */
 	private static readonly AIM_RADIUS: number = 1.5;
 	private static readonly AIM_SHOULDER: number = 0.6;
-	private static readonly AIM_FOV: number = 55;
+	/** How far the view narrows while aiming: a scope narrows it further. */
+	public aimFov: number = 55;
 	private aimBlend: number = 0;
 	private static readonly BASE_FOV: number = 80;
 	private static scratch: THREE.Vector3 = new THREE.Vector3();
@@ -217,7 +218,7 @@ export class CameraOperator implements IInputReceiver, IUpdatable
 		let camera = this.camera as THREE.PerspectiveCamera;
 		if (camera.isPerspectiveCamera !== true) return;
 
-		let wanted = THREE.MathUtils.lerp(CameraOperator.BASE_FOV, CameraOperator.AIM_FOV, this.aimBlend);
+		let wanted = THREE.MathUtils.lerp(CameraOperator.BASE_FOV, this.aimFov, this.aimBlend);
 		if (Math.abs(camera.fov - wanted) < 0.01) return;
 
 		camera.fov = wanted;

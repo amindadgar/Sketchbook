@@ -2,6 +2,12 @@ export declare class UIManager {
     static setUserInterfaceVisible(value: boolean): void;
     static setLoadingScreenVisible(value: boolean): void;
     static setFPSVisible(value: boolean): void;
+    /** What's in the wallet, formatted, top right beside the health. */
+    static setCash(text: string): void;
+    /** A payment or a purchase, floated off the cash readout. */
+    static flashCash(text: string, gain: boolean): void;
+    /** The guns carried, by number key, the one in hand picked out. */
+    static setWeaponSlots(names: string[], held: number): void;
     /** @param health 0 to 1. Weapon name undefined means empty handed. */
     static setCombatHud(health: number, weapon: string, ammo: number, reserve: number): void;
     /** Names come off the network, so they're written as text, never as HTML. */
@@ -62,6 +68,8 @@ export declare class UIManager {
     static setSpeedometerVisible(value: boolean): void;
     /** @param left 0 to 1, and whether it's being spent right now. */
     static setBoost(left: number, spending: boolean): void;
-    /** @param fill 0 at a standstill, 1 at the vehicle's top speed. */
-    static setSpeedometerFill(fill: number, speed: number): void;
+    /** The car's condition under the speed, 0 to 1, or hidden with undefined. Reddens and pulses as it goes. */
+    static setCondition(condition: number): void;
+    /** The figure in kilometres an hour, rewritten only when the whole number changes. */
+    static setSpeed(kmh: number): void;
 }

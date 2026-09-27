@@ -1,54 +1,48 @@
-#speedometer {
+/* The speed as a figure in km/h, at the bottom in the middle, with the nitro
+   and the car's condition in slim bars under it. A bar filling toward a top
+   speed said less than a number does, and took more room saying it. */
+#speed-badge {
 	position: fixed;
-	bottom: 42px;
 	left: 50%;
+	bottom: 40px;
 	transform: translateX(-50%);
-	width: 320px;
-	height: 18px;
-	padding: 3px;
+	display: flex;
+	align-items: baseline;
+	justify-content: center;
+	gap: 5px;
+	min-width: 104px;
+	padding: 1px 14px 3px;
 	box-sizing: border-box;
-	display: none;
+	visibility: hidden;
 	background: rgba(0, 0, 0, 0.45);
-	border: 2px solid rgba(255, 255, 255, 0.8);
-	border-radius: 3px;
+	border-radius: 16px;
+	font-family: 'Solway', serif;
+	color: #fff;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+	font-variant-numeric: tabular-nums;
 	pointer-events: none;
 	user-select: none;
+	z-index: 25;
 }
 
-#speedometer-track {
-	position: relative;
-	width: 100%;
-	height: 100%;
-	overflow: hidden;
+#speed-number {
+	font-size: 30px;
+	font-weight: 700;
+	line-height: 1.15;
 }
 
-#speedometer-fill {
-	width: 0%;
-	height: 100%;
-	/* Sized to the track rather than to itself, so the gradient stays anchored
-	   and the leading edge colour tracks actual speed instead of stretching */
-	background-image: linear-gradient(to right, #4cc95d 0%, #f5d327 55%, #e6394a 100%);
-	background-size: 306px 100%;
-	background-repeat: no-repeat;
-}
-
-.speedometer-split {
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	width: 2px;
-	margin-left: -1px;
-	/* Light, so the splits read against both the empty track and the coloured fill */
-	background: rgba(255, 255, 255, 0.8);
+#speed-unit {
+	font-size: 13px;
+	color: rgba(255, 255, 255, 0.75);
 }
 
 /* Nitro, under the speed. Slim, because it only has one number to say. */
 #boost {
 	position: fixed;
-	bottom: 60px;
+	bottom: 29px;
 	left: 50%;
 	transform: translateX(-50%);
-	width: 240px;
+	width: 150px;
 	height: 7px;
 	padding: 2px;
 	box-sizing: border-box;
@@ -70,4 +64,36 @@
 
 #boost.spending #boost-fill {
 	background: #FFB900;
+}
+
+/* The car's condition, under the nitro: green to red, pulsing once the engine weakens */
+#condition {
+	position: fixed;
+	bottom: 18px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 150px;
+	height: 7px;
+	padding: 2px;
+	box-sizing: border-box;
+	background: rgba(0, 0, 0, 0.45);
+	border: 2px solid rgba(255, 255, 255, 0.45);
+	border-radius: 3px;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+#condition-fill {
+	width: 100%;
+	height: 100%;
+	background: #4cc95d;
+}
+
+#condition.weak {
+	animation: condition-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes condition-pulse {
+	0%, 100% { border-color: rgba(255, 255, 255, 0.45); }
+	50% { border-color: rgba(255, 90, 80, 0.95); }
 }

@@ -26,8 +26,12 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 * **A realistic look** — three.js 0.186, physically based materials, a physical sky with clouds and a real night, reflections of that sky, ambient occlusion and bloom
 * **A person to play** — a realistic character built from MakeHuman's CC0 assets, with the game's whole animation set moved onto it and a gun held in hand
 * **Audio** — positional engine sound pitched by revs, and an outrun music track
+* **Jobs and money** — eight jobs on `J`: taxi fares, robbing people in the street, holding up a corner shop, courier runs, stealing to order for a chop shop, a bounty, street races and a cash van heist
+* **Shops** — two gun shops, a garage that puts a damaged car right, and a dealership for cars and bikes
+* **More to drive** — seven retro cars from a CC0 pack in the traffic and for sale, a police cruiser, and motorbikes that lean into the corners
+* **Robbing people** — anyone on the pavement can be held up at gunpoint, and in a party whoever kills you can pick up the money you drop
 * **Party mode** — room codes over a small WebSocket relay, up to 8 players, in five minute rounds
-* **Combat** — four weapons, health, kills, recoil, hit markers and a scoreboard
+* **Combat** — eight guns, carried together and switched with the number keys, health, kills, recoil, hit markers and a scoreboard
 * **Races** — the three circuits the world always had, now with laps, times and a running order
 * **Driving with consequences** — a handbrake that steps the back out, downforce, crash damage and smoke, and tyres that squeal and leave rubber on the road when they skid
 * **Nitro** — three and a half seconds of it, and a stunt park to spend it in
@@ -35,7 +39,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 * **Levels and daily challenges** — three a day, the same three for everyone
 * **A day that passes** — the sun crosses in seven minutes, and the cars have headlights
 * **Chat, kill feed, killstreaks, leaderboards and unlockable colours and hats**
-* **A minimap**, a speedometer, and settings folded behind a gear
+* **A minimap**, a speedometer in km/h, and settings folded behind a gear
 * **Free roam (everything)** — a scenario with a car, a helicopter and an aeroplane all in reach
 * **A world that downloads in 6MB** rather than 26, at the same picture
 
@@ -65,11 +69,20 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 	* General state system
 	* Character AI
 * Vehicles
-	* Cars, airplanes and helicopters
+	* Cars, motorbikes, airplanes and helicopters
+	* Eight car models and two bikes, each with its own speed and pull, in the traffic and at the dealership
 	* All three within reach in the Free roam (everything) scenario
 	* Handbrake drift, speed sensitive downforce, crash damage and smoke
 	* Skid marks and tyre squeal when braking hard, sliding or spinning the wheels
 	* Nitro, and R to set a stuck one back on its wheels
+* Jobs and money
+	* A job board on `J`, one job at a time, alongside free roam
+	* Taxi, Stick-ups, Hold-up, Courier, Chop shop, Street race, Bounty and Cash van heist
+	* Armed guards and bodyguards who fight back, drivers who race and flee along the real roads
+	* Money kept per browser; guns bought are kept through a death
+	* Two gun shops, a repair garage, and a dealership
+	* Holding up anyone in the street at gunpoint
+	* Money dropped on dying in a party, for whoever gets to it first
 * Stunts
 	* Airtime, flips, barrel rolls and spins, measured off the physics body
 	* A chain multiplier for landing them back to back, and a personal best
@@ -90,7 +103,8 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 	* Per player name tags, colours and hats
 	* Shared scenarios
 * Combat
-	* Handgun, automatic, rifle and shotgun, each with its own feel
+	* Eight guns, each with its own feel, modelled from a CC0 pack
+	* Several carried at once, switched with `1`-`9` or `Q`
 	* Weapon pickups floating in a halo, GTA style
 	* Aim down sights, recoil, hit markers, health, kills and a scoreboard
 	* Server side checks on claimed hits, and line of sight checked by the target
@@ -102,7 +116,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 	* A day and night cycle, with headlights after dark
 * HUD
 	* Round minimap with party markers
-	* Speedometer, lap board, round clock
+	* Speed in km/h, nitro and condition meters, lap board, round clock
 	* Settings folded behind a gear
 
 ## Controls
@@ -114,7 +128,9 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 | `Space` | Jump |
 | `F` / `G` | Enter vehicle as driver / passenger. `F` beside a car in the traffic steals it |
 | Left mouse | Fire |
-| Right mouse, held | Aim |
+| Right mouse, held | Aim. Held on somebody close by, it's a hold-up |
+| `1`-`9` / `Q` | Pick a gun / the next gun |
+| `E` | Whatever the prompt at the bottom of the screen says: a shop counter, a job's next step |
 
 | Driving | |
 | --- | --- |
@@ -137,6 +153,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 
 | Anywhere | |
 | --- | --- |
+| `J` | Job board |
 | `M` | Mute the music |
 | `N` | Big map of the whole world. `N` or `Esc` closes it |
 | `C` | Centre the camera behind you |
@@ -174,6 +191,9 @@ while sitting in the car it just opened is no use to anybody:
 | Stick | Move, and steer. Push it all the way to sprint, on foot |
 | Drag anywhere | Look. The camera goes back to following a moment later |
 | MAP | Opens the map of the whole world in the middle of the screen, and puts it away again |
+| Money, top right | The job board |
+| The prompt in the middle | Does what it says: a shop, a job's next step |
+| Gun's name | Switches to the next gun, marked with an arrow when there's more than one |
 | Speech bubble | Party chat, in a party |
 
 The camera follows by itself on a phone, because one thumb is on the stick and
@@ -188,12 +208,12 @@ stick and the buttons would be on top of each other, so it says so and waits.
 The manifest asks for a landscape lock too, which browsers honour once the game
 has been added to a home screen.
 
-Speed is a figure under the stick rather than a bar across the middle, with the
-nitro meter under it, and the map folds away behind a button: a glance is worth
-a corner, a permanent map isn't. Health is a number beside the gear on every
+Speed is a figure in km/h under the stick, where the desktop has it in the
+bottom middle, with the nitro and condition meters under it, and the map folds
+away behind a button: a glance is worth a corner, a permanent map isn't. Health is a number beside the gear on every
 device, not just this one.
 
-A card on the first run says the four things worth knowing, since the keyboard
+A card on the first run says the five things worth knowing, since the keyboard
 hints down the left hand side aren't there to read.
 
 **Add to Home Screen** works, and the welcome screen says so on a phone that
@@ -467,15 +487,25 @@ Weapons sit around the map turning inside a glowing column. Walk into one to pic
 it up; the column goes dark and comes back twenty seconds later. Guns are stowed
 while driving.
 
-| Weapon | Damage | Rate | Mag | Carried | Notes |
-| --- | --- | --- | --- | --- | --- |
-| Handgun | 25 | semi | 12 | 36 | four shots to a kill |
-| Automatic | 13 | 12/s | 30 | 90 | wide spread, short range |
-| Rifle | 55 | slow | 8 | 24 | near zero spread, reaches 250m |
-| Shotgun | 12 x 8 | slow | 6 | 18 | a kill up close, useless at range |
+| Weapon | Damage | Rate | Mag | Carried | Price | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Handgun | 25 | semi | 12 | 36 | $250 | four shots to a kill |
+| Heavy pistol | 38 | semi | 8 | 32 | $700 | three shots, slower |
+| SMG | 10 | 15/s | 32 | 128 | $1,100 | sprays, empties fast |
+| Automatic | 13 | 12/s | 30 | 90 | $1,400 | wide spread, short range |
+| Shotgun | 12 x 8 | slow | 6 | 18 | $900 | a kill up close, useless at range |
+| Rifle | 55 | slow | 8 | 24 | $2,200 | near zero spread, reaches 250m |
+| Assault rifle | 17 | 10/s | 30 | 120 | $2,600 | the all rounder |
+| Sniper | 95 | very slow | 5 | 20 | $3,800 | a scope that zooms right in |
+
+The first four also lie about the map; the rest are only sold. Everything picked
+up or bought is carried at once: `1` to `9` picks one, `Q` goes to the next, and
+the row under the ammunition count shows what's in your pockets.
 
 Ammunition is finite. Reloads draw on what you're carrying, and once that and the
-magazine are both empty the gun is dropped and you're looking for another column.
+magazine are both empty a gun you picked up is dropped. A gun you bought is kept,
+empty, and the gun shop sells more rounds for it. Dying loses what you picked up
+and keeps what you paid for.
 
 Holding right mouse narrows the view, slides the camera over your shoulder so you
 aren't standing where the crosshair is, and cuts spread to a third. Shots go to
@@ -502,9 +532,85 @@ Everyone starts on 100 health and respawns three seconds after dying. Dying lays
 you out and hands the camera to whoever shot you, or to the nearest player. A
 kill scores a point on the scoreboard at the top right.
 
-Cars hurt too. An impact above six metres a second along the contact normal
-takes health off whoever is driving and wears the vehicle down, and a wreck
-below half condition smokes, harder the worse it is.
+Crashing costs the car, not you. An impact above six metres a second along the
+contact normal wears the vehicle down: below half condition it smokes, harder
+the worse it is, and below a third it loses power until a garage fixes it.
+Whoever's inside keeps their health; only bullets take that.
+
+## Jobs and money
+
+Money is in the top right, and starts at $500. It's kept in the browser, like
+experience: the jobs that pay it are played out on your own screen, and nothing on
+a server could check a fare was really driven.
+
+`J` opens the job board. One job runs at a time, next to free roam: the traffic
+and the people carry on, and so does everyone else in a party. A job ends when
+it's done, when it goes wrong, when you quit it on the board, or when you die.
+Everything it asks for is marked on the map with an arrow round the edge of the
+minimap, and the panel at the top left says what to do next, how long is left,
+and which way and how far the next place is, which on a phone, where the map is
+folded away, is the arrow that matters.
+
+| Job | What it is | Pays |
+| --- | --- | --- |
+| Taxi | Fares waiting at the kerb. Get them there in time, and go easy on the car | $60 - $400 a fare |
+| Stick-ups | Three well-off marks. Lift their wallet from behind with `E`, or hold them up. Some are armed | $300 - $1,100 |
+| Hold-up | Rob the till at a corner shop, past its guards, then get clear before the friends arrive | $450 - $900 |
+| Courier | Three parcels, three addresses, one clock, and one of them fragile | $150 - $450 |
+| Chop shop | Steal a car of the colour the buyer wants and bring it to the docks in one piece | $300 - $700 |
+| Street race | Three drivers, checkpoints along real roads, $100 to enter | $200 - $900 |
+| Bounty | A wanted man and his bodyguards in a car park. He runs for his car when he sees you | $900 - $1,600 |
+| Cash van heist | Stop a security van on its round, deal with the guards, grab the bags and lie low | $1,200 - $2,400 |
+
+Outside a job, anyone on the pavement can be robbed: hold a gun on them from
+close by, keep it there while the ring round the crosshair fills, and they drop
+what they're carrying and run. Nobody can be robbed twice.
+
+Dying costs a tenth of what you carry, up to $1,500. Alone, the hospital has it.
+In a party, killed by another player, it's dropped where you fell, for whoever
+gets to it first: most likely them, unless you get back there. The relay numbers
+each drop and gives it to the first player to ask, so two people walking over it
+at once can't both have it.
+
+The shops are on the map as squares. Walk into the ring outside a gun shop and
+`E` opens the counter: guns, and ammunition for the ones you own. Drive into the
+bay at Fix & Spray and `E` repairs the car, for more the worse it is; a badly
+damaged car loses power until it's fixed, and the bar under the speedometer says
+how it's doing. The dealership sells cars and bikes, and anything you've bought
+can be had back from its lot for nothing.
+
+## Vehicles
+
+Besides the original car, the helicopter and the aeroplane, the city has its own
+cars: a hatchback, a compact, a saloon, an estate, a van, a taxi and a police
+cruiser, low poly and textured to match the rest of the game. All but the police
+car turn up in the traffic, and whatever you steal is the model you stole. Each
+has its own gearing and pull, scaled off the original car's, so a van takes its
+time and the Compact GT, which looks exactly like the compact, doesn't.
+
+| Vehicle | Price | Top speed |
+| --- | --- | --- |
+| Hatchback | $3,500 | 126 km/h |
+| Compact | $5,000 | 130 km/h |
+| Sedan | $6,500 | 137 km/h |
+| Estate | $7,000 | 123 km/h |
+| Van | $8,000 | 112 km/h |
+| Taxi | $9,000 | 137 km/h |
+| Roadster, the original car | $10,000 | 137 km/h |
+| Compact GT | $15,000 | 178 km/h |
+| Police cruiser | $22,000 | 164 km/h |
+| Street bike | $4,500 | 164 km/h |
+| Sport bike | $11,000 | 205 km/h |
+
+The bikes are cars underneath: four raycast wheels a hand's width apart, which
+keeps the physics simple. What makes them bikes is that they're held upright the
+way a rider would hold them, and lean into a turn, further the faster they go.
+The rider sits astride with their legs down either side, and the front wheel
+turns on its fork.
+
+Northside Motors sells all of them, in any of the traffic's ten colours bar the
+taxi and the police car, which keep their livery. A bought one is brought round
+to the lot, and anything you own can be taken out again for nothing.
 
 ## Stunts
 
@@ -601,7 +707,10 @@ replacing the file, with no code change:
 | `car.wav`, `heli.wav`, `airplane.wav` | Engine loops |
 | `tyre_squeal.wav` | A real car's tyre squeal cut into a ten second seamless loop, levelled so it holds steady, see Credits |
 | `music.mp3` | Music, streamed rather than decoded into memory. "Voltaic" by Kevin MacLeod, CC BY 4.0, see Credits |
-| `gun_*.wav` | Weapon reports |
+| `gun_*.wav` | Weapon reports. The four guns added later borrow these at another pitch |
+| `guns/*.glb` | The eight guns, from a CC0 pack, built by `tools/guns/build_guns.py`. Until one loads, a gun is drawn in boxes |
+| `hatchback.glb`, `compact.glb`, `sedan.glb`, `wagon.glb`, `van.glb`, `taxi.glb`, `police.glb` | The city's cars, from a CC0 pack of retro cars. Built by `tools/vehicles/build_vehicles.py` |
+| `motorbike.glb` | The motorbike, modelled from scratch by the same script |
 | `humans/player.glb` | The player, with every animation. Built by `tools/humans/build_character.py` |
 | `humans/npc_*.glb` | Nine pedestrians, which borrow the player's animations |
 | `textures/*.webp` | The city's surfaces: colour, normal and AO/roughness/metal for each |
@@ -692,6 +801,13 @@ credited on the welcome screen as well.
 The people are built from [MakeHuman](http://www.makehumancommunity.org)'s system assets,
 released under CC0, with the [MPFB](https://extensions.blender.org/add-ons/mpfb/) add-on. The city's
 textures and street props are from [Poly Haven](https://polyhaven.com), also CC0.
+
+The city's cars are "PSX Style Cars" by [GGBotNet](https://ggbot.itch.io/psx-style-cars), released as
+CC0: cut into separate wheels, scaled to the world and given seats, collision and lamps by
+`tools/vehicles/build_vehicles.py`. The motorbike was built from scratch by the same script.
+
+The guns are from the "Free CC0 Guns & Explosives Pack" by 3dmodelscc0, released as CC0:
+trimmed, decimated and set up for the hand by `tools/guns/build_guns.py`.
 
 The tyre squeal is cut from "Chrysler LHS tire squeal 04" by
 [audible-edge](https://freesound.org/people/audible-edge/sounds/71739/) on Freesound, CC0: the

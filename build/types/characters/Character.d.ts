@@ -161,6 +161,8 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * animation, every frame the character is aiming or has just fired.
      */
     private poseAim;
+    /** One bone of the skeleton, by name, pointed along a world direction, over whatever the animation did. */
+    pointBoneAlong(name: string, direction: THREE.Vector3): void;
     /** Turns a bone, keeping its parent where it is, so its length points along a world direction. */
     private static pointBone;
     unequipWeapon(): void;
@@ -247,6 +249,8 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     enterVehicle(seat: VehicleSeat, entryPoint: THREE.Object3D): void;
     teleportToVehicle(vehicle: Vehicle, seat: VehicleSeat): void;
     startControllingVehicle(vehicle: IControllable, seat: VehicleSeat): void;
+    /** The one the keyboard drives: this screen's player, not someone the game moves. */
+    isLocalPlayer(): boolean;
     transferControls(entity: IControllable): void;
     stopControllingVehicle(): void;
     exitVehicle(): void;

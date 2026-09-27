@@ -119,6 +119,21 @@ export class Progress
 		this.count('flight', seconds);
 	}
 
+	/** A job done, or a part of one: experience for it, and a count towards today's challenges. */
+	public addJob(kind: string, xp: number): void
+	{
+		this.count('jobs', 1);
+		this.count('job_' + kind, 1);
+		this.award(Math.max(0, xp));
+	}
+
+	/** Somebody held up in the street. */
+	public addMugging(): void
+	{
+		this.count('muggings', 1);
+		this.award(4);
+	}
+
 	public addPickup(): void
 	{
 		this.count('pickups', 1);

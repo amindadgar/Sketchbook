@@ -214,6 +214,21 @@ export class PartySession implements IUpdatable
 			if (city !== undefined && typeof message.b === 'number') city.breakables.knockRemote(message.b, velocity);
 		};
 
+		// Money a dead player dropped, and who got to it first
+		this.client.onDrop = (message) =>
+		{
+			let at = PartySession.readVector(message.p);
+			let amount = Number(message.a);
+			if (at === undefined || this.world.cashDrops === undefined || typeof message.n !== 'number' || !(amount > 0)) return;
+			this.world.cashDrops.networkDrop(message.n, at, amount);
+		};
+
+		this.client.onTaken = (message) =>
+		{
+			if (this.world.cashDrops === undefined || typeof message.n !== 'number') return;
+			this.world.cashDrops.networkTaken(message.n, message.id === this.client.id);
+		};
+
 		// Someone else shot a pedestrian; this client decides what happens to them
 		this.client.onNpcHit = (message) =>
 		{
@@ -458,6 +473,8 @@ export class PartySession implements IUpdatable
 	{
 		if (!this.active || vehicle.getNetworkId() === undefined || vehicle.isRemoteDriven()) return;
 		if (vehicle === this.drivenVehicle || this.driverSeatHeldByOther(vehicle)) return;
+		// A job's parked car is this screen's business until somebody drives it
+		if (this.world.npcs !== undefined && this.world.npcs.isHeld(vehicle)) return;
 
 		let until = PartySession.now() + PartySession.COAST_TIME;
 		let entry = this.coasting.find((candidate) => candidate.vehicle === vehicle);
@@ -488,6 +505,20 @@ export class PartySession implements IUpdatable
 	{
 		if (!this.active || !this.hasFeature('breakables')) return;
 		this.client.send({ t: 'break', b: id, v: PartySession.round3([velocity.x, velocity.y, velocity.z]) });
+	}
+
+	/** Money the local player dropped on dying, for anyone in the party to pick up. */
+	public sendDrop(at: THREE.Vector3, amount: number): void
+	{
+		if (!this.active || !this.hasFeature('cash')) return;
+		this.client.send({ t: 'drop', a: Math.round(amount), p: PartySession.round3([at.x, at.y, at.z]) });
+	}
+
+	/** Asking for money on the ground; the relay says who got it. */
+	public sendTake(id: number): void
+	{
+		if (!this.active || !this.hasFeature('cash')) return;
+		this.client.send({ t: 'take', n: id });
 	}
 
 	/** Whether the relay supports something beyond the original protocol. */
