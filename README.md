@@ -40,6 +40,9 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 * **A day that passes** — the sun crosses in seven minutes, and the cars have headlights
 * **Chat, kill feed, killstreaks, leaderboards and unlockable colours and hats**
 * **A minimap** that turns with the camera the way GTA's does, a speedometer in km/h, and settings folded behind a gear
+* **A phone** on `↑`, the way GTA's comes out: jobs, the map, your stats, the leaderboards, the party, every control, the music, the settings and a way to support the game
+* **A pause menu** on `Esc`, which stops the world when you're playing alone
+* **A heart in the corner** for the code on GitHub and donations in crypto
 * **Free roam (everything)** — a scenario with a car, a helicopter and an aeroplane all in reach
 * **A world that downloads in 6MB** rather than 26, at the same picture
 
@@ -118,6 +121,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 	* Round minimap centred on you and turned with the camera, with party markers and an N that follows north round the rim
 	* Speed in km/h, nitro and condition meters, lap board, round clock
 	* Settings folded behind a gear
+	* A phone and a pause menu instead of a list of keys down the side
 
 ## Controls
 
@@ -153,6 +157,8 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 
 | Anywhere | |
 | --- | --- |
+| `↑` | The phone. The arrows walk its apps, `Enter` opens one, `Backspace` comes back, `Esc` puts it away |
+| `Esc` | Pause. Alone, the world stops and goes quiet until you resume; in a party it carries on |
 | `J` | Job board |
 | `M` | Mute the music |
 | `N` | Big map of the whole world. `N` or `Esc` closes it |
@@ -163,6 +169,46 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 | `Shift` + `C` | Free camera |
 | Mouse wheel | Slow down or speed up time |
 | Gear icon | Settings |
+| Heart, top left | The code on GitHub, and donations in crypto |
+
+## The phone and the pause menu
+
+`↑` brings out a phone at the bottom right, beside the map, the way GTA's
+comes up. The game carries on behind it, so you can keep walking or driving
+with it out. It has nine apps:
+
+| App | |
+| --- | --- |
+| Jobs | Every job, what it pays, and what it is once it's picked. `Enter` starts one, or quits the one you're on |
+| Map | The whole world, as `N` opens it |
+| Stats | Level and experience, money, and today's three challenges |
+| Leaderboard | Kills, or best laps on the circuit you're driving |
+| Party | The code friends join with, who's in and their scores, and a message to them |
+| Controls | The keys for wherever you are, on foot, at the wheel or flying, then the ones that work everywhere |
+| Music | The track playing, and switching it off |
+| Settings | Opens the settings |
+| Support | The code on GitHub and the donation addresses |
+
+The clock in its corner is the game's own time of day.
+
+`Esc` pauses. With the mouse held by the game the browser keeps that `Esc` to
+itself and only lets go of the mouse, so losing the mouse any way the game
+didn't ask for pauses too, the same as tabbing away. Letting go for a shop or
+a restart doesn't. `Esc` with the phone, a shop, the big map or the support
+card open closes that instead. Alone, the world stands still and goes quiet
+until you resume; in a party it can't stop for one player, so the menu says so
+and the game carries on underneath. The menu has the map, your stats, the
+controls, the settings, which resume the game to show them, and the support card.
+
+### Donations
+
+The heart at the top left opens a card with the code on GitHub and a crypto
+address that takes donations: ETH and tokens on any EVM chain, to
+`0x0aDBcdE5D51DE9497db2761cfe84666fCCe881cB`. They support the development and
+keep the game running. The addresses are in `src/ts/core/Donations.ts`, a line
+per wallet with the coin, its network and the address, and one without an
+address yet shows as coming soon. The phone and the pause menu read the same
+list.
 
 ## On a phone
 
@@ -191,6 +237,7 @@ while sitting in the car it just opened is no use to anybody:
 | Stick | Move, and steer. Push it all the way to sprint, on foot |
 | Drag anywhere | Look. The camera goes back to following a moment later |
 | MAP | Opens the map of the whole world in the middle of the screen, and puts it away again |
+| Phone, beside the heart | The phone. Tap an app to open it; a job's first tap says what it is, the second starts it |
 | Money, top right | The job board |
 | The weapon's name | Fists, then each gun carried, and round again. Marked with an arrow once there's a gun to switch to |
 | The prompt in the middle | Does what it says: a shop, a job's next step |

@@ -1,5 +1,7 @@
 export declare class UIManager {
     static setUserInterfaceVisible(value: boolean): void;
+    /** In play, rather than on the loading screen or the start menu. */
+    static isUserInterfaceVisible(): boolean;
     static setLoadingScreenVisible(value: boolean): void;
     static setFPSVisible(value: boolean): void;
     /** What's in the wallet, formatted, top right beside the health. */
@@ -62,6 +64,7 @@ export declare class UIManager {
     static setRaceResult(place: number, field?: number, total?: string, best?: string): void;
     private static ordinal;
     static toggleSettings(): void;
+    static showSettings(visible: boolean): void;
     static setPartyVisible(value: boolean): void;
     /** Names come off the network, so they're written as text nodes, never as HTML. */
     static setPartyDetails(code: string, names: string[], colors: string[]): void;

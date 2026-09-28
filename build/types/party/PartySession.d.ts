@@ -200,6 +200,12 @@ export declare class PartySession implements IUpdatable {
     private tickMatchClock;
     private static mmss;
     /** Works out of a party too, where it's just you and your score. */
+    /** Everyone in the party, this player first, with the round's scores. */
+    roster(): {
+        name: string;
+        color: string;
+        score: number;
+    }[];
     refreshScoreboard(): void;
     update(timeStep: number, unscaledTimeStep: number): void;
     /**

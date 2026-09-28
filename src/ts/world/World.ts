@@ -62,6 +62,11 @@ import { JobSystem } from '../jobs/JobSystem';
 import { registerJobs } from '../jobs/registerJobs';
 import { StuntSystem } from '../stunts/StuntSystem';
 import { CombatSystem } from '../combat/CombatSystem';
+import { Phone } from '../core/Phone';
+import { PauseMenu } from '../core/PauseMenu';
+import { SupportButton } from '../core/SupportButton';
+import { Pointer } from '../core/Pointer';
+import { ControlRow } from '../core/GameInfo';
 
 export class World
 {
@@ -140,6 +145,11 @@ export class World
 	private beam: THREE.SpotLight;
 	public minimap: Minimap;
 	public touchControls: TouchControls;
+	public phone: Phone;
+	public pauseMenu: PauseMenu;
+	public support: SupportButton;
+	/** What the keys do right now: on foot, at the wheel, flying. The phone and the pause menu list them. */
+	public controls: ControlRow[] = [];
 	public lastScenarioID: string;
 
 	/**
@@ -258,6 +268,9 @@ export class World
 		this.stunts = new StuntSystem(this);
 		this.chat = new Chat(this);
 		this.leaderboard = new Leaderboard(this);
+		this.support = new SupportButton();
+		this.phone = new Phone(this);
+		this.pauseMenu = new PauseMenu(this);
 
 		// Initialization
 		this.inputManager = new InputManager(this, this.renderer.domElement);
@@ -473,8 +486,8 @@ export class World
 		let timeStep = unscaledTimeStep * this.params.Time_Scale;
 		timeStep = Math.min(timeStep, 1 / 30);    // min 30 fps
 
-		// Logic
-		world.update(timeStep, unscaledTimeStep);
+		// Logic, unless paused alone, when the world stands still behind the menu
+		if (this.pauseMenu === undefined || !this.pauseMenu.freezes) world.update(timeStep, unscaledTimeStep);
 
 		// Measuring logic time
 		this.logicDelta = this.clock.getDelta();
@@ -1166,8 +1179,8 @@ export class World
 	{
 		if (this.lastScenarioID !== undefined)
 		{
-			// A phone has no pointer lock to let go of
-			if (document.exitPointerLock) document.exitPointerLock();
+			// Let go on purpose, which isn't a pause. A phone has no lock to let go of
+			Pointer.release();
 			this.launchScenario(this.lastScenarioID);
 		}
 		else
@@ -1212,39 +1225,10 @@ export class World
 		}
 	}
 
-	public updateControls(controls: any): void
+	/** What the keys do now, kept for the phone's Controls app and the pause menu. */
+	public updateControls(controls: ControlRow[]): void
 	{
-		let html = '';
-		html += '<h2 class="controls-title">Controls:</h2>';
-
-		controls.forEach((row) =>
-		{
-			html += '<div class="ctrl-row">';
-			row.keys.forEach((key) => {
-				if (key === '+' || key === 'and' || key === 'or' || key === '&') html += '&nbsp;' + key + '&nbsp;';
-				else html += '<span class="ctrl-key">' + key + '</span>';
-			});
-
-			html += '<span class="ctrl-desc">' + row.desc + '</span></div>';
-		});
-
-		// Available whatever the input receiver is, so they're listed everywhere
-		html += '<div class="ctrl-row"><span class="ctrl-key">M</span>'
-			+ '<span class="ctrl-desc">Mute music</span></div>';
-		html += '<div class="ctrl-row"><span class="ctrl-key">N</span>'
-			+ '<span class="ctrl-desc">Big map</span></div>';
-		html += '<div class="ctrl-row"><span class="ctrl-key">J</span>'
-			+ '<span class="ctrl-desc">Jobs</span></div>';
-		html += '<div class="ctrl-row"><span class="ctrl-key">E</span>'
-			+ '<span class="ctrl-desc">Shops, and what a job asks</span></div>';
-		html += '<div class="ctrl-row"><span class="ctrl-key">C</span>'
-			+ '<span class="ctrl-desc">Center camera</span></div>';
-		html += '<div class="ctrl-row"><span class="ctrl-key">L</span>'
-			+ '<span class="ctrl-desc">Leaderboard</span></div>';
-		html += '<div class="ctrl-row"><span class="ctrl-key">Enter</span>'
-			+ '<span class="ctrl-desc">Party chat</span></div>';
-
-		document.getElementById('controls').innerHTML = html;
+		this.controls = controls;
 	}
 
 	private setupAudio(): void
@@ -1289,6 +1273,8 @@ export class World
 				return;
 			}
 			if (this.audioListener.context.state === 'running') return;
+			// Quiet on purpose, until the pause is over
+			if (this.pauseMenu !== undefined && this.pauseMenu.freezes) return;
 
 			this.listenForAudioUnlock();
 			this.resumeAudio();
@@ -1318,20 +1304,13 @@ export class World
 
 		// UI
 		$(`	<div id="ui-container" style="display: none;">
-				<div class="github-corner">
-					<a href="https://github.com/amindadgar/Sketchbook" target="_blank" title="Fork me on GitHub">
-						<svg viewbox="0 0 100 100" fill="currentColor">
-							<title>Fork me on GitHub</title>
-							<path d="M0 0v100h100V0H0zm60 70.2h.2c1 2.7.3 4.7 0 5.2 1.4 1.4 2 3 2 5.2 0 7.4-4.4 9-8.7 9.5.7.7 1.3 2
-							1.3 3.7V99c0 .5 1.4 1 1.4 1H44s1.2-.5 1.2-1v-3.8c-3.5 1.4-5.2-.8-5.2-.8-1.5-2-3-2-3-2-2-.5-.2-1-.2-1
-							2-.7 3.5.8 3.5.8 2 1.7 4 1 5 .3.2-1.2.7-2 1.2-2.4-4.3-.4-8.8-2-8.8-9.4 0-2 .7-4 2-5.2-.2-.5-1-2.5.2-5
-							0 0 1.5-.6 5.2 1.8 1.5-.4 3.2-.6 4.8-.6 1.6 0 3.3.2 4.8.7 2.8-2 4.4-2 5-2z"></path>
-						</svg>
-					</a>
+				<div id="support-button" title="Support Sketchbook">
+					<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.6-9C.8 8.4 3 4 7 4c2.2 0 3.6 1.2 5 3 1.4-1.8 2.8-3 5-3 4 0 6.2 4.4 4.6 8-2.1 4.4-9.6 9-9.6 9z"></path></svg>
 				</div>
-				<div class="left-panel">
-					<div id="controls" class="panel-segment flex-bottom"></div>
+				<div id="phone-toggle" title="Phone">
+					<svg viewBox="0 0 24 24"><path fill="currentColor" d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 3v13h8V5H8zm4 14.2a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8z"></path></svg>
 				</div>
+				<div id="play-hint"><span class="play-hint-key">\u2191</span>Phone<span class="play-hint-key">Esc</span>Pause</div>
 				<div id="reticle">
 					<svg viewBox="0 0 100 100">
 						<g stroke="#ff2f3f" stroke-width="4" fill="none" stroke-linecap="round">

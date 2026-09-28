@@ -1,0 +1,293 @@
+/* Top left, where the GitHub corner was: a heart for the code and donations */
+#support-button {
+	position: fixed;
+	top: 14px;
+	left: 14px;
+	width: 40px;
+	height: 40px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	background: rgba(0, 0, 0, 0.5);
+	border: 2px solid rgba(255, 255, 255, 0.7);
+	border-radius: 50%;
+	color: #ff5a6e;
+	cursor: pointer;
+	pointer-events: auto;
+	user-select: none;
+	touch-action: none;
+	z-index: 36;
+	transition: transform 0.12s ease, background 0.12s ease;
+}
+
+#support-button svg {
+	width: 20px;
+	height: 20px;
+}
+
+#support-button:hover,
+#support-button.open {
+	background: rgba(0, 0, 0, 0.72);
+	transform: scale(1.06);
+}
+
+#support-card {
+	text-shadow: none;
+	position: fixed;
+	top: 64px;
+	left: 14px;
+	width: min(320px, calc(100vw - 28px));
+	max-height: calc(100vh - 90px);
+	overflow-y: auto;
+	box-sizing: border-box;
+	padding: 14px 16px 12px 16px;
+	border-radius: 10px;
+	background: rgba(14, 16, 22, 0.94);
+	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+	font-family: 'Solway', serif;
+	color: #fff;
+	pointer-events: auto;
+	z-index: 60;
+	animation: support-in 0.16s ease-out;
+}
+
+@keyframes support-in {
+	from { opacity: 0; transform: translateY(-6px); }
+	to { opacity: 1; transform: none; }
+}
+
+.support-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+}
+
+.support-title {
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.support-close {
+	padding: 0 2px;
+	font-size: 24px;
+	line-height: 1;
+	cursor: pointer;
+	opacity: 0.8;
+}
+
+body.touch #support-button {
+	top: max(10px, env(safe-area-inset-top, 0px));
+	left: max(17px, env(safe-area-inset-left, 0px));
+}
+
+body.touch #support-card {
+	top: max(58px, calc(48px + env(safe-area-inset-top, 0px)));
+	left: max(14px, env(safe-area-inset-left, 0px));
+	z-index: 50;
+}
+
+/* What the phone, the pause menu and the support card all show */
+.info-heading {
+	margin: 14px 0 7px 0;
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	opacity: 0.7;
+}
+
+.info-heading:first-child {
+	margin-top: 0;
+}
+
+.info-control {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 0 0 7px 0;
+}
+
+.info-keys {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 3px;
+	flex-shrink: 0;
+	min-width: 62px;
+}
+
+.info-key {
+	padding: 2px 6px;
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.92);
+	box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+	color: #111;
+	font-family: 'Cutive Mono', monospace;
+	font-size: 12px;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.info-joiner {
+	font-size: 11px;
+	opacity: 0.7;
+}
+
+.info-control-desc {
+	font-size: 12.5px;
+	line-height: 1.3;
+}
+
+.info-level {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+}
+
+.info-level-number {
+	font-size: 18px;
+	font-weight: 700;
+}
+
+.info-level-xp {
+	font-size: 12px;
+	opacity: 0.8;
+}
+
+.info-bar {
+	height: 6px;
+	margin: 6px 0 2px 0;
+	overflow: hidden;
+	border-radius: 3px;
+	background: rgba(255, 255, 255, 0.18);
+}
+
+.info-bar-fill {
+	height: 100%;
+	border-radius: 3px;
+	background: linear-gradient(90deg, #FFB900, #ffd65a);
+}
+
+.info-money {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.info-money-cash {
+	font-size: 16px;
+	font-weight: 700;
+	color: #7be38a;
+}
+
+.info-money-earned {
+	font-size: 11px;
+	opacity: 0.75;
+}
+
+.info-challenge {
+	margin: 0 0 9px 0;
+}
+
+.info-challenge-line {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 12.5px;
+}
+
+.info-challenge-count {
+	white-space: nowrap;
+	opacity: 0.8;
+}
+
+.info-challenge.done .info-challenge-count {
+	color: #7be38a;
+	opacity: 1;
+}
+
+.info-challenge.done .info-bar-fill {
+	background: #58c96b;
+}
+
+.info-text {
+	margin: 0 0 12px 0;
+	font-size: 13px;
+	line-height: 1.45;
+	opacity: 0.9;
+}
+
+.info-github {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 9px 12px;
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+	font-size: 13px;
+	font-weight: 700;
+	text-decoration: none;
+}
+
+.info-github:hover {
+	background: rgba(255, 255, 255, 0.18);
+}
+
+.info-github-mark {
+	width: 18px;
+	height: 18px;
+}
+
+.info-wallet {
+	margin-bottom: 8px;
+	padding: 10px 12px;
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.07);
+}
+
+.info-wallet-coin {
+	margin-bottom: 6px;
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.info-wallet-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.info-wallet-address {
+	flex: 1;
+	min-width: 0;
+	padding: 6px 8px;
+	border-radius: 5px;
+	background: rgba(0, 0, 0, 0.3);
+	font-family: 'Cutive Mono', monospace;
+	font-size: 12px;
+	overflow-wrap: anywhere;
+	user-select: all;
+}
+
+.info-copy {
+	flex-shrink: 0;
+	padding: 6px 10px;
+	border: none;
+	border-radius: 5px;
+	background: #FFB900;
+	color: #222;
+	font-family: 'Solway', serif;
+	font-size: 12px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.info-wallet-soon {
+	font-size: 12px;
+	font-style: italic;
+	opacity: 0.7;
+}

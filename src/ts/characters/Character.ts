@@ -1129,6 +1129,18 @@ export class Character extends THREE.Object3D implements IWorldEntity
 				desc: 'Enter vehicle'
 			},
 			{
+				keys: ['Click'],
+				desc: 'Punch, or shoot with a gun out'
+			},
+			{
+				keys: ['Right click'],
+				desc: 'Aim a gun'
+			},
+			{
+				keys: ['0-9', 'or', 'Q'],
+				desc: 'Fists, or a gun carried'
+			},
+			{
 				keys: ['Shift', '+', 'R'],
 				desc: 'Respawn'
 			},

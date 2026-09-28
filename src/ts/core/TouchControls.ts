@@ -15,6 +15,8 @@ interface TouchButtonSpec
 	mouse?: number;
 	/** Spans the pair of columns, for the odd one out at the bottom of a set. */
 	wide?: boolean;
+	/** What it does, for the phone's Controls app. */
+	desc: string;
 }
 
 /**
@@ -38,40 +40,40 @@ export class TouchControls
 	private static readonly LAYOUTS: { [context: string]: TouchButtonSpec[] } = {
 		// Empty handed, the trigger is a punch, in the place FIRE takes with a gun
 		'foot': [
-			{ id: 'touch-punch', label: 'PUNCH', mouse: 0 },
-			{ id: 'touch-jump', label: 'JUMP', key: 'Space' },
-			{ id: 'touch-enter', label: 'ENTER', key: 'KeyF' },
+			{ id: 'touch-punch', label: 'PUNCH', mouse: 0, desc: 'Punch. Held, it keeps punching' },
+			{ id: 'touch-jump', label: 'JUMP', key: 'Space', desc: 'Jump' },
+			{ id: 'touch-enter', label: 'ENTER', key: 'KeyF', desc: 'Get into the car beside you' },
 		],
 		'foot-armed': [
-			{ id: 'touch-aim', label: 'AIM', mouse: 2 },
-			{ id: 'touch-fire', label: 'FIRE', mouse: 0 },
-			{ id: 'touch-jump', label: 'JUMP', key: 'Space' },
-			{ id: 'touch-enter', label: 'ENTER', key: 'KeyF' },
+			{ id: 'touch-aim', label: 'AIM', mouse: 2, desc: 'Aim, while it\'s held' },
+			{ id: 'touch-fire', label: 'FIRE', mouse: 0, desc: 'Shoot' },
+			{ id: 'touch-jump', label: 'JUMP', key: 'Space', desc: 'Jump' },
+			{ id: 'touch-enter', label: 'ENTER', key: 'KeyF', desc: 'Get into the car beside you' },
 		],
 		'car': [
-			{ id: 'touch-boost', label: 'BOOST', key: 'ShiftLeft' },
-			{ id: 'touch-brake', label: 'BRAKE', key: 'Space' },
-			{ id: 'touch-recover', label: 'FLIP', key: 'KeyR' },
-			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF' },
+			{ id: 'touch-boost', label: 'BOOST', key: 'ShiftLeft', desc: 'Nitro' },
+			{ id: 'touch-brake', label: 'BRAKE', key: 'Space', desc: 'Handbrake' },
+			{ id: 'touch-recover', label: 'FLIP', key: 'KeyR', desc: 'Back onto its wheels' },
+			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF', desc: 'Get out' },
 		],
 		'helicopter': [
-			{ id: 'touch-recover', label: 'FLIP', key: 'KeyR' },
-			{ id: 'touch-yaw-left', label: 'YAW L', key: 'KeyQ' },
-			{ id: 'touch-yaw-right', label: 'YAW R', key: 'KeyE' },
-			{ id: 'touch-up', label: 'UP', key: 'ShiftLeft' },
-			{ id: 'touch-down', label: 'DOWN', key: 'Space' },
-			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF', wide: true },
+			{ id: 'touch-recover', label: 'FLIP', key: 'KeyR', desc: 'Upright again' },
+			{ id: 'touch-yaw-left', label: 'YAW L', key: 'KeyQ', desc: 'Turn left' },
+			{ id: 'touch-yaw-right', label: 'YAW R', key: 'KeyE', desc: 'Turn right' },
+			{ id: 'touch-up', label: 'UP', key: 'ShiftLeft', desc: 'Climb' },
+			{ id: 'touch-down', label: 'DOWN', key: 'Space', desc: 'Descend' },
+			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF', wide: true, desc: 'Get out' },
 		],
 		'airplane': [
-			{ id: 'touch-yaw-left', label: 'YAW L', key: 'KeyQ' },
-			{ id: 'touch-yaw-right', label: 'YAW R', key: 'KeyE' },
-			{ id: 'touch-up', label: 'THRTL', key: 'ShiftLeft' },
-			{ id: 'touch-brake', label: 'BRAKE', key: 'Space' },
-			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF', wide: true },
+			{ id: 'touch-yaw-left', label: 'YAW L', key: 'KeyQ', desc: 'Turn left' },
+			{ id: 'touch-yaw-right', label: 'YAW R', key: 'KeyE', desc: 'Turn right' },
+			{ id: 'touch-up', label: 'THRTL', key: 'ShiftLeft', desc: 'Throttle' },
+			{ id: 'touch-brake', label: 'BRAKE', key: 'Space', desc: 'Brake' },
+			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF', wide: true, desc: 'Get out' },
 		],
 		// A passenger steers nothing, so the only thing left to offer is the door
 		'passenger': [
-			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF' },
+			{ id: 'touch-enter', label: 'EXIT', key: 'KeyF', desc: 'Get out' },
 		],
 	};
 
@@ -224,10 +226,10 @@ export class TouchControls
 	/** Called every frame by the world; swapping the buttons is the rare case. */
 	public update(): void
 	{
-		// A shop or the job board open: the thumbs are on it, not on the game.
-		// Whatever was held lets go, so a stick pushed on the way in doesn't
-		// walk the player out of the shop, and the buttons get out of the way
-		let open = Panel.isOpen;
+		// A shop, the job board or the phone open: the thumbs are on it, not on
+		// the game. Whatever was held lets go, so a stick pushed on the way in
+		// doesn't walk the player out of the shop, and the buttons get out of the way
+		let open = Panel.isOpen || (this.world.phone !== undefined && this.world.phone.isOpen);
 		if (open !== this.frozen)
 		{
 			this.frozen = open;
@@ -243,6 +245,13 @@ export class TouchControls
 
 		let context = this.readContext();
 		if (context !== this.context) this.applyContext(context);
+	}
+
+	/** The buttons on screen now and what they do, for the phone's Controls app. */
+	public describe(): { keys: string[], desc: string }[]
+	{
+		let layout = TouchControls.LAYOUTS[this.readContext()] || [];
+		return layout.map((spec) => ({ keys: [spec.label], desc: spec.desc }));
 	}
 
 	private readContext(): string

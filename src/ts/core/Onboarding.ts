@@ -80,6 +80,7 @@ export class Onboarding
 		{
 			return [
 				['Stick', 'Drive and walk. Drag anywhere to look'],
+				['\u260E', 'Your phone: jobs, the map, your stats'],
 				['ENTER', 'Get into a car you are standing next to'],
 				['PUNCH', 'Hands up and swing. With a gun out it\'s FIRE'],
 				['BOOST', 'Nitro. Ramps are worth points'],
@@ -90,6 +91,7 @@ export class Onboarding
 
 		return [
 			['W A S D', 'Move, and steer'],
+			['\u2191', 'Your phone: jobs, the map, your stats and every control'],
 			['F', 'Get into a car you are standing next to'],
 			['Click', 'Punch, or shoot with a gun out'],
 			['Shift', 'Nitro. Ramps are worth points'],

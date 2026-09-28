@@ -41,6 +41,10 @@ import { ShopSystem } from '../economy/ShopSystem';
 import { JobSystem } from '../jobs/JobSystem';
 import { StuntSystem } from '../stunts/StuntSystem';
 import { CombatSystem } from '../combat/CombatSystem';
+import { Phone } from '../core/Phone';
+import { PauseMenu } from '../core/PauseMenu';
+import { SupportButton } from '../core/SupportButton';
+import { ControlRow } from '../core/GameInfo';
 export declare class World {
     renderer: THREE.WebGLRenderer;
     camera: THREE.PerspectiveCamera;
@@ -117,6 +121,11 @@ export declare class World {
     private beam;
     minimap: Minimap;
     touchControls: TouchControls;
+    phone: Phone;
+    pauseMenu: PauseMenu;
+    support: SupportButton;
+    /** What the keys do right now: on foot, at the wheel, flying. The phone and the pause menu list them. */
+    controls: ControlRow[];
     lastScenarioID: string;
     /**
      * The playable area, used both to respawn anything that leaves it and to
@@ -295,7 +304,8 @@ export declare class World {
     restartScenario(): void;
     clearEntities(): void;
     scrollTheTimeScale(scrollAmount: number): void;
-    updateControls(controls: any): void;
+    /** What the keys do now, kept for the phone's Controls app and the pause menu. */
+    updateControls(controls: ControlRow[]): void;
     private setupAudio;
     private generateHTML;
     private createParamsGUI;

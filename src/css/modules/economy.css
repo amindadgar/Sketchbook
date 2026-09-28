@@ -295,7 +295,7 @@ body.touch #interaction-prompt {
    come in, and the panel mustn't sit over them */
 body.touch #job-hud {
 	top: 8px;
-	left: 80px;
+	left: 118px;
 	min-width: 0;
 	max-width: 148px;
 	padding: 5px 8px;

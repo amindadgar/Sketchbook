@@ -85,6 +85,13 @@ export declare class Sky extends THREE.Object3D implements IUpdatable {
     /** Sets the time of day directly, nought to one, as the party clock does. */
     setPhase(phase: number): void;
     getPhase(): number;
+    /**
+     * The time of day on a clock, nought to twenty four: up over the horizon
+     * at six, highest at noon, down at six. The sun spends more of the turn up
+     * than down, since its lowest is only a little under the horizon, so the
+     * hours of daylight pass more slowly than the night's.
+     */
+    get clockHours(): number;
     refreshSunPosition(): void;
     /**
      * Everything that follows from the sun's height: how strong and what

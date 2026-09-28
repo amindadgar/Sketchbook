@@ -1,0 +1,434 @@
+/* The phone: bottom right, beside the map, sliding up out of the edge like
+   GTA's. The game carries on behind it, so it only ever covers its corner. */
+#phone {
+	position: fixed;
+	right: 226px;
+	bottom: 0;
+	width: 236px;
+	height: min(470px, calc(100vh - 60px));
+	transform: translateY(105%);
+	transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+	z-index: 44;
+	pointer-events: auto;
+	user-select: none;
+	font-family: 'Solway', serif;
+	/* The HUD's shadow reads as a smudge on the phone's own white */
+	text-shadow: none;
+}
+
+#phone.open {
+	transform: translateY(-22px);
+}
+
+.phone-body {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	padding: 9px;
+	box-sizing: border-box;
+	border-radius: 38px;
+	background: linear-gradient(145deg, #30353d, #0c0e11 60%);
+	box-shadow: inset 0 0 0 2px #444a54, 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+.phone-screen {
+	position: relative;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border-radius: 30px;
+	color: #fff;
+	/* Dusk over the city */
+	background:
+		radial-gradient(120% 70% at 15% 0%, rgba(74, 132, 196, 0.9) 0%, rgba(74, 132, 196, 0) 60%),
+		radial-gradient(90% 60% at 100% 100%, rgba(222, 92, 128, 0.85) 0%, rgba(222, 92, 128, 0) 62%),
+		linear-gradient(180deg, #18213b 0%, #362150 55%, #642a50 100%);
+}
+
+/* The bar a phone's own screen has at the bottom */
+.phone-screen::after {
+	content: '';
+	position: absolute;
+	bottom: 6px;
+	left: 50%;
+	width: 84px;
+	height: 4px;
+	border-radius: 2px;
+	background: rgba(255, 255, 255, 0.75);
+	transform: translateX(-50%);
+}
+
+.phone-status {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 22px;
+	padding: 8px 16px 0 18px;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.phone-island {
+	width: 62px;
+	height: 18px;
+	border-radius: 10px;
+	background: #000;
+}
+
+.phone-signal {
+	display: flex;
+	align-items: flex-end;
+	gap: 2px;
+}
+
+.phone-signal i {
+	display: block;
+	width: 3px;
+	border-radius: 1px;
+	background: #fff;
+}
+
+.phone-signal i:nth-child(1) { height: 4px; }
+.phone-signal i:nth-child(2) { height: 6px; }
+.phone-signal i:nth-child(3) { height: 8px; }
+.phone-signal i:nth-child(4) { height: 10px; }
+
+.phone-battery {
+	position: relative;
+	width: 19px;
+	height: 10px;
+	margin-left: 6px;
+	box-sizing: border-box;
+	border: 1.5px solid #fff;
+	border-radius: 3px;
+}
+
+.phone-battery::after {
+	content: '';
+	position: absolute;
+	top: 1px;
+	left: 1px;
+	bottom: 1px;
+	width: 70%;
+	border-radius: 1px;
+	background: #fff;
+}
+
+.phone-head {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 26px;
+	padding: 12px 16px 6px 16px;
+}
+
+.phone-title {
+	font-size: 17px;
+	font-weight: 700;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.phone-back {
+	display: none;
+	padding: 0 6px 2px 0;
+	font-size: 28px;
+	line-height: 20px;
+	cursor: pointer;
+}
+
+#phone.in-app .phone-back {
+	display: inline;
+}
+
+.phone-home {
+	flex: 1;
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 16px 6px;
+	align-content: start;
+	padding: 12px 12px;
+}
+
+#phone.in-app .phone-home {
+	display: none;
+}
+
+.phone-app {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+}
+
+.phone-icon {
+	width: 50px;
+	height: 50px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 14px;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 3px 8px rgba(0, 0, 0, 0.3);
+	transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.phone-icon svg {
+	width: 28px;
+	height: 28px;
+}
+
+.phone-label {
+	font-size: 10.5px;
+	white-space: nowrap;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+/* The one the arrows are on */
+.phone-app.selected .phone-icon {
+	transform: scale(1.1);
+	box-shadow: 0 0 0 3px #fff, 0 6px 14px rgba(0, 0, 0, 0.45);
+}
+
+.phone-app.selected .phone-label {
+	font-weight: 700;
+}
+
+.phone-view {
+	display: none;
+	flex: 1;
+	overflow-y: auto;
+	padding: 4px 10px 8px 10px;
+	background: rgba(8, 10, 16, 0.5);
+	scrollbar-width: none;
+}
+
+.phone-view::-webkit-scrollbar {
+	display: none;
+}
+
+#phone.in-app .phone-view {
+	display: block;
+}
+
+.phone-row {
+	margin-bottom: 5px;
+	padding: 9px 10px;
+	border-radius: 11px;
+	background: rgba(255, 255, 255, 0.07);
+}
+
+.phone-row-top {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.phone-row.pickable {
+	cursor: pointer;
+}
+
+.phone-row.selected {
+	background: #fff;
+	color: #111;
+}
+
+.phone-row-title {
+	flex: 1;
+	min-width: 0;
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.phone-row-detail {
+	margin-top: 2px;
+	font-size: 11px;
+	line-height: 1.35;
+	opacity: 0.78;
+	overflow-wrap: anywhere;
+}
+
+.phone-row-aside {
+	flex-shrink: 0;
+	font-size: 11px;
+	font-weight: 700;
+	white-space: nowrap;
+	color: #FFB900;
+}
+
+/* An address, to copy by hand where the clipboard won't */
+.phone-row.selectable .phone-row-detail {
+	-webkit-user-select: all;
+	user-select: all;
+}
+
+/* Read about once it's picked */
+.phone-row.two-step:not(.selected) .phone-row-detail {
+	display: none;
+}
+
+.phone-row.selected .phone-row-aside {
+	color: #a86f00;
+}
+
+.phone-row.highlight .phone-row-aside {
+	color: #6fe08a;
+}
+
+.phone-row.selected.highlight .phone-row-aside {
+	color: #178a3f;
+}
+
+.phone-info {
+	padding: 6px 4px 4px 4px;
+}
+
+.phone-note {
+	font-size: 12px;
+	line-height: 1.45;
+	opacity: 0.85;
+}
+
+.phone-hint {
+	padding: 6px 0 16px 0;
+	font-size: 10px;
+	letter-spacing: 0.04em;
+	text-align: center;
+	white-space: pre;
+	opacity: 0.7;
+}
+
+/* One line in the corner the key list used to fill: where the rest went */
+#play-hint {
+	position: fixed;
+	left: 18px;
+	bottom: 16px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-family: 'Solway', serif;
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.85);
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+	pointer-events: none;
+	transition: opacity 0.2s ease;
+}
+
+.play-hint-key {
+	margin-left: 6px;
+	padding: 1px 6px;
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.9);
+	color: #111;
+	font-family: 'Cutive Mono', monospace;
+	font-weight: 700;
+	text-shadow: none;
+}
+
+.play-hint-key:first-child {
+	margin-left: 0;
+}
+
+body.phone-open #play-hint,
+body.paused #play-hint {
+	opacity: 0;
+}
+
+/* Phones: a button beside the map instead of the up key */
+#phone-toggle {
+	display: none;
+}
+
+/* In the top row beside the heart, clear of the chat bubble on a short screen */
+body.touch #phone-toggle {
+	position: fixed;
+	top: max(10px, env(safe-area-inset-top, 0px));
+	left: calc(max(17px, env(safe-area-inset-left, 0px)) + 48px);
+	width: 40px;
+	height: 40px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	background: rgba(0, 0, 0, 0.45);
+	border: 2px solid rgba(255, 255, 255, 0.7);
+	border-radius: 50%;
+	color: #fff;
+	touch-action: none;
+	user-select: none;
+	z-index: 25;
+}
+
+body.touch #phone-toggle svg {
+	width: 22px;
+	height: 22px;
+}
+
+body.touch.phone-open #phone-toggle {
+	border-color: #FFB900;
+	color: #FFB900;
+}
+
+body.touch #play-hint,
+body.touch .phone-hint {
+	display: none;
+}
+
+body.touch .phone-screen::after {
+	bottom: 5px;
+}
+
+body.touch #phone {
+	right: max(12px, env(safe-area-inset-right, 0px));
+	height: min(430px, calc(100vh - 24px));
+}
+
+body.touch #phone.open {
+	transform: translateY(-12px);
+}
+
+/* A phone held sideways is short: smaller tiles, closer together, so all
+   nine fit above the bar at the bottom */
+@media (max-height: 460px) {
+	.phone-status {
+		padding-top: 6px;
+	}
+
+	.phone-head {
+		min-height: 20px;
+		padding: 6px 16px 2px 16px;
+	}
+
+	.phone-title {
+		font-size: 15px;
+	}
+
+	.phone-home {
+		gap: 7px 6px;
+		padding: 6px 12px 18px 12px;
+	}
+
+	.phone-icon {
+		width: 40px;
+		height: 40px;
+		border-radius: 11px;
+	}
+
+	.phone-icon svg {
+		width: 22px;
+		height: 22px;
+	}
+
+	.phone-app {
+		gap: 3px;
+	}
+
+	.phone-label {
+		font-size: 9.5px;
+	}
+}

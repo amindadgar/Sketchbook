@@ -2,6 +2,8 @@ import { World } from '../world/World';
 import { IInputReceiver } from '../interfaces/IInputReceiver';
 import { EntityType } from '../enums/EntityType';
 import { IUpdatable } from '../interfaces/IUpdatable';
+import { Pointer } from './Pointer';
+import { Panel } from './Panel';
 
 export class InputManager implements IUpdatable
 {
@@ -103,9 +105,23 @@ export class InputManager implements IUpdatable
 			this.domElement.removeEventListener('mouseup', this.boundOnMouseUp, false);
 			this.isLocked = false;
 
-			// The browser keeps the Esc that ends pointer lock to itself, so it
-			// never reaches the key handler that closes the big map
-			if (this.world.minimap !== undefined && this.world.minimap.expanded) this.world.minimap.setExpanded(false);
+			// The browser keeps the Esc that ends pointer lock to itself, so
+			// losing the lock is the only sign of it. It closes what's open, the
+			// big map or the phone, and otherwise it's a pause, as it is when the
+			// window loses focus. Unless the game let go itself, for a shop.
+			let asked = Pointer.takeRelease();
+			if (this.world.minimap !== undefined && this.world.minimap.expanded)
+			{
+				this.world.minimap.setExpanded(false);
+				return;
+			}
+			if (asked || Panel.isOpen || this.world.chat.typing) return;
+			if (this.world.phone !== undefined && this.world.phone.isOpen)
+			{
+				this.world.phone.close();
+				return;
+			}
+			if (this.world.pauseMenu !== undefined) this.world.pauseMenu.open();
 		}
 	}
 
@@ -160,6 +176,8 @@ export class InputManager implements IUpdatable
 	{
 		// Somebody is writing a message, so the keys are theirs, not the game's
 		if (this.world.chat.typing || InputManager.isTyping(event)) return;
+		// Paused: the menu has the keys
+		if (this.world.pauseMenu !== undefined && this.world.pauseMenu.isOpen) return;
 
 		// Handled here rather than per receiver, so they work on foot, in a
 		// vehicle and in the free camera alike. Shift is left alone, Shift + C
@@ -218,6 +236,14 @@ export class InputManager implements IUpdatable
 				return;
 			}
 
+			// With the mouse free, Esc gets here; the phone, a shop and the
+			// support card have already taken theirs
+			if (event.code === 'Escape' && this.world.pauseMenu !== undefined)
+			{
+				this.world.pauseMenu.open();
+				return;
+			}
+
 			if (event.code === 'Enter')
 			{
 				this.world.chat.begin();
@@ -260,7 +286,7 @@ export class InputManager implements IUpdatable
 	 * than to the game. Not a checkbox or a list, which keep focus after a
 	 * click and would otherwise leave the game deaf until the canvas is clicked.
 	 */
-	private static isTyping(event: KeyboardEvent): boolean
+	public static isTyping(event: KeyboardEvent): boolean
 	{
 		let target = event.target as HTMLElement;
 		if (target === null || target === undefined || target.tagName === undefined) return false;
@@ -272,6 +298,7 @@ export class InputManager implements IUpdatable
 
 	public onMouseWheelMove(event: WheelEvent): void
 	{
+		if (this.world.pauseMenu !== undefined && this.world.pauseMenu.isOpen) return;
 		if (this.inputReceiver !== undefined)
 		{
 			this.inputReceiver.handleMouseWheel(event, event.deltaY);

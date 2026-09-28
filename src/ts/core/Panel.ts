@@ -1,4 +1,5 @@
 import { onTap } from './Tap';
+import { Pointer } from './Pointer';
 
 /** A line in a panel: a thing to buy, a job to take. */
 export interface PanelRow
@@ -43,8 +44,8 @@ export class Panel
 		(Panel.root.querySelector('.panel-subtitle') as HTMLElement).textContent = subtitle;
 		Panel.fill(rows);
 		Panel.root.style.display = '';
-		// The buttons want the mouse
-		if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock();
+		// The buttons want the mouse, which is let go on purpose rather than to pause
+		Pointer.release();
 	}
 
 	/** New rows and a new line of context, for a panel that's already open. */
@@ -177,6 +178,8 @@ export class Panel
 			if (event.code === 'Escape')
 			{
 				Panel.close();
+				// Closing the shop isn't pausing the game
+				event.stopPropagation();
 				return;
 			}
 			let digit = /^Digit([1-9])$/.exec(event.code);

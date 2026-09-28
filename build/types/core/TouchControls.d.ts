@@ -46,6 +46,11 @@ export declare class TouchControls {
     private addButton;
     /** Called every frame by the world; swapping the buttons is the rare case. */
     update(): void;
+    /** The buttons on screen now and what they do, for the phone's Controls app. */
+    describe(): {
+        keys: string[];
+        desc: string;
+    }[];
     private readContext;
     private applyContext;
     private releaseAll;

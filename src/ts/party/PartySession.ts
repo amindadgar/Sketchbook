@@ -1125,23 +1125,26 @@ export class PartySession implements IUpdatable
 	}
 
 	/** Works out of a party too, where it's just you and your score. */
-	public refreshScoreboard(): void
+	/** Everyone in the party, this player first, with the round's scores. */
+	public roster(): { name: string, color: string, score: number }[]
 	{
-		let names = [this.world.localPlayer.name];
-		let colors = [this.world.localPlayer.color];
-		let scores = [this.localScore];
+		let everyone = [{ name: this.world.localPlayer.name, color: this.world.localPlayer.color, score: this.localScore }];
 
 		for (const id in this.players)
 		{
 			if (!this.players.hasOwnProperty(id)) continue;
 
 			let info = this.players[id].info;
-			names.push(info.name);
-			colors.push(info.color);
-			scores.push(info.score !== undefined ? info.score : 0);
+			everyone.push({ name: info.name, color: info.color, score: info.score !== undefined ? info.score : 0 });
 		}
 
-		UIManager.setScoreboard(names, colors, scores);
+		return everyone;
+	}
+
+	public refreshScoreboard(): void
+	{
+		let everyone = this.roster();
+		UIManager.setScoreboard(everyone.map((p) => p.name), everyone.map((p) => p.color), everyone.map((p) => p.score));
 	}
 
 	public update(timeStep: number, unscaledTimeStep: number): void

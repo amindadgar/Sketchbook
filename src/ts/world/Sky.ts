@@ -312,6 +312,24 @@ export class Sky extends THREE.Object3D implements IUpdatable
 		return this.phase;
 	}
 
+	/**
+	 * The time of day on a clock, nought to twenty four: up over the horizon
+	 * at six, highest at noon, down at six. The sun spends more of the turn up
+	 * than down, since its lowest is only a little under the horizon, so the
+	 * hours of daylight pass more slowly than the night's.
+	 */
+	public get clockHours(): number
+	{
+		// How far either side of noon, as a share of the turn, the sun is on the horizon
+		let day = 0.25 - Math.asin(2 * -Sky.LOW_SUN / (Sky.HIGH_SUN - Sky.LOW_SUN) - 1) / (Math.PI * 2);
+		let fromNoon = this.phase - 0.25;
+		fromNoon -= Math.round(fromNoon);
+		let away = Math.abs(fromNoon);
+		let hours = away <= day ? 6 * away / day : 6 + 6 * (away - day) / (0.5 - day);
+		let clock = fromNoon >= 0 ? 12 + hours : 12 - hours;
+		return ((clock % 24) + 24) % 24;
+	}
+
 	public refreshSunPosition(): void
 	{
 		const sunDistance = 10;

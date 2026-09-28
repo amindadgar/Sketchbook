@@ -5,6 +5,13 @@ export class UIManager
 		document.getElementById('ui-container').style.display = value ? 'block' : 'none';
 	}
 
+	/** In play, rather than on the loading screen or the start menu. */
+	public static isUserInterfaceVisible(): boolean
+	{
+		let ui = document.getElementById('ui-container');
+		return ui !== null && ui.style.display !== 'none';
+	}
+
 	public static setLoadingScreenVisible(value: boolean): void
 	{
 		document.getElementById('loading-screen').style.display = value ? 'flex' : 'none';
@@ -411,7 +418,12 @@ export class UIManager
 	public static toggleSettings(): void
 	{
 		let panel = document.getElementById('dat-gui-container');
-		panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
+		UIManager.showSettings(panel.style.display !== 'block');
+	}
+
+	public static showSettings(visible: boolean): void
+	{
+		document.getElementById('dat-gui-container').style.display = visible ? 'block' : 'none';
 	}
 
 	public static setPartyVisible(value: boolean): void

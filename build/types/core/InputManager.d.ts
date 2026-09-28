@@ -33,6 +33,6 @@ export declare class InputManager implements IUpdatable {
      * than to the game. Not a checkbox or a list, which keep focus after a
      * click and would otherwise leave the game deaf until the canvas is clicked.
      */
-    private static isTyping;
+    static isTyping(event: KeyboardEvent): boolean;
     onMouseWheelMove(event: WheelEvent): void;
 }
