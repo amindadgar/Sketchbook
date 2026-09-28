@@ -141,17 +141,21 @@ async function createUser(username, password)
 async function findUser(username)
 {
 	const result = await pool.query(
-		'SELECT id, username, password FROM users WHERE username_key = $1', [key(username)]);
+		'SELECT id, username, password, (google_sub IS NOT NULL) AS google FROM users WHERE username_key = $1', [key(username)]);
 
 	return result.rows[0] || null;
 }
 
+/**
+ * The account and its tallies, or null for none: including one Google was
+ * moved off, which has no way in left, so a session it had is over too.
+ */
 async function getProfile(userId)
 {
 	const result = await pool.query(
 		`SELECT u.id, u.username, s.kills, s.deaths, s.played, (u.google_sub IS NOT NULL) AS google
 		 FROM users u LEFT JOIN stats s ON s.user_id = u.id
-		 WHERE u.id = $1`, [userId]);
+		 WHERE u.id = $1 AND (u.password IS NOT NULL OR u.google_sub IS NOT NULL)`, [userId]);
 
 	return result.rows[0] || null;
 }
@@ -264,6 +268,49 @@ async function linkGoogle(userId, sub, email)
 	return result.rowCount === 1;
 }
 
+/** Who signs in with this Google identity now, and whether they have a password to fall back on. */
+async function googleHolder(sub)
+{
+	const result = await pool.query(
+		'SELECT id, username, (password IS NOT NULL) AS "hasPassword" FROM users WHERE google_sub = $1', [sub]);
+	return result.rows[0] || null;
+}
+
+/**
+ * Google taken off a player it made, one with no password and so no other way
+ * in, and put on an account the same person made with a password before. The
+ * one it came off is kept, out of reach, rather than deleted. All or nothing.
+ */
+async function moveGoogle(fromId, toId, sub, email)
+{
+	const client = await pool.connect();
+	try
+	{
+		await client.query('BEGIN');
+		const off = await client.query(
+			'UPDATE users SET google_sub = NULL WHERE id = $1 AND google_sub = $2 AND password IS NULL RETURNING id', [fromId, sub]);
+		const on = off.rowCount === 1 ? await client.query(
+			'UPDATE users SET google_sub = $2, email = COALESCE(email, $3) WHERE id = $1 AND google_sub IS NULL RETURNING id',
+			[toId, sub, email]) : null;
+		if (on === null || on.rowCount !== 1)
+		{
+			await client.query('ROLLBACK');
+			return false;
+		}
+		await client.query('COMMIT');
+		return true;
+	}
+	catch (error)
+	{
+		await client.query('ROLLBACK').catch(() => undefined);
+		throw error;
+	}
+	finally
+	{
+		client.release();
+	}
+}
+
 /** Only ever moves down: a slower lap than the one on record is not news. */
 async function recordLap(userId, track, milliseconds)
 {
@@ -290,5 +337,5 @@ module.exports = {
 	available, connect, createUser, findUser, getProfile,
 	recordKill, recordDeath, recordPlayed, leaderboard,
 	recordLap, lapBoard, getSave, putSave,
-	findGoogleUser, createGoogleUser, linkGoogle
+	findGoogleUser, createGoogleUser, linkGoogle, googleHolder, moveGoogle
 };

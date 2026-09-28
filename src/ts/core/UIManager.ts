@@ -44,16 +44,17 @@ export class UIManager
 		let hud = document.getElementById('combat-hud');
 		if (hud !== null) hud.classList.toggle('several', names.length > 1);
 		while (slots.firstChild) slots.removeChild(slots.firstChild);
+		// Numbered from nought, which is the fists
 		names.forEach((name, i) =>
 		{
 			let slot = document.createElement('span');
 			slot.className = 'weapon-slot' + (i === held ? ' held' : '');
-			slot.textContent = (i + 1) + ' ' + name;
+			slot.textContent = i + ' ' + name;
 			slots.appendChild(slot);
 		});
 	}
 
-	/** @param health 0 to 1. Weapon name undefined means empty handed. */
+	/** @param health 0 to 1. Weapon name undefined hides the readout, and ammo undefined is a weapon without any. */
 	public static setCombatHud(health: number, weapon: string, ammo: number, reserve: number): void
 	{
 		let points = Math.round(health * 100);
@@ -73,7 +74,7 @@ export class UIManager
 
 		readout.style.visibility = 'visible';
 		document.getElementById('weapon-name').textContent = weapon;
-		document.getElementById('weapon-ammo').textContent = ammo + ' / ' + reserve;
+		document.getElementById('weapon-ammo').textContent = ammo === undefined ? '' : ammo + ' / ' + reserve;
 	}
 
 	/** Names come off the network, so they're written as text, never as HTML. */

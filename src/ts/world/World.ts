@@ -821,7 +821,7 @@ export class World
 		tap('weapon-name', () =>
 		{
 			let character = this.localCharacter;
-			if (character !== undefined && !character.isBusyWithVehicle()) this.combat.cycleWeapon(true);
+			if (character !== undefined && !character.isBusyWithVehicle()) this.combat.cycleWeapon();
 		});
 	}
 

@@ -15,14 +15,31 @@ export interface PartyMenuOptions
 }
 
 /**
- * The dialog shown once the world has loaded. Picks the player's name and
- * colour, and optionally starts or joins a party before the game begins.
+ * The dialog shown once the world has loaded. Signs the player in, picks
+ * their name and colour, and optionally starts or joins a party before the
+ * game begins.
+ *
+ * Where the game's own relay has Google sign-in set up, signing in with it
+ * is how the game starts: playing solo, hosting and joining all wait for it.
  */
 export class PartyMenu
 {
+	/** Whether playing waits for a Google sign-in. Undefined until the relay has said. */
+	private static required: boolean;
+	/** A stored session being picked back up, which may well make signing in unnecessary. */
+	private static resuming: boolean = false;
+	private static showing: boolean = false;
+	/** A party being hosted or joined, which holds the buttons down until it's settled. */
+	private static connecting: boolean = false;
+	private static googleClientId: string;
+	private static retryTimer: number;
+	private static readonly RETRY_MS: number = 5000;
+
 	public static show(options: PartyMenuOptions): void
 	{
 		let entered = false;
+		PartyMenu.required = undefined;
+		PartyMenu.connecting = false;
 
 		Swal.fire({
 			title: 'Welcome to Sketchbook!',
@@ -38,13 +55,26 @@ export class PartyMenu
 				+ '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a></span>',
 			onBeforeOpen: () =>
 			{
+				PartyMenu.showing = true;
 				PartyMenu.bindSwatches();
 				PartyMenu.bindServerPicker();
-				PartyMenu.bindAccount(options.identity);
 				PartyMenu.bindPartyButtons(options, () => { entered = true; });
+				PartyMenu.bindAccount(options.identity);
+			},
+			onClose: () =>
+			{
+				PartyMenu.showing = false;
+				window.clearTimeout(PartyMenu.retryTimer);
 			},
 			preConfirm: () =>
 			{
+				// However it was pressed: Enter can still get here with the button greyed out
+				if (!PartyMenu.mayPlay())
+				{
+					// Turning it down puts the button back as it was before the press
+					window.setTimeout(() => PartyMenu.updateGate(), 0);
+					return false;
+				}
 				PartyMenu.commitIdentity(options.identity);
 				return true;
 			}
@@ -87,6 +117,29 @@ export class PartyMenu
 		return '<p class="party-intro">Explore the world and hop into any vehicle.'
 			+ ' Scenarios are in the right hand panel.</p>'
 			+ PartyMenu.buildInstallHint()
+			// First, since everything else waits on it when it's required
+			+ '<div class="party-account">'
+			+ '<div class="party-server-line">'
+			+ '<span class="party-server-label">Account</span>'
+			+ '<span id="party-account-current" class="party-server-current">Checking\u2026</span>'
+			+ '<button type="button" id="party-account-toggle" class="party-server-change">Sign in</button>'
+			+ '</div>'
+			+ '<div id="party-account-note" class="party-account-note"></div>'
+			+ '<div id="party-google" class="party-google"></div>'
+			+ '<div id="party-google-link" class="party-google"></div>'
+			+ '<button type="button" id="party-account-old" class="party-server-change party-account-old">'
+			+ 'Made an account with a password before? Sign in to it here first</button>'
+			+ '<div id="party-account-panel" class="party-server-panel">'
+			+ '<input id="party-account-name" class="party-input" maxlength="16" spellcheck="false" placeholder="Name">'
+			+ '<input id="party-account-password" class="party-input" type="password" placeholder="Password">'
+			+ '<div class="party-row">'
+			+ '<button type="button" id="party-account-login" class="party-button">Sign in</button>'
+			+ '<button type="button" id="party-account-register" class="party-button">Create account</button>'
+			+ '</div>'
+			+ '</div>'
+			+ '<div id="party-account-status" class="party-status"></div>'
+			+ '<button type="button" id="party-account-move" class="party-button party-account-move"></button>'
+			+ '</div>'
 			+ '<label class="party-label" for="party-name">Your name</label>'
 			+ '<input id="party-name" class="party-input" maxlength="16" spellcheck="false"'
 			+ ' value="' + PartyMenu.escape(identity.name) + '">'
@@ -94,25 +147,6 @@ export class PartyMenu
 			+ '<div id="party-colors" class="party-colors">' + swatches + '</div>'
 			+ '<label class="party-label">Your hat</label>'
 			+ '<div id="party-hats" class="party-hats">' + hats + '</div>'
-			+ '<div class="party-divider"><span>account</span></div>'
-			+ '<div class="party-server-line">'
-			+ '<span class="party-server-label">Account</span>'
-			+ '<span id="party-account-current" class="party-server-current">Not signed in</span>'
-			+ '<button type="button" id="party-account-toggle" class="party-server-change">Sign in</button>'
-			+ '</div>'
-			+ '<div id="party-account-note" class="party-account-note"></div>'
-			+ '<div id="party-google-link" class="party-google"></div>'
-			+ '<div id="party-account-panel" class="party-server-panel">'
-			+ '<div id="party-google" class="party-google"></div>'
-			+ '<div id="party-google-or" class="party-account-or">or with a name and password</div>'
-			+ '<input id="party-account-name" class="party-input" maxlength="16" spellcheck="false" placeholder="Name">'
-			+ '<input id="party-account-password" class="party-input" type="password" placeholder="Password">'
-			+ '<div class="party-row">'
-			+ '<button type="button" id="party-account-login" class="party-button">Sign in</button>'
-			+ '<button type="button" id="party-account-register" class="party-button">Create account</button>'
-			+ '</div>'
-			+ '<div id="party-account-status" class="party-status"></div>'
-			+ '</div>'
 			+ '<div class="party-divider"><span>or play with friends</span></div>'
 			+ '<div class="party-row">'
 			+ '<input id="party-code-input" class="party-input party-code-input" maxlength="4"'
@@ -175,23 +209,25 @@ export class PartyMenu
 
 		let begin = (action: () => Promise<void>) =>
 		{
+			if (!PartyMenu.mayPlay() || PartyMenu.connecting) return;
 			PartyMenu.commitIdentity(options.identity);
 
-			host.setAttribute('disabled', 'disabled');
-			join.setAttribute('disabled', 'disabled');
+			PartyMenu.connecting = true;
+			PartyMenu.updateGate();
 			status.textContent = 'Connecting…';
 			status.className = 'party-status';
 
 			action().then(() =>
 			{
+				PartyMenu.connecting = false;
 				markEntered();
 				Swal.close();
 				options.onPlay();
 			})
 			.catch((error) =>
 			{
-				host.removeAttribute('disabled');
-				join.removeAttribute('disabled');
+				PartyMenu.connecting = false;
+				PartyMenu.updateGate();
 				status.textContent = error.message;
 				status.className = 'party-status party-status-error';
 			});
@@ -285,39 +321,156 @@ export class PartyMenu
 		}, false);
 	}
 
+	/** Where accounts live: always the game's own relay, whichever server a party is on. */
+	private static accountServer(): string
+	{
+		return NetworkClient.defaultUrl();
+	}
+
+	/** Signed in the way this server needs, or it needs nothing. */
+	private static mayPlay(): boolean
+	{
+		if (PartyMenu.required === undefined || PartyMenu.resuming) return false;
+		if (!PartyMenu.required) return true;
+		return Account.signedIn && Account.profile.google === true;
+	}
+
+	/** Play, host and join, usable or greyed out to match. */
+	private static updateGate(): void
+	{
+		let open = PartyMenu.mayPlay() && !PartyMenu.connecting;
+		let confirm = Swal.getConfirmButton() as HTMLButtonElement;
+		if (confirm !== null && confirm !== undefined) confirm.disabled = !open;
+
+		for (const id of ['party-host', 'party-join'])
+		{
+			let button = document.getElementById(id);
+			if (button === null) continue;
+			if (open) button.removeAttribute('disabled');
+			else button.setAttribute('disabled', 'disabled');
+		}
+	}
+
+	/** Served from this machine, where the game is being worked on and a relay may not be running. */
+	private static isLocalPage(): boolean
+	{
+		let host = window.location.hostname;
+		return host === '' || host === 'localhost' || host === '127.0.0.1';
+	}
+
 	/**
-	 * Signing in is optional: the party works without it. What it buys is having
-	 * kills counted against a name that persists, which is what a leaderboard
-	 * will be built on.
+	 * Asks the relay whether it has Google sign-in, which makes it required.
+	 * A relay that can't be reached is asked again until it answers: playing
+	 * without the sign-in it may want isn't an option. Except on this machine,
+	 * where nobody should need a relay running to try a change.
+	 */
+	private static checkRequired(render: () => void, status: HTMLElement, answered: () => void): void
+	{
+		let settle = (google: string) =>
+		{
+			PartyMenu.googleClientId = google;
+			PartyMenu.required = google !== undefined;
+			if (status.dataset.unreachable === '1')
+			{
+				status.textContent = '';
+				status.className = 'party-status';
+				delete status.dataset.unreachable;
+			}
+			answered();
+			render();
+		};
+
+		Account.config(PartyMenu.accountServer()).then((config) => settle(config.google))
+		.catch((error) =>
+		{
+			// The relay itself said no, rather than not answering: one older than
+			// this, or without accounts. Nothing to sign in to, so nothing to wait for.
+			// A gateway's error page for a relay that's down isn't the relay talking
+			let spoke = error.body !== undefined && typeof error.body.error === 'string';
+			if (spoke || PartyMenu.isLocalPage())
+			{
+				settle(undefined);
+				return;
+			}
+			status.textContent = 'Can’t reach the sign-in server. Trying again…';
+			status.className = 'party-status party-status-error';
+			status.dataset.unreachable = '1';
+			PartyMenu.retryTimer = window.setTimeout(() =>
+			{
+				if (PartyMenu.showing) PartyMenu.checkRequired(render, status, answered);
+			}, PartyMenu.RETRY_MS);
+		});
+	}
+
+	/**
+	 * The account: signed in or not, and how to be. With Google required
+	 * that's its button and nothing else, apart from a way for somebody who
+	 * made an account with a password before to sign in to it once and put
+	 * Google on it. Without Google it's names and passwords, and optional.
 	 */
 	private static bindAccount(identity: PlayerIdentity): void
 	{
-		let line = document.getElementById('party-account-current');
+		let current = document.getElementById('party-account-current');
 		let toggle = document.getElementById('party-account-toggle');
 		let panel = document.getElementById('party-account-panel');
+		let older = document.getElementById('party-account-old');
+		let register = document.getElementById('party-account-register');
 		let status = document.getElementById('party-account-status');
+		let note = document.getElementById('party-account-note');
 		let name = document.getElementById('party-account-name') as HTMLInputElement;
 		let password = document.getElementById('party-account-password') as HTMLInputElement;
 
-		let note = document.getElementById('party-account-note');
 		let render = () =>
 		{
-			if (Account.signedIn)
+			let required = PartyMenu.required;
+
+			if (move.style.display !== 'none' && (!Account.signedIn || Account.profile.id !== offeredTo))
+			{
+				move.style.display = 'none';
+				status.textContent = '';
+				status.className = 'party-status';
+			}
+
+			if (required === undefined || PartyMenu.resuming)
+			{
+				current.textContent = 'Checking…';
+				toggle.style.display = 'none';
+				older.style.display = 'none';
+				note.textContent = '';
+				panel.classList.remove('open');
+			}
+			else if (Account.signedIn)
 			{
 				let profile = Account.profile;
-				line.textContent = profile.username + ' \u2014 ' + profile.kills + ' kills, ' + profile.deaths + ' deaths';
+				current.textContent = profile.username + ' — ' + profile.kills + ' kills, ' + profile.deaths + ' deaths';
+				toggle.style.display = '';
 				toggle.textContent = 'Sign out';
+				older.style.display = 'none';
 				panel.classList.remove('open');
-				note.textContent = 'Your money, guns, cars and level are kept on this account.';
+				note.textContent = required && profile.google !== true
+					? 'One more step: add Google to this account to play. Everything on it stays.'
+					: 'Your money, guns, cars and level are kept on this account.';
 			}
 			else
 			{
-				line.textContent = 'Not signed in';
+				current.textContent = 'Not signed in';
+				toggle.style.display = required ? 'none' : '';
 				toggle.textContent = 'Sign in';
-				note.textContent = 'Sign in to keep your money, guns, cars and level on any device.';
+				older.style.display = required ? '' : 'none';
+				register.style.display = required ? 'none' : '';
+				note.textContent = required
+					? 'Sign in with Google to play. Your money, guns, cars and level are kept on your account, on any device.'
+					: 'Sign in to keep your money, guns, cars and level on any device.';
 			}
-			PartyMenu.showGoogle(panel.classList.contains('open'), attempt);
+
+			PartyMenu.showGoogle(attempt, fail);
+			PartyMenu.updateGate();
 		};
+
+		let move = document.getElementById('party-account-move');
+		move.style.display = 'none';
+		// Who the offer on screen was made to, so signing out or in takes it away
+		let offeredTo: number;
 
 		let fail = (error: Error) =>
 		{
@@ -328,6 +481,7 @@ export class PartyMenu
 		let succeed = () =>
 		{
 			status.textContent = '';
+			status.className = 'party-status';
 			password.value = '';
 
 			// A default name is worth replacing with the one they just signed in as
@@ -339,15 +493,64 @@ export class PartyMenu
 
 		let attempt = (action: () => Promise<any>) =>
 		{
-			status.textContent = 'Talking to the server\u2026';
+			status.textContent = 'Talking to the server…';
 			status.className = 'party-status';
-			action().then(succeed).catch(fail);
+			move.style.display = 'none';
+			action().then((result) =>
+			{
+				// Nothing came back: an offer is on screen, waiting on them
+				if (result === undefined && move.style.display !== 'none') return;
+				succeed();
+			}).catch((error) =>
+			{
+				fail(error);
+				render();
+			});
 		};
 
-		render();
+		// Google already has a player of its own for this person: offered to
+		// move it here, saying plainly what happens to that one
+		PartyMenu.offerMove = (holder: string, confirm: () => void) =>
+		{
+			offeredTo = Account.profile.id;
+			move.textContent = 'Move Google to ' + Account.profile.username;
+			move.style.display = '';
+			move.onclick = () =>
+			{
+				move.style.display = 'none';
+				confirm();
+			};
+			status.textContent = 'That Google account already has a player of its own, ' + holder
+				+ '. Moving Google here leaves ' + holder + ' with no way in.';
+			status.className = 'party-status party-status-error';
+		};
+
+		// Asked for again, with the name already in: the session was too old to put Google on
+		PartyMenu.passwordAgain = (username: string) =>
+		{
+			name.value = username;
+			password.value = '';
+			panel.classList.add('open');
+			password.focus();
+		};
 
 		// Quietly pick a previous session back up, if the server still honours it
-		Account.resume(PartyMenu.serverUrl()).then(render).catch(() => undefined);
+		let resume = () =>
+		{
+			if (Account.signedIn || PartyMenu.resuming || Account.loadToken() === undefined) return;
+			PartyMenu.resuming = true;
+			Account.resume(PartyMenu.accountServer())
+				.catch(() => undefined)
+				.then(() =>
+				{
+					PartyMenu.resuming = false;
+					render();
+				});
+		};
+		resume();
+		render();
+		// Once more when the relay answers, in case it hadn't the first time
+		PartyMenu.checkRequired(render, status, resume);
 
 		toggle.addEventListener('click', () =>
 		{
@@ -359,20 +562,26 @@ export class PartyMenu
 			}
 
 			panel.classList.toggle('open');
-			PartyMenu.showGoogle(panel.classList.contains('open'), attempt);
+		}, false);
+
+		older.addEventListener('click', () =>
+		{
+			if (panel.classList.toggle('open')) name.focus();
 		}, false);
 
 		document.getElementById('party-account-login').addEventListener('click', () =>
 		{
-			attempt(() => Account.login(PartyMenu.serverUrl(), name.value, password.value));
+			attempt(() => Account.login(PartyMenu.accountServer(), name.value, password.value));
 		}, false);
 
-		document.getElementById('party-account-register').addEventListener('click', () =>
+		register.addEventListener('click', () =>
 		{
-			attempt(() => Account.register(PartyMenu.serverUrl(), name.value, password.value));
+			attempt(() => Account.register(PartyMenu.accountServer(), name.value, password.value));
 		}, false);
 	}
 
+	private static passwordAgain: (username: string) => void;
+	private static offerMove: (holder: string, confirm: () => void) => void;
 	private static googleScript: Promise<void>;
 	private static googleClient: string;
 	private static googleMode: { link: boolean, user: number } = { link: false, user: undefined };
@@ -391,7 +600,43 @@ export class PartyMenu
 			attempt(() => Promise.reject(new Error('Signed in or out in the meantime: try the Google button again.')));
 			return;
 		}
-		attempt(() => Account.google(server, credential, mode.link));
+		PartyMenu.sendGoogle(credential, server, attempt, mode, false);
+	}
+
+	/** Sends Google's answer, and deals with the two ways putting it on an account can be turned down. */
+	private static sendGoogle(credential: string, server: string, attempt: (action: () => Promise<any>) => void,
+		mode: { link: boolean, user: number }, move: boolean): void
+	{
+		attempt(() => Account.google(server, credential, mode.link, move).catch((error) =>
+		{
+			let body = error.body !== undefined ? error.body : {};
+
+			// Too long since the password went in to trust this browser with
+			// the account: once more, and then Google again
+			if (mode.link && body.signInAgain === true && Account.signedIn)
+			{
+				let username = Account.profile.username;
+				Account.signOut();
+				if (PartyMenu.passwordAgain !== undefined) PartyMenu.passwordAgain(username);
+				throw new Error('Sign in with your password once more, then add Google.');
+			}
+
+			// Pressed Google before signing in with the password, most likely,
+			// and got a new player for it: that can be undone, if they say so
+			let stillThem = Account.signedIn && Account.profile.id === mode.user;
+			if (mode.link && !move && stillThem && body.canMove === true && typeof body.holder === 'string' && PartyMenu.offerMove !== undefined)
+			{
+				PartyMenu.offerMove(body.holder, () =>
+				{
+					let current = Account.signedIn ? Account.profile.id : undefined;
+					if (current !== mode.user) return;
+					PartyMenu.sendGoogle(credential, server, attempt, mode, true);
+				});
+				// Left as the offer says it, rather than written over
+				return undefined;
+			}
+			throw error;
+		}));
 	}
 
 	/** Google's sign-in script, fetched the first time a server offers Google. */
@@ -408,7 +653,7 @@ export class PartyMenu
 				script.onerror = () =>
 				{
 					PartyMenu.googleScript = undefined;
-					reject(new Error('Google sign-in could not load.'));
+					reject(new Error('Google sign-in could not load. Check the connection and reload the page.'));
 				};
 				document.head.appendChild(script);
 			});
@@ -417,64 +662,57 @@ export class PartyMenu
 	}
 
 	/**
-	 * Google's button, where it belongs: in the sign-in panel for somebody
-	 * signed out, and under the account for somebody signed in without it,
-	 * to put it on their account. Nothing at all if the server has no Google.
+	 * Google's button, where it belongs: under the account for somebody signed
+	 * out, to sign in, and for somebody signed in without it, to put it on
+	 * their account. Nothing at all while the relay is still being asked, or
+	 * if it has no Google.
 	 */
-	private static showGoogle(panelOpen: boolean, attempt: (action: () => Promise<any>) => void): void
+	private static showGoogle(attempt: (action: () => Promise<any>) => void, fail: (error: Error) => void): void
 	{
 		let signIn = document.getElementById('party-google');
 		let link = document.getElementById('party-google-link');
-		let or = document.getElementById('party-google-or');
-		let hide = () =>
+		// Worked out again once the script is in: things may have moved on by then
+		let wanted = () =>
 		{
-			signIn.style.display = 'none';
-			link.style.display = 'none';
-			or.style.display = 'none';
+			let ready = PartyMenu.googleClientId !== undefined && PartyMenu.required !== undefined && !PartyMenu.resuming;
+			let linking = Account.signedIn && Account.profile.google !== true;
+			return { signIn: ready && !Account.signedIn, link: ready && linking };
 		};
-		let server = PartyMenu.serverUrl();
-		// Only on this game's own relay. A Google sign-in is good on any relay
-		// with the same client id, so one handed to a relay typed into the box
-		// could be passed on and used here: those get names and passwords
-		if (Account.httpBase(server) !== Account.httpBase(NetworkClient.defaultUrl()))
+
+		let want = wanted();
+		signIn.style.display = want.signIn ? '' : 'none';
+		link.style.display = want.link ? '' : 'none';
+		if (!want.signIn && !want.link) return;
+
+		let server = PartyMenu.accountServer();
+		let client = PartyMenu.googleClientId;
+		PartyMenu.loadGoogle().then(() =>
 		{
-			hide();
-			return;
-		}
-		Account.config(server).then((config) =>
-		{
-			if (config.google === undefined)
+			let now = wanted();
+			if (!now.signIn && !now.link) return;
+
+			let api = (window as any).google.accounts.id;
+			if (PartyMenu.googleClient !== client)
 			{
-				hide();
-				return;
+				PartyMenu.googleClient = client;
+				api.initialize({
+					client_id: client,
+					callback: (response: any) => PartyMenu.googleAnswered(response.credential, server, attempt),
+					auto_select: false,
+					cancel_on_tap_outside: true
+				});
 			}
-			return PartyMenu.loadGoogle().then(() =>
-			{
-				let api = (window as any).google.accounts.id;
-				if (PartyMenu.googleClient !== config.google)
-				{
-					PartyMenu.googleClient = config.google;
-					api.initialize({
-						client_id: config.google,
-						callback: (response: any) => PartyMenu.googleAnswered(response.credential, server, attempt),
-						auto_select: false,
-						cancel_on_tap_outside: true
-					});
-				}
-				let linking = Account.signedIn && Account.profile.google !== true;
-				// What the button on screen was made to do, and for whom
-				PartyMenu.googleMode = linking ? { link: true, user: Account.profile.id } : { link: false, user: undefined };
-				let target = Account.signedIn ? (linking ? link : undefined) : (panelOpen ? signIn : undefined);
-				signIn.style.display = !Account.signedIn && panelOpen ? '' : 'none';
-				or.style.display = signIn.style.display;
-				link.style.display = linking ? '' : 'none';
-				if (target === undefined || target.childElementCount > 0 && target.dataset.mode === (linking ? 'link' : 'in')) return;
-				target.innerHTML = '';
-				target.dataset.mode = linking ? 'link' : 'in';
-				// In the game's language, not the browser's
-				api.renderButton(target, { theme: 'outline', size: 'large', shape: 'pill', text: linking ? 'continue_with' : 'signin_with', width: 260, locale: 'en' });
-			});
-		}).catch(() => hide());
+			// What the button on screen was made to do, and for whom
+			PartyMenu.googleMode = now.link ? { link: true, user: Account.profile.id } : { link: false, user: undefined };
+			let target = now.link ? link : signIn;
+			let mode = now.link ? 'link' : 'in';
+			if (target.childElementCount > 0 && target.dataset.mode === mode) return;
+			target.innerHTML = '';
+			target.dataset.mode = mode;
+			// In the game's language, not the browser's
+			api.renderButton(target, { theme: 'outline', size: 'large', shape: 'pill', text: now.link ? 'continue_with' : 'signin_with', width: 260, locale: 'en' });
+		})
+		.catch((error) => fail(error));
 	}
 
 	private static commitIdentity(identity: PlayerIdentity): void

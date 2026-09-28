@@ -45,6 +45,19 @@ export interface WeaponSpec {
  */
 export declare const WEAPONS: WeaponSpec[];
 export declare function findWeapon(id: string): WeaponSpec;
+/** What empty hands do. */
+export interface MeleeSpec {
+    id: string;
+    name: string;
+    /** Damage per punch that lands. */
+    damage: number;
+    /** Seconds between punches, held or tapped. */
+    interval: number;
+    /** How far from the puncher's middle a punch still lands. */
+    range: number;
+}
+/** Always to hand, never bought, never dropped. In the same file as the guns, so the relay checks punches too. */
+export declare const FISTS: MeleeSpec;
 /**
  * A gun: the modelled one, from the CC0 guns pack, once it has loaded, and
  * until then one built out of boxes in its shape and colour, so a gun is in

@@ -61,6 +61,12 @@ export declare class PartySession implements IUpdatable {
     host(url: string, identity: PlayerIdentity): Promise<void>;
     join(url: string, code: string, identity: PlayerIdentity): Promise<void>;
     /**
+     * The session, for the relay that issued it and no other. A relay typed
+     * into the box is somebody else's, and a session handed to it could be
+     * used on this game's own as its owner.
+     */
+    private static tokenFor;
+    /**
      * Settles once the server confirms the room rather than when the socket opens.
      * A wrong code used to close the menu and start the game as though it had
      * worked, with the refusal arriving after there was anywhere left to show it.
@@ -108,6 +114,8 @@ export declare class PartySession implements IUpdatable {
      * else draws the shot that was fired rather than working out their own.
      */
     publishShot(from: THREE.Vector3, direction: THREE.Vector3, weaponId: string, endpoints: THREE.Vector3[]): void;
+    /** A punch thrown, for everyone else to see the arm go. Where it landed travels as a hit. */
+    publishPunch(from: THREE.Vector3, direction: THREE.Vector3, left: boolean): void;
     /**
      * Their client owns their health, so a hit is a request, not a verdict.
      * The weapon and the place it was fired from travel with it: the relay uses

@@ -8,7 +8,7 @@ export declare class UIManager {
     static flashCash(text: string, gain: boolean): void;
     /** The guns carried, by number key, the one in hand picked out. */
     static setWeaponSlots(names: string[], held: number): void;
-    /** @param health 0 to 1. Weapon name undefined means empty handed. */
+    /** @param health 0 to 1. Weapon name undefined hides the readout, and ammo undefined is a weapon without any. */
     static setCombatHud(health: number, weapon: string, ammo: number, reserve: number): void;
     /** Names come off the network, so they're written as text, never as HTML. */
     static setScoreboard(names: string[], colors: string[], scores: number[]): void;

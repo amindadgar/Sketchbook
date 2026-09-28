@@ -85,10 +85,28 @@ function verify(token)
 /** Putting Google on an account needs a sign-in this recent: a token found on a shared machine a week later won't do. */
 const LINK_WINDOW_MS = 15 * 60 * 1000;
 
-function tokenFor(user)
+/**
+ * A signed session. One from Google, or for an account Google signs in to,
+ * says so: with Google sign-in required, that's what lets it into a party.
+ */
+function tokenFor(user, viaGoogle)
 {
 	let now = Date.now();
-	return sign({ uid: user.id, name: user.username, iat: now, exp: now + TOKEN_TTL_MS });
+	let claims = { uid: user.id, name: user.username, iat: now, exp: now + TOKEN_TTL_MS };
+	if (viaGoogle === true) claims.g = 1;
+	return sign(claims);
+}
+
+/**
+ * With Google sign-in set up, it's the only way in: no new accounts with a
+ * password, and a party only for somebody signed in with Google. An account
+ * made with a password before still signs in with it, to put Google on it.
+ * Only while there are accounts at all: a relay whose database never came up
+ * can't sign anybody in, and holding the game to it would stop everyone.
+ */
+function googleRequired()
+{
+	return google.clientId() !== '' && db.available();
 }
 
 /** Who a request claims to be, or null. */
@@ -97,6 +115,14 @@ function identify(request)
 	const header = request.headers['authorization'] || '';
 	const match = /^Bearer (.+)$/.exec(header);
 	return match ? verify(match[1]) : null;
+}
+
+/** identify, and only for an account that still has a way in: not one Google was moved off. */
+async function identifyAccount(request)
+{
+	const claims = identify(request);
+	if (claims === null || await db.getProfile(claims.uid) === null) return null;
+	return claims;
 }
 
 function validate(username, password)
@@ -166,6 +192,14 @@ async function handle(request, response, url)
 
 	if (!url.startsWith('/auth/') && url !== '/leaderboard' && url !== '/race/lap' && url !== '/save') return false;
 
+	// Whether the page should ask for Google, and the id its button is made
+	// with. Answered with or without a database, since the page waits on it
+	if (url === '/auth/config' && request.method === 'GET')
+	{
+		send(response, 200, { google: googleRequired() ? google.clientId() : null });
+		return true;
+	}
+
 	if (!db.available())
 	{
 		send(response, 503, { error: 'Accounts are not configured on this server.' });
@@ -176,6 +210,8 @@ async function handle(request, response, url)
 	{
 		if (url === '/auth/register' && request.method === 'POST')
 		{
+			if (googleRequired()) { send(response, 403, { error: 'New players sign in with Google.' }); return true; }
+
 			const body = await readBody(request);
 			const problem = validate(body.username, body.password);
 			if (problem) { send(response, 400, { error: problem }); return true; }
@@ -199,7 +235,9 @@ async function handle(request, response, url)
 				return true;
 			}
 
-			send(response, 200, { token: tokenFor(user), user: { id: user.id, username: user.username } });
+			// An account Google already signs in to is as good as a Google sign-in
+			const viaGoogle = user.google === true;
+			send(response, 200, { token: tokenFor(user, viaGoogle), user: { id: user.id, username: user.username, google: viaGoogle } });
 			return true;
 		}
 
@@ -211,14 +249,12 @@ async function handle(request, response, url)
 			const profile = await db.getProfile(claims.uid);
 			if (profile === null) { send(response, 401, { error: 'Not signed in.' }); return true; }
 
-			send(response, 200, { user: profile });
-			return true;
-		}
-
-		// Whether the page should offer Google, and the id its button is made with
-		if (url === '/auth/config' && request.method === 'GET')
-		{
-			send(response, 200, { google: google.clientId() || null });
+			// Google put on the account since this session began, or before
+			// sessions said so: the same session saying it now, for the party to
+			// accept. Same start and end, so it can't be used to outlive itself
+			const body = { user: profile };
+			if (profile.google === true && claims.g !== 1) body.token = sign(Object.assign({}, claims, { g: 1 }));
+			send(response, 200, body);
 			return true;
 		}
 
@@ -237,22 +273,40 @@ async function handle(request, response, url)
 			if (body.link === true)
 			{
 				const claims = identify(request);
+				// signInAgain tells the page it's the session that's too old, not Google's answer
 				if (claims === null || typeof claims.iat !== 'number' || Date.now() - claims.iat > LINK_WINDOW_MS)
 				{
-					send(response, 401, { error: 'Sign in again, then add Google.' });
+					send(response, 401, { error: 'Sign in again, then add Google.', signInAgain: true });
 					return true;
 				}
-				if (await db.getProfile(claims.uid) === null)
+				const target = await db.getProfile(claims.uid);
+				if (target === null)
 				{
-					send(response, 401, { error: 'Sign in again, then add Google.' });
+					send(response, 401, { error: 'Sign in again, then add Google.', signInAgain: true });
 					return true;
 				}
 				if (!await db.linkGoogle(claims.uid, person.sub, person.email))
 				{
+					// Most likely the same person pressed Google before signing in
+					// with their password, and got a new player for it. With both
+					// proved just now, Google can come off that one and onto this
+					const holder = await db.googleHolder(person.sub);
+					// Never onto an account that has a Google of its own already
+					const movable = holder !== null && holder.id !== claims.uid && holder.hasPassword !== true && target.google !== true;
+					if (movable && body.move === true && await db.moveGoogle(holder.id, claims.uid, person.sub, person.email))
+					{
+						send(response, 200, { token: tokenFor({ id: claims.uid, username: claims.name }, true), user: { id: claims.uid, username: claims.name, google: true } });
+						return true;
+					}
+					if (movable)
+					{
+						send(response, 409, { error: 'That Google account already has a player of its own, ' + holder.username + '.', canMove: true, holder: holder.username });
+						return true;
+					}
 					send(response, 409, { error: 'That Google account is already signed in to another player, or this one has a different Google account.' });
 					return true;
 				}
-				send(response, 200, { token: tokenFor({ id: claims.uid, username: claims.name }), user: { id: claims.uid, username: claims.name } });
+				send(response, 200, { token: tokenFor({ id: claims.uid, username: claims.name }, true), user: { id: claims.uid, username: claims.name, google: true } });
 				return true;
 			}
 
@@ -260,14 +314,14 @@ async function handle(request, response, url)
 			if (user === null) user = await db.createGoogleUser(person.sub, person.email, google.playerName(person.names));
 			if (user === null) { send(response, 409, { error: 'Could not find a free name to sign you in under.' }); return true; }
 
-			send(response, 200, { token: tokenFor(user), user: { id: user.id, username: user.username } });
+			send(response, 200, { token: tokenFor(user, true), user: { id: user.id, username: user.username, google: true } });
 			return true;
 		}
 
 		// The player's kept progress: money and what it bought, experience
 		if (url === '/save' && request.method === 'GET')
 		{
-			const claims = identify(request);
+			const claims = await identifyAccount(request);
 			if (claims === null) { send(response, 401, { error: 'Not signed in.' }); return true; }
 
 			const row = await db.getSave(claims.uid);
@@ -277,7 +331,7 @@ async function handle(request, response, url)
 
 		if (url === '/save' && (request.method === 'PUT' || request.method === 'POST'))
 		{
-			const claims = identify(request);
+			const claims = await identifyAccount(request);
 			if (claims === null) { send(response, 401, { error: 'Not signed in.' }); return true; }
 
 			const body = await readBody(request, MAX_SAVE_BYTES);
@@ -305,7 +359,7 @@ async function handle(request, response, url)
 
 		if (url === '/race/lap' && request.method === 'POST')
 		{
-			const claims = identify(request);
+			const claims = await identifyAccount(request);
 			if (claims === null) { send(response, 401, { error: 'Not signed in.' }); return true; }
 
 			const body = await readBody(request);
@@ -350,4 +404,4 @@ async function handle(request, response, url)
 	return true;
 }
 
-module.exports = { handle, verify, identify, send };
+module.exports = { handle, verify, identify, send, googleRequired };

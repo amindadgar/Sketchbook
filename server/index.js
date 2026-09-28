@@ -18,8 +18,11 @@
 const http = require('http');
 const db = require('./db');
 const auth = require('./auth');
-// The same table the game builds its weapons from, so the two can't drift
-const WEAPONS = new Map(require('../shared/weapons.json').weapons.map((w) => [w.id, w]));
+// The same table the game builds its weapons from, so the two can't drift.
+// Guns are what can be held and fired; anything that can hit includes fists
+const CATALOGUE = require('../shared/weapons.json');
+const WEAPONS = new Map(CATALOGUE.weapons.map((w) => [w.id, w]));
+const HITTERS = new Map(CATALOGUE.weapons.concat(CATALOGUE.melee || []).map((w) => [w.id, w]));
 // ws 7 exposes the server as WebSocket.Server, ws 8 also has a named export.
 // Going through the class works on both.
 const WebSocket = require('ws');
@@ -48,6 +51,9 @@ const CODE_LENGTH = 4;
 // client being shot at does that part, since it holds both the map and the
 // truth about where it is.
 const RANGE_SLACK = 1.35;
+// Both positions are a movement update or two old, which is nothing to a gun
+// and more than a fist's whole reach to somebody running
+const POSITION_SLACK = 3;
 // The automatic is the fastest honest damage in the game at about 153 a second
 const MAX_DAMAGE_PER_SECOND = 220;
 const DAMAGE_WINDOW_MS = 1000;
@@ -145,15 +151,24 @@ function publicInfo(player)
 	};
 }
 
-/** Attaches the signed-in account, if the client presented a valid token. */
+/**
+ * Attaches the signed-in account, if the client presented a valid token.
+ * Returns false when this server wants a Google sign-in to play and the
+ * token isn't from one, which is up to the caller to turn away.
+ */
 function adoptToken(player, token)
 {
 	const claims = auth.verify(token);
-	if (claims === null) return;
+	const google = claims !== null && claims.g === 1;
+	if (auth.googleRequired() && !google) return false;
+	if (claims === null) return true;
 
 	player.userId = claims.uid;
 	player.account = claims.name;
+	return true;
 }
+
+const SIGN_IN_FIRST = 'Sign in with Google to play with friends.';
 
 /** Tallies are best effort: a database hiccup shouldn't interrupt a game. */
 function tally(action, userId)
@@ -243,6 +258,16 @@ function sanitizeVehicle(msg)
 	if (msg.f) out.f = 1;
 
 	return out;
+}
+
+/** A punch thrown: where from, which way, and which hand. Only for showing; what it hit comes as a hit. */
+function sanitizePunch(msg)
+{
+	const p = readPoint(msg.p);
+	const d = readPoint(msg.d);
+	if (p === null || d === null) return null;
+
+	return { t: 'punch', p, d, s: msg.s === 1 ? 1 : 0 };
 }
 
 function sanitizeShot(msg)
@@ -425,7 +450,7 @@ function findInRoom(room, id)
 /** Everything about a claimed hit that can be judged without the map. */
 function hitIsPlausible(player, msg, now)
 {
-	const weapon = WEAPONS.get(msg.w);
+	const weapon = HITTERS.get(msg.w);
 	if (weapon === undefined) return 'unknown weapon';
 
 	if (typeof msg.damage !== 'number' || !(msg.damage > 0)) return 'damage is not a number';
@@ -440,7 +465,7 @@ function hitIsPlausible(player, msg, now)
 	const from = readPoint(msg.p) || player.position;
 	if (from !== null && target.position !== null)
 	{
-		const reach = weapon.range * RANGE_SLACK;
+		const reach = weapon.range * RANGE_SLACK + POSITION_SLACK;
 		if (apart(from, target.position) > reach) return 'further than a ' + weapon.id + ' reaches';
 	}
 
@@ -600,7 +625,7 @@ const server = http.createServer((req, res) =>
 	if (url === '/health')
 	{
 		res.writeHead(200, { 'Content-Type': 'application/json' });
-		res.end(JSON.stringify({ ok: true, rooms: rooms.size, accounts: db.available() }));
+		res.end(JSON.stringify({ ok: true, rooms: rooms.size, accounts: db.available(), google: auth.googleRequired() }));
 		return;
 	}
 
@@ -678,7 +703,11 @@ wss.on('connection', (ws) =>
 				player.color = sanitizeColor(msg.color);
 				player.hat = sanitizeHat(msg.hat);
 				player.protocol = msg.protocol === 2 ? 2 : 1;
-				adoptToken(player, msg.token);
+				if (!adoptToken(player, msg.token))
+				{
+					send(player, { t: 'error', message: SIGN_IN_FIRST });
+					return;
+				}
 
 				const code = makeRoomCode();
 				if (code === null)
@@ -714,7 +743,11 @@ wss.on('connection', (ws) =>
 				player.color = sanitizeColor(msg.color);
 				player.hat = sanitizeHat(msg.hat);
 				player.protocol = msg.protocol === 2 ? 2 : 1;
-				adoptToken(player, msg.token);
+				if (!adoptToken(player, msg.token))
+				{
+					send(player, { t: 'error', message: SIGN_IN_FIRST });
+					return;
+				}
 
 				const code = typeof msg.code === 'string' ? msg.code.toUpperCase().trim() : '';
 				const room = rooms.get(code);
@@ -835,6 +868,18 @@ wss.on('connection', (ws) =>
 
 				shot.id = player.id;
 				broadcast(player.room, shot, player);
+				break;
+			}
+
+			case 'punch':
+			{
+				if (player.room === null) break;
+
+				const punch = sanitizePunch(msg);
+				if (punch === null) break;
+
+				punch.id = player.id;
+				broadcast(player.room, punch, player);
 				break;
 			}
 
@@ -1060,7 +1105,7 @@ wss.on('connection', (ws) =>
 				broadcast(room, {
 					t: 'death', id: player.id,
 					killer: killer !== null ? killer.id : undefined,
-					w: killer !== null && WEAPONS.has(msg.w) ? msg.w : undefined
+					w: killer !== null && HITTERS.has(msg.w) ? msg.w : undefined
 				}, player);
 				break;
 			}

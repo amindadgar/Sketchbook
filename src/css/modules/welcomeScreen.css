@@ -23,6 +23,17 @@
 	box-shadow: 0 0px 0 0 rgb(228 158 0);
 }
 
+/* Waiting on a sign-in: plainly not pressable, and not pressed in when tried */
+.swal2-confirm[disabled] {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.swal2-confirm[disabled]:active {
+	margin: 0 0 4px 0;
+	box-shadow: 0 4px 0 0 rgb(228 158 0);
+}
+
 div.swal2-footer {
 	justify-content: space-evenly;
 	flex-wrap: wrap;

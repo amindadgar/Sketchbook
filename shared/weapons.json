@@ -1,5 +1,5 @@
 {
-	"_": "Shared by the game and the relay. The relay checks incoming hits against these numbers, so a copy on each side would drift and start rejecting honest shots. Prices are dollars for the gun and for a magazine's worth of spare rounds. Guns with pickup false are only sold, never lying about.",
+	"_": "Shared by the game and the relay. The relay checks incoming hits against these numbers, so a copy on each side would drift and start rejecting honest shots. Prices are dollars for the gun and for a magazine's worth of spare rounds. Guns with pickup false are only sold, never lying about. Melee is what empty hands do: interval is seconds between punches and range is how far from the puncher a punch lands.",
 	"weapons": [
 		{
 			"id": "handgun",
@@ -151,6 +151,15 @@
 			"sound": "rifle",
 			"soundPitch": 0.8,
 			"pickup": false
+		}
+	],
+	"melee": [
+		{
+			"id": "fist",
+			"name": "Fists",
+			"damage": 12,
+			"interval": 0.42,
+			"range": 1.25
 		}
 	]
 }

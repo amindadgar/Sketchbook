@@ -266,7 +266,7 @@ export class CloudSave implements IUpdatable
 	private expired(): void
 	{
 		this.ready = false;
-		this.world.notices.say('Signed out', 'bad', 'sign in again to keep saving to your account');
+		this.world.notices.say('Signed out', 'bad', 'reload the page and sign in again to keep saving');
 		Account.signOut();
 	}
 

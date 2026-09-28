@@ -30,6 +30,7 @@ export declare class NetworkClient {
     onHurt: (message: any) => void;
     onPickup: (message: any) => void;
     onShot: (message: any) => void;
+    onPunch: (message: any) => void;
     onHit: (message: any) => void;
     onScore: (id: number, score: number) => void;
     onMatch: (message: any) => void;

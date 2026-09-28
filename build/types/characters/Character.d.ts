@@ -89,6 +89,29 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
     /** Until when, in seconds of page time, the gun is held up, and along what. */
     aimUntil: number;
     aimAlong: THREE.Vector3;
+    /** The last punch: when it was thrown, in seconds of page time, which hand, and which way. */
+    private punchAt;
+    private punchLeft;
+    private punchAlong;
+    /** The fists stay up this long after a punch, ready for the next, and came up at guardFrom. */
+    private guardUntil;
+    private guardFrom;
+    /**
+     * Every bone posed over the animation this frame, and what it was before.
+     * They're put back before the next frame's animation, because the mixer
+     * only writes a bone when its value changes: a bone the clip holds still,
+     * or one it doesn't move at all like the hands, would otherwise keep the
+     * pose after it was over, or turn a little further every frame.
+     */
+    private posedBones;
+    /** Seconds from throwing a punch to it landing, and to the arm being back. */
+    static readonly PUNCH_REACH_TIME: number;
+    private static readonly PUNCH_TIME;
+    private static readonly GUARD_TIME;
+    private static readonly GUARD_RISE;
+    private static readonly GUARD_FALL;
+    /** The furthest round from where the body faces that a punch reaches, in radians. */
+    private static readonly PUNCH_TWIST;
     private headTexture;
     private headCanvas;
     private headBone;
@@ -161,10 +184,39 @@ export declare class Character extends THREE.Object3D implements IWorldEntity {
      * animation, every frame the character is aiming or has just fired.
      */
     private poseAim;
+    /**
+     * A punch, from the hand given, along a direction on the ground. Only the
+     * look of it: what it lands on is the combat system's business, and so is
+     * telling everyone else's screen to show it.
+     */
+    throwPunch(direction: THREE.Vector3, left: boolean): void;
+    /** How far up the fists are: quickly up after the first punch, down over the last of the guard. */
+    private guardWeight;
+    /**
+     * Fists up by the chin, and the hand whose turn it was out and back:
+     * quick out, a moment there, slower home. Over whatever the animation
+     * had the arms doing, weighted, so the guard comes up and goes down
+     * rather than snapping, and the shoulders turn into the punch.
+     */
+    private posePunch;
+    /**
+     * One arm between the guard and full stretch, and its fingers curled.
+     * Out is to the outside of that arm, which is the character's right for
+     * the right arm and its left for the left.
+     */
+    private poseFist;
+    /** Noted before a bone is posed, the first time this frame, so it can be put back. */
+    private remember;
+    /** Last frame's poses taken off, before the animation runs again. */
+    private undoPoses;
+    /** Turns a bone about an axis in the world, keeping its parent where it is. */
+    private turnBone;
+    /** pointBone, only part of the way from where the animation had it. */
+    private blendBone;
     /** One bone of the skeleton, by name, pointed along a world direction, over whatever the animation did. */
     pointBoneAlong(name: string, direction: THREE.Vector3): void;
     /** Turns a bone, keeping its parent where it is, so its length points along a world direction. */
-    private static pointBone;
+    private pointBone;
     unequipWeapon(): void;
     /** Where shots leave the gun, so flashes and tracers start at the barrel. */
     getMuzzlePosition(): THREE.Vector3;

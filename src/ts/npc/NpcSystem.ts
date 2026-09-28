@@ -1089,6 +1089,31 @@ export class NpcSystem implements IUpdatable
 	}
 
 	/**
+	 * The nearest pedestrian standing within reach of a point on the ground,
+	 * inside a cone either side of a direction, for a punch. Feet to feet,
+	 * and not somebody on a different level.
+	 */
+	public pedestrianWithin(feet: THREE.Vector3, along: THREE.Vector3, reach: number, minCos: number): Pedestrian
+	{
+		let best: Pedestrian;
+		let nearest = reach;
+		for (const pedestrian of this.pedestrians)
+		{
+			if (!pedestrian.alive) continue;
+			let p = pedestrian.position;
+			if (Math.abs(p.y - feet.y) > 1) continue;
+			let dx = p.x - feet.x;
+			let dz = p.z - feet.z;
+			let distance = Math.sqrt(dx * dx + dz * dz);
+			if (distance > nearest) continue;
+			if (distance > 0.3 && (dx * along.x + dz * along.z) / distance < minCos) continue;
+			nearest = distance;
+			best = pedestrian;
+		}
+		return best;
+	}
+
+	/**
 	 * A gun held on a pedestrian: they stop where they are, for as long as it
 	 * stays on them. Only where they're simulated; on anyone else's screen
 	 * they carry on, and the hold-up still counts.

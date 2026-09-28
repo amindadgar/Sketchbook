@@ -61,6 +61,22 @@ export function findWeapon(id: string): WeaponSpec
 	return undefined;
 }
 
+/** What empty hands do. */
+export interface MeleeSpec
+{
+	id: string;
+	name: string;
+	/** Damage per punch that lands. */
+	damage: number;
+	/** Seconds between punches, held or tapped. */
+	interval: number;
+	/** How far from the puncher's middle a punch still lands. */
+	range: number;
+}
+
+/** Always to hand, never bought, never dropped. In the same file as the guns, so the relay checks punches too. */
+export const FISTS: MeleeSpec = (catalogue as any).melee[0];
+
 /** Each gun's model, loaded once and copied for every hand and pickup that shows it. */
 const gunModels: { [id: string]: Promise<THREE.Object3D> } = {};
 

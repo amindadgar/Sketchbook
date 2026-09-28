@@ -28,6 +28,11 @@ export declare class Account {
     static get signedIn(): boolean;
     /** The accounts API sits on the party server, over http rather than ws. */
     static httpBase(serverUrl: string): string;
+    /**
+     * Whether two addresses are the same server, however they're written:
+     * ws or http, a trailing slash, capitals, the default port spelled out.
+     */
+    static sameServer(a: string, b: string): boolean;
     static loadToken(): string;
     static signOut(): void;
     static register(server: string, username: string, password: string): Promise<AccountProfile>;
@@ -40,15 +45,17 @@ export declare class Account {
     }>;
     /**
      * Signs in with what Google's button handed back. Signed in already, it
-     * puts Google sign-in on that account instead, when link is asked for.
+     * puts Google sign-in on that account instead, when link is asked for,
+     * and with move, takes it off a player Google made for the same person.
      */
-    static google(server: string, credential: string, link?: boolean): Promise<AccountProfile>;
+    static google(server: string, credential: string, link?: boolean, move?: boolean): Promise<AccountProfile>;
     /** A new personal best, for the per track boards. Ignored when not signed in. */
     static submitLap(server: string, track: string, milliseconds: number): Promise<void>;
     static leaderboard(server: string, track?: string): Promise<any[]>;
     private static post;
     /** A token and a user from the server: signed in, kept for next time, and everyone told. */
     private static accept;
-    /** Turns the server's error shape into a rejection carrying its message. */
+    private static store;
+    /** Turns the server's error shape into a rejection carrying its message, and the status and body behind it. */
     private static unwrap;
 }

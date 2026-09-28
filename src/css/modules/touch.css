@@ -65,6 +65,11 @@ body.touch #canvas {
 	user-select: none;
 }
 
+/* Where FIRE sits once a gun is out, over JUMP and ENTER rather than off on its own */
+#touch-punch {
+	grid-column: 2;
+}
+
 .touch-button.held {
 	background: rgba(255, 185, 0, 0.55);
 }

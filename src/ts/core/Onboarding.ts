@@ -81,6 +81,7 @@ export class Onboarding
 			return [
 				['Stick', 'Drive and walk. Drag anywhere to look'],
 				['ENTER', 'Get into a car you are standing next to'],
+				['PUNCH', 'Hands up and swing. With a gun out it\'s FIRE'],
 				['BOOST', 'Nitro. Ramps are worth points'],
 				['$', 'Tap your money for jobs that pay more of it'],
 				['MAP', 'Where you are, when you need it']
@@ -90,6 +91,7 @@ export class Onboarding
 		return [
 			['W A S D', 'Move, and steer'],
 			['F', 'Get into a car you are standing next to'],
+			['Click', 'Punch, or shoot with a gun out'],
 			['Shift', 'Nitro. Ramps are worth points'],
 			['J', 'Jobs, for money to spend at the shops on the map'],
 			['L', 'Your level, today\'s challenges and the boards']

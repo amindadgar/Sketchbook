@@ -7,7 +7,6 @@ import { PathNode } from '../world/PathNode';
 import { FollowPath } from '../characters/character_ai/FollowPath';
 import { UIManager } from '../core/UIManager';
 import { Account } from '../party/Account';
-import { NetworkClient } from '../party/NetworkClient';
 
 /** Where a racer has got to: which lap, and how far round it. */
 interface Progress
@@ -450,7 +449,8 @@ export class RaceSystem implements IUpdatable
 
 		if (!Account.signedIn) return;
 
-		Account.submitLap(NetworkClient.loadUrl(), this.track, Math.round(seconds * 1000))
+		// To the relay the session came from, not whichever the last party was on
+		Account.submitLap(Account.server, this.track, Math.round(seconds * 1000))
 			.catch(() => undefined);
 	}
 }

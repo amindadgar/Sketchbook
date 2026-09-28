@@ -194,11 +194,12 @@ export class InputManager implements IUpdatable
 				return;
 			}
 
-			// On foot: the number keys draw a gun carried, Q the next one
+			// On foot: the number keys draw a gun carried, 0 puts it away for the
+			// fists, and Q goes round them all
 			let player = this.world.localCharacter;
 			if (player !== undefined && this.inputReceiver === (player as any) && !player.isBusyWithVehicle())
 			{
-				let digit = /^Digit([1-9])$/.exec(event.code);
+				let digit = /^Digit([0-9])$/.exec(event.code);
 				if (digit !== null)
 				{
 					this.world.combat.selectSlot(Number(digit[1]));

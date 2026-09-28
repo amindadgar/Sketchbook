@@ -4,7 +4,7 @@ import { IUpdatable } from '../interfaces/IUpdatable';
 import { Character } from '../characters/Character';
 import { WeaponPickup } from './WeaponPickup';
 /**
- * Guns, health and kills.
+ * Guns, fists, health and kills.
  *
  * Every client is the authority on its own health, matching how the rest of the
  * party layer already works. A shooter reports the hit, the player who was hit
@@ -37,6 +37,16 @@ export declare class CombatSystem implements IUpdatable {
     private static readonly MARKER_GAP;
     private static readonly FLASH_INTENSITY;
     private static readonly FLASH_LIFE;
+    /**
+     * A punch turns the puncher to somebody this much further off than it
+     * reaches and this far either side of where they're looking, so a thumb
+     * on a phone doesn't have to line it up. What lands is a narrower cone.
+     */
+    private static readonly PUNCH_LOCK_SLACK;
+    private static readonly PUNCH_LOCK_COS;
+    /** On the move the body faces where it's going, and the arm can only reach so far round from that. */
+    private static readonly PUNCH_LOCK_MOVING_COS;
+    private static readonly PUNCH_LAND_COS;
     private static scratch;
     private world;
     pickups: WeaponPickup[];
@@ -73,6 +83,19 @@ export declare class CombatSystem implements IUpdatable {
     private audioCursor;
     private hitSound;
     private hurtSound;
+    private punchSound;
+    private swingSound;
+    /** Empty hands: how long until the next punch, which hand throws it, and one on its way to landing. */
+    private punchCooldown;
+    private nextPunchLeft;
+    private punchLanding;
+    private punchAlong;
+    /**
+     * The trigger was already down when the gun came out: held for the fists,
+     * or for the last gun. It has to come up before this one fires, or walking
+     * over an automatic while punching would empty it.
+     */
+    private heldOver;
     /**
      * A fixed pair of lights reused by every muzzle flash. Adding and removing
      * a light changes the light count, which makes three.js rebuild the program
@@ -106,6 +129,9 @@ export declare class CombatSystem implements IUpdatable {
     private buildHitSound;
     /** A low thump for being hit, made the same way as the hit click. */
     private buildHurtSound;
+    /** A knuckle landing: a dull thump with a slap on the front of it. */
+    private buildPunchSounds;
+    private play;
     private synthesise;
     private markHit;
     setRespawnPoints(points: THREE.Vector3[]): void;
@@ -123,7 +149,7 @@ export declare class CombatSystem implements IUpdatable {
     carries(id: string): boolean;
     /** The guns carried, in the order the number keys pick them. */
     carriedIds(): string[];
-    /** Number key n: the nth gun carried. */
+    /** Number key n: the nth gun carried, and 0 the fists. */
     selectSlot(n: number): void;
     /**
      * Every gun the wallet says was bought, in the pockets if it isn't already,
@@ -132,11 +158,10 @@ export declare class CombatSystem implements IUpdatable {
      */
     restoreOwned(): void;
     /**
-     * Q: the next gun carried, and empty hands after the last. Wrapping, it
-     * goes round to the first instead: a phone switches guns by tapping the
-     * gun's name, which empty hands would take away, and it has no Q.
+     * Q, or tapping the weapon's name on a phone: the next gun carried, the
+     * fists after the last, and round again to the first.
      */
-    cycleWeapon(wrap?: boolean): void;
+    cycleWeapon(): void;
     /** What's in the hand, put back in the pocket with what it has left. */
     private stow;
     private draw;
@@ -158,7 +183,10 @@ export declare class CombatSystem implements IUpdatable {
      * somebody it knows has just died.
      */
     private chargeForDeath;
-    /** The guns carried, along the bottom of the weapon readout, the one in hand picked out. */
+    /**
+     * The fists and the guns carried, along the bottom of the weapon readout,
+     * the one in hand picked out. Nothing at all with only the fists.
+     */
     private showSlots;
     /**
      * A new local character: a scenario launch, or the player's own restart.
@@ -170,6 +198,21 @@ export declare class CombatSystem implements IUpdatable {
     private setAiming;
     private updateTrigger;
     private fire;
+    /**
+     * Held, it keeps punching, a hand at a time, which is what a phone's
+     * button needs. What a punch hits is settled as the fist arrives rather
+     * than as it's thrown, so stepping in or out of the way still counts.
+     */
+    private updateFists;
+    private throwPunch;
+    private landPunch;
+    /**
+     * The nearest person within reach and inside a cone either side of a
+     * direction on the ground: somebody in the party, somebody a job put in
+     * the street, or one of the city's people. Nobody sat in a car, whose
+     * doors are in the way, and nobody a floor above or below.
+     */
+    private meleeTarget;
     /**
      * Toward whatever is under the crosshair.
      *
@@ -282,6 +325,8 @@ export declare class CombatSystem implements IUpdatable {
      * shooter's own body, which the barrel starts inside.
      */
     showRemoteShot(from: THREE.Vector3, direction: THREE.Vector3, weaponId: string, shooter?: Character, endpoints?: THREE.Vector3[]): void;
+    /** Somebody else's punch: their arm, and the air it moved. Whoever it hit hears it land. */
+    showRemotePunch(puncher: Character, direction: THREE.Vector3, left: boolean): void;
     private addMuzzleFlash;
     private fadeFlashLights;
     /**

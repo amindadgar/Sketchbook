@@ -48,7 +48,8 @@ export class Leaderboard
 
 		this.setRows([['', 'Asking the server…', '']]);
 
-		Account.leaderboard(NetworkClient.loadUrl(), track)
+		// From where accounts live, which is where the laps and kills went
+		Account.leaderboard(Account.server !== undefined ? Account.server : NetworkClient.defaultUrl(), track)
 			.then((players) => this.fill(players, track !== undefined))
 			.catch((error) => this.setRows([['', error.message, '']]));
 	}

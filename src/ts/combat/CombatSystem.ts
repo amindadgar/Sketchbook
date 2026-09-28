@@ -8,12 +8,13 @@ import { Character } from '../characters/Character';
 import { Vehicle } from '../vehicles/Vehicle';
 import { UIManager } from '../core/UIManager';
 import { CollisionGroups } from '../enums/CollisionGroups';
-import { WEAPONS, WeaponSpec, findWeapon, getFlashTexture } from './Weapons';
+import { WEAPONS, WeaponSpec, FISTS, findWeapon, getFlashTexture } from './Weapons';
 import { WeaponPickup } from './WeaponPickup';
 import { Wallet } from '../progress/Wallet';
+import { Panel } from '../core/Panel';
 
 /**
- * Guns, health and kills.
+ * Guns, fists, health and kills.
  *
  * Every client is the authority on its own health, matching how the rest of the
  * party layer already works. A shooter reports the hit, the player who was hit
@@ -50,6 +51,16 @@ export class CombatSystem implements IUpdatable
 	private static readonly MARKER_GAP: number = 0.06;
 	private static readonly FLASH_INTENSITY: number = 2.6;
 	private static readonly FLASH_LIFE: number = 0.06;
+	/**
+	 * A punch turns the puncher to somebody this much further off than it
+	 * reaches and this far either side of where they're looking, so a thumb
+	 * on a phone doesn't have to line it up. What lands is a narrower cone.
+	 */
+	private static readonly PUNCH_LOCK_SLACK: number = 0.7;
+	private static readonly PUNCH_LOCK_COS: number = Math.cos(THREE.MathUtils.degToRad(70));
+	/** On the move the body faces where it's going, and the arm can only reach so far round from that. */
+	private static readonly PUNCH_LOCK_MOVING_COS: number = Math.cos(THREE.MathUtils.degToRad(45));
+	private static readonly PUNCH_LAND_COS: number = Math.cos(THREE.MathUtils.degToRad(55));
 
 	private static scratch: THREE.Vector3 = new THREE.Vector3();
 
@@ -89,6 +100,19 @@ export class CombatSystem implements IUpdatable
 	private audioCursor: number = 0;
 	private hitSound: THREE.Audio;
 	private hurtSound: THREE.Audio;
+	private punchSound: THREE.Audio;
+	private swingSound: THREE.Audio;
+	/** Empty hands: how long until the next punch, which hand throws it, and one on its way to landing. */
+	private punchCooldown: number = 0;
+	private nextPunchLeft: boolean = false;
+	private punchLanding: number = -1;
+	private punchAlong: THREE.Vector3 = new THREE.Vector3();
+	/**
+	 * The trigger was already down when the gun came out: held for the fists,
+	 * or for the last gun. It has to come up before this one fires, or walking
+	 * over an automatic while punching would empty it.
+	 */
+	private heldOver: boolean = false;
 	/**
 	 * A fixed pair of lights reused by every muzzle flash. Adding and removing
 	 * a light changes the light count, which makes three.js rebuild the program
@@ -196,6 +220,27 @@ export class CombatSystem implements IUpdatable
 			(Math.sin(2 * Math.PI * 140 * t) + 0.35 * Math.sin(2 * Math.PI * 67 * t)) * Math.exp(-t * 28) * 0.55);
 	}
 
+	/** A knuckle landing: a dull thump with a slap on the front of it. */
+	private buildPunchSounds(): void
+	{
+		this.punchSound = this.synthesise(0.16, 0.7, (t) =>
+			Math.sin(2 * Math.PI * 92 * t) * Math.exp(-t * 32) * 0.8 + (Math.random() * 2 - 1) * Math.exp(-t * 90) * 0.5);
+
+		// Air moving past the ear: noise, smoothed and swelled
+		let smooth = 0;
+		this.swingSound = this.synthesise(0.15, 0.22, (t) =>
+		{
+			smooth += 0.18 * ((Math.random() * 2 - 1) - smooth);
+			return smooth * Math.sin(Math.PI * t / 0.15) * 1.6;
+		});
+	}
+
+	private play(sound: THREE.Audio): void
+	{
+		if (sound.isPlaying) sound.stop();
+		sound.play();
+	}
+
 	private synthesise(seconds: number, volume: number, wave: (t: number) => number): THREE.Audio
 	{
 		let context = this.world.audioListener.context;
@@ -277,6 +322,14 @@ export class CombatSystem implements IUpdatable
 			return;
 		}
 
+		// A shop or the job board has the mouse now, and the button's release
+		// goes to the panel rather than to the game: let go of it here instead
+		if (Panel.isOpen)
+		{
+			if (character.actions.primary.isPressed) character.triggerAction('primary', false);
+			if (character.actions.secondary.isPressed) character.triggerAction('secondary', false);
+		}
+
 		// No guns while in a car, or climbing into or out of one
 		let onFoot = !character.isBusyWithVehicle();
 
@@ -289,13 +342,14 @@ export class CombatSystem implements IUpdatable
 		this.updateTrigger(character, unscaledTimeStep);
 
 		// The gun is stowed while driving, so the readout goes with it rather than
-		// sitting over the windscreen advertising a trigger that does nothing
+		// sitting over the windscreen advertising a trigger that does nothing.
+		// On foot with nothing in hand, it's the fists the trigger throws
 		let inHand = character.weapon !== undefined && onFoot;
 
 		UIManager.setCombatHud(
 			character.health / Character.MAX_HEALTH,
-			inHand ? character.weapon.name : undefined,
-			character.ammo,
+			inHand ? character.weapon.name : (onFoot ? FISTS.name : undefined),
+			inHand ? character.ammo : undefined,
 			character.reserve
 		);
 		this.showSlots(character, onFoot);
@@ -314,6 +368,8 @@ export class CombatSystem implements IUpdatable
 		let character = this.world.localCharacter;
 		if (spec === undefined || character === undefined) return;
 
+		// The same gun again is only more rounds: a trigger held on it stays held
+		let same = character.weapon !== undefined && character.weapon.id === id;
 		this.stow(character);
 		let entry = this.carried.get(id);
 		if (entry === undefined) entry = { ammo: spec.magazine, reserve: spec.reserve };
@@ -321,6 +377,7 @@ export class CombatSystem implements IUpdatable
 		else entry.reserve += spec.magazine;
 		this.carried.set(id, entry);
 		this.draw(character, id);
+		if (same) this.heldOver = false;
 	}
 
 	/** A magazine's worth more for a gun carried. False if it isn't. */
@@ -356,11 +413,17 @@ export class CombatSystem implements IUpdatable
 		return WEAPONS.map((w) => w.id).filter((id) => this.carried.has(id) || id === held);
 	}
 
-	/** Number key n: the nth gun carried. */
+	/** Number key n: the nth gun carried, and 0 the fists. */
 	public selectSlot(n: number): void
 	{
 		let character = this.world.localCharacter;
 		if (character === undefined || character.health <= 0 || character.isBusyWithVehicle()) return;
+		if (n === 0)
+		{
+			this.stow(character);
+			character.unequipWeapon();
+			return;
+		}
 		let id = this.carriedIds()[n - 1];
 		if (id === undefined || (character.weapon !== undefined && character.weapon.id === id)) return;
 		this.stow(character);
@@ -384,23 +447,20 @@ export class CombatSystem implements IUpdatable
 	}
 
 	/**
-	 * Q: the next gun carried, and empty hands after the last. Wrapping, it
-	 * goes round to the first instead: a phone switches guns by tapping the
-	 * gun's name, which empty hands would take away, and it has no Q.
+	 * Q, or tapping the weapon's name on a phone: the next gun carried, the
+	 * fists after the last, and round again to the first.
 	 */
-	public cycleWeapon(wrap: boolean = false): void
+	public cycleWeapon(): void
 	{
 		let character = this.world.localCharacter;
 		if (character === undefined || character.health <= 0 || character.isBusyWithVehicle()) return;
 		let ids = this.carriedIds();
 		if (ids.length === 0) return;
 		let at = character.weapon !== undefined ? ids.indexOf(character.weapon.id) : -1;
-		if (wrap && ids.length === 1 && at === 0) return;
 		this.stow(character);
 		if (at + 1 >= ids.length)
 		{
-			if (wrap) this.draw(character, ids[0]);
-			else character.unequipWeapon();
+			character.unequipWeapon();
 			return;
 		}
 		this.draw(character, ids[at + 1]);
@@ -425,6 +485,9 @@ export class CombatSystem implements IUpdatable
 		character.ammo = entry.ammo;
 		character.reserve = entry.reserve;
 		this.carried.delete(id);
+		// A gun in the hand now, so a punch still on its way doesn't land
+		this.punchLanding = -1;
+		this.heldOver = character.actions.primary.isPressed === true;
 		// A moment to bring it up, or longer if it still had a shot to wait out
 		let waiting = (this.readyAt.get(id) || 0) - performance.now() / 1000;
 		this.cooldown = Math.max(CombatSystem.DRAW_TIME, waiting);
@@ -488,7 +551,10 @@ export class CombatSystem implements IUpdatable
 		else this.world.notices.say('Hospital bill', 'bad', '-$' + Wallet.format(share));
 	}
 
-	/** The guns carried, along the bottom of the weapon readout, the one in hand picked out. */
+	/**
+	 * The fists and the guns carried, along the bottom of the weapon readout,
+	 * the one in hand picked out. Nothing at all with only the fists.
+	 */
 	private showSlots(character: Character, onFoot: boolean): void
 	{
 		let ids = onFoot && character.health > 0 ? this.carriedIds() : [];
@@ -496,7 +562,8 @@ export class CombatSystem implements IUpdatable
 		let key = ids.join(',') + '|' + held;
 		if (key === this.shownSlots) return;
 		this.shownSlots = key;
-		UIManager.setWeaponSlots(ids.map((id) => findWeapon(id).name), ids.indexOf(held));
+		let names = ids.length > 0 ? [FISTS.name].concat(ids.map((id) => findWeapon(id).name)) : [];
+		UIManager.setWeaponSlots(names, ids.indexOf(held) + 1);
 	}
 
 	/**
@@ -517,6 +584,8 @@ export class CombatSystem implements IUpdatable
 		this.cooldown = 0;
 		this.reloadTimer = 0;
 		this.triggerWasDown = false;
+		this.punchCooldown = 0;
+		this.punchLanding = -1;
 		this.setAiming(false);
 		this.world.cameraOperator.spectateTarget = undefined;
 		UIManager.setDeathNotice(undefined);
@@ -569,7 +638,12 @@ export class CombatSystem implements IUpdatable
 		let ready = weapon !== undefined && !character.isBusyWithVehicle();
 		let down = character.actions.primary.isPressed === true;
 
-		if (ready && down && this.cooldown <= 0 && this.reloadTimer <= 0)
+		// Nothing in hand, the trigger is a punch
+		this.updateFists(character, weapon === undefined && !character.isBusyWithVehicle() && down, timeStep);
+
+		if (!down) this.heldOver = false;
+
+		if (ready && down && !this.heldOver && this.cooldown <= 0 && this.reloadTimer <= 0)
 		{
 			// A held trigger only repeats for the automatic
 			if (weapon.automatic || !this.triggerWasDown)
@@ -609,7 +683,7 @@ export class CombatSystem implements IUpdatable
 			this.addTracer(muzzle, hit.point, weapon.color, false);
 			ends.push(hit.point);
 
-			if (hit.character !== undefined && this.reportHit(hit.character, weapon, eye)) landed = true;
+			if (hit.character !== undefined && this.reportHit(hit.character, weapon.damage, weapon.id, eye)) landed = true;
 			if (hit.pedestrian !== undefined)
 			{
 				this.world.npcs.damagePedestrian(hit.pedestrian.id, weapon.damage, eye);
@@ -640,6 +714,134 @@ export class CombatSystem implements IUpdatable
 		if (character.ammo <= 0) this.beginReload(character, weapon);
 
 		this.world.party.publishShot(muzzle, aim, weapon.id, ends);
+	}
+
+	// ----------------------------------------------------------------- the fists
+
+	/**
+	 * Held, it keeps punching, a hand at a time, which is what a phone's
+	 * button needs. What a punch hits is settled as the fist arrives rather
+	 * than as it's thrown, so stepping in or out of the way still counts.
+	 */
+	private updateFists(character: Character, down: boolean, timeStep: number): void
+	{
+		if (this.punchCooldown > 0) this.punchCooldown -= timeStep;
+
+		if (this.punchLanding >= 0)
+		{
+			this.punchLanding -= timeStep;
+			if (this.punchLanding < 0) this.landPunch(character);
+		}
+
+		if (down && this.punchCooldown <= 0) this.throwPunch(character);
+	}
+
+	private throwPunch(character: Character): void
+	{
+		this.punchCooldown = FISTS.interval;
+
+		let here = character.getWorldPosition(new THREE.Vector3());
+
+		// Standing, it goes where the camera looks, and the body turns to it.
+		// On the move the body faces the way it's going and won't turn, so the
+		// punch goes that way too, rather than out behind a player backing off
+		let moving = ['up', 'down', 'left', 'right'].some((action) => character.actions[action].isPressed === true);
+		let along = moving ? character.getWorldDirection(new THREE.Vector3()) : this.world.camera.getWorldDirection(new THREE.Vector3());
+		along.y = 0;
+		if (along.lengthSq() < 0.0001) along.copy(character.orientation);
+		along.normalize();
+
+		// At whoever is close and near enough in front
+		let target = this.meleeTarget(character, here, along, FISTS.range + CombatSystem.PUNCH_LOCK_SLACK,
+			moving ? CombatSystem.PUNCH_LOCK_MOVING_COS : CombatSystem.PUNCH_LOCK_COS);
+		if (target !== undefined)
+		{
+			along.set(target.at.x - here.x, 0, target.at.z - here.z);
+			if (along.lengthSq() > 0.0001) along.normalize();
+			else along.copy(character.orientation);
+		}
+
+		character.setOrientation(along);
+		character.throwPunch(along, this.nextPunchLeft);
+		this.world.party.publishPunch(here, along, this.nextPunchLeft);
+		this.nextPunchLeft = !this.nextPunchLeft;
+
+		this.punchAlong.copy(along);
+		this.punchLanding = Character.PUNCH_REACH_TIME;
+
+		if (this.swingSound === undefined) this.buildPunchSounds();
+		this.play(this.swingSound);
+	}
+
+	private landPunch(character: Character): void
+	{
+		if (character.health <= 0 || character.weapon !== undefined || character.isBusyWithVehicle()) return;
+
+		let here = character.getWorldPosition(new THREE.Vector3());
+		let target = this.meleeTarget(character, here, this.punchAlong, FISTS.range, CombatSystem.PUNCH_LAND_COS);
+		if (target === undefined) return;
+
+		let eye = here.clone();
+		eye.y += CombatSystem.EYE_HEIGHT;
+
+		if (this.punchSound === undefined) this.buildPunchSounds();
+		this.play(this.punchSound);
+
+		if (target.character !== undefined)
+		{
+			if (this.reportHit(target.character, FISTS.damage, FISTS.id, eye)) UIManager.flashHitMarker();
+		}
+		else if (target.pedestrian !== undefined)
+		{
+			this.world.npcs.damagePedestrian(target.pedestrian.id, FISTS.damage, eye);
+			UIManager.flashHitMarker();
+		}
+	}
+
+	/**
+	 * The nearest person within reach and inside a cone either side of a
+	 * direction on the ground: somebody in the party, somebody a job put in
+	 * the street, or one of the city's people. Nobody sat in a car, whose
+	 * doors are in the way, and nobody a floor above or below.
+	 */
+	private meleeTarget(puncher: Character, here: THREE.Vector3, along: THREE.Vector3, reach: number, minCos: number):
+		{ at: THREE.Vector3, character?: Character, pedestrian?: Pedestrian }
+	{
+		let best: { at: THREE.Vector3, character?: Character, pedestrian?: Pedestrian };
+		let nearest = reach;
+
+		let inReach = (at: THREE.Vector3): number =>
+		{
+			let dx = at.x - here.x;
+			let dz = at.z - here.z;
+			let distance = Math.sqrt(dx * dx + dz * dz);
+			if (distance > nearest) return undefined;
+			// Right up close, which way they are hardly matters
+			if (distance > 0.3 && (dx * along.x + dz * along.z) / distance < minCos) return undefined;
+			return distance;
+		};
+
+		for (const other of this.world.characters)
+		{
+			if (other === puncher || other.health <= 0 || other.isBusyWithVehicle()) continue;
+			let at = other.getWorldPosition(new THREE.Vector3());
+			if (Math.abs(at.y - here.y) > 1) continue;
+			let distance = inReach(at);
+			if (distance === undefined) continue;
+			nearest = distance;
+			best = { at: at, character: other };
+		}
+
+		if (this.world.npcs !== undefined)
+		{
+			// Their position is at their feet, a character's at its middle
+			let feet = here.clone();
+			feet.y -= 0.57;
+			let pedestrian = this.world.npcs.pedestrianWithin(feet, along, nearest, minCos);
+			if (pedestrian !== undefined) best = { at: pedestrian.position.clone(), pedestrian: pedestrian };
+		}
+
+		return best;
 	}
 
 	/**
@@ -852,18 +1054,18 @@ export class CombatSystem implements IUpdatable
 	 * relay or their cover check can still turn it down, and a marker for a hit
 	 * that did nothing is exactly what "my shots don't register" looks like.
 	 */
-	private reportHit(target: Character, weapon: WeaponSpec, from: THREE.Vector3): boolean
+	private reportHit(target: Character, damage: number, weaponId: string, from: THREE.Vector3): boolean
 	{
 		// Their client owns their health, so it's told rather than told about
 		if (target.networkId !== undefined && target !== this.world.localCharacter)
 		{
-			this.world.party.publishHit(target.networkId, weapon.damage, weapon.id, from, target.networkLife);
+			this.world.party.publishHit(target.networkId, damage, weaponId, from, target.networkLife);
 
 			// An older relay can't carry the answer back, so guess as before
 			return !this.world.party.hasFeature('hurt');
 		}
 
-		this.applyDamage(target, weapon.damage, undefined);
+		this.applyDamage(target, damage, undefined);
 		return true;
 	}
 
@@ -1042,6 +1244,7 @@ export class CombatSystem implements IUpdatable
 			this.deathTimer = CombatSystem.RESPAWN_DELAY;
 			this.lastKiller = attackerId;
 			this.streak = 0;
+			this.punchLanding = -1;
 			// Whatever was held at the moment of death stays held otherwise, and
 			// the body walks off under its own steam
 			target.resetControls();
@@ -1218,6 +1421,13 @@ export class CombatSystem implements IUpdatable
 
 		let hit = this.trace(from, direction, weapon.range, shooter);
 		this.addTracer(from, hit.point, weapon.color, true);
+	}
+
+	/** Somebody else's punch: their arm, and the air it moved. Whoever it hit hears it land. */
+	public showRemotePunch(puncher: Character, direction: THREE.Vector3, left: boolean): void
+	{
+		if (puncher === undefined || puncher.health <= 0 || puncher.weapon !== undefined) return;
+		puncher.throwPunch(direction, left);
 	}
 
 	private addMuzzleFlash(position: THREE.Vector3): void

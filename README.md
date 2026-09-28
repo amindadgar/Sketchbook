@@ -31,7 +31,7 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 * **More to drive** — seven retro cars from a CC0 pack in the traffic and for sale, a police cruiser, and motorbikes that lean into the corners
 * **Robbing people** — anyone on the pavement can be held up at gunpoint, and in a party whoever kills you can pick up the money you drop
 * **Party mode** — room codes over a small WebSocket relay, up to 8 players, in five minute rounds
-* **Combat** — eight guns, carried together and switched with the number keys, health, kills, recoil, hit markers and a scoreboard
+* **Combat** — fists whenever nothing's in hand, eight guns, carried together and switched with the number keys, health, kills, recoil, hit markers and a scoreboard
 * **Races** — the three circuits the world always had, now with laps, times and a running order
 * **Driving with consequences** — a handbrake that steps the back out, downforce, crash damage and smoke, and tyres that squeal and leave rubber on the road when they skid
 * **Nitro** — three and a half seconds of it, and a stunt park to spend it in
@@ -127,9 +127,9 @@ This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook),
 | `Shift` | Sprint |
 | `Space` | Jump |
 | `F` / `G` | Enter vehicle as driver / passenger. `F` beside a car in the traffic steals it |
-| Left mouse | Fire |
+| Left mouse | Punch, or fire with a gun out. Held, it keeps punching |
 | Right mouse, held | Aim. Held on somebody close by, it's a hold-up |
-| `1`-`9` / `Q` | Pick a gun / the next gun |
+| `0`-`9` / `Q` | Fists or a gun / the next one, round to the fists and back |
 | `E` | Whatever the prompt at the bottom of the screen says: a shop counter, a job's next step |
 
 | Driving | |
@@ -180,7 +180,7 @@ while sitting in the car it just opened is no use to anybody:
 
 | Where | Buttons |
 | --- | --- |
-| On foot | JUMP, ENTER, and FIRE and AIM once armed |
+| On foot | PUNCH, JUMP, ENTER. With a gun out PUNCH becomes FIRE, with AIM beside it |
 | Car | BOOST, BRAKE, FLIP, EXIT |
 | Helicopter | FLIP, YAW L, YAW R, UP, DOWN, EXIT |
 | Aeroplane | YAW L, YAW R, THRTL, BRAKE, EXIT |
@@ -192,8 +192,8 @@ while sitting in the car it just opened is no use to anybody:
 | Drag anywhere | Look. The camera goes back to following a moment later |
 | MAP | Opens the map of the whole world in the middle of the screen, and puts it away again |
 | Money, top right | The job board |
+| The weapon's name | Fists, then each gun carried, and round again. Marked with an arrow once there's a gun to switch to |
 | The prompt in the middle | Does what it says: a shop, a job's next step |
-| Gun's name | Switches to the next gun, marked with an arrow when there's more than one |
 | Speech bubble | Party chat, in a party |
 
 The camera follows by itself on a phone, because one thumb is on the stick and
@@ -405,7 +405,11 @@ of the player counts. Hits aimed at a life that has since ended are dropped, and
 so is everything for a second and a half after respawning.
 
 The weapon numbers both sides check against live in `shared/weapons.json`. Two
-copies would drift and the relay would start refusing honest shots.
+copies would drift and the relay would start refusing honest shots. Fists are in
+there too, as melee, and a punch is checked like a shot: its damage, and its
+reach, with three metres allowed on top for the positions being a moment old.
+The swing itself goes to everyone as a `punch`, so they see the arm; what it
+hit only ever travels as a hit.
 
 The city's pedestrians and traffic are simulated by one client, the member with
 the lowest id, who sends where they all are five times a second, along with the
@@ -436,25 +440,29 @@ across the map with one message.
 
 ## Accounts
 
-Optional, and the game works without them. Signing in, with a name and password
-or with Google, keeps your money, guns, cars and level on the account, so they
+Signing in keeps your money, guns, cars and level on the account, so they
 follow you to any device, and counts your kills and best laps against a name
 that persists, which is what the leaderboards and the unlocks are built on.
+
+Where the relay has Google sign-in set up, as the hosted game does, it's
+required: the menu opens on "Sign in with Google", and Play solo, Create party
+and Join stay greyed out until you have. Without it, accounts are optional and
+made with a name and a password, as before.
 
 The party server grows a few endpoints and a Postgres database:
 
 | | |
 | --- | --- |
-| `POST /auth/register` | `{username, password}` returns a token |
+| `POST /auth/register` | `{username, password}` returns a token. Refused while Google sign-in is required |
 | `POST /auth/login` | same, for an existing account |
-| `GET /auth/me` | the signed-in profile and its tallies |
+| `GET /auth/me` | the signed-in profile and its tallies, and a fresh token if Google was put on the account since |
 | `GET /leaderboard` | top players by kills |
 | `GET /leaderboard?track=` | best laps on one circuit |
 | `POST /race/lap` | `{track, ms}`, a new personal best. Only ever moves down |
 | `GET /save` | the signed-in player's kept progress and its revision |
 | `PUT /save` | `{data, revision}`, progress made from that revision. Refused with the newer copy if another device saved since |
-| `GET /auth/config` | whether the server offers Google sign-in, and the client id its button needs |
-| `POST /auth/google` | `{credential}` from Google's button, returns a token. With `link: true` and a token, puts Google on that account |
+| `GET /auth/config` | whether the server requires Google sign-in, and the client id its button needs. Answers without a database too |
+| `POST /auth/google` | `{credential}` from Google's button, returns a token. With `link: true` and a token, puts Google on that account, and with `move: true` too, takes it off a player Google made for the same person |
 
 Set `DATABASE_URL` on the relay to switch accounts on; without it the relay
 still runs parties and simply reports that accounts are unavailable. Set
@@ -482,13 +490,31 @@ driven: the same trust as the rest of the game. Good for playing with friends.
 
 ### Signing in with Google
 
-Set `GOOGLE_CLIENT_ID` on the relay and the menu offers "Sign in with Google";
-without it, nothing changes. A first Google sign-in makes an account named
-from the Google profile, the next free one if it's taken. Somebody already
-signed in with a name and password gets "Continue with Google" instead, which
-puts Google on the account they have. The browser's ID token is checked on the
-relay against Google's published keys with Node's crypto: signature, this
+Set `GOOGLE_CLIENT_ID` on the relay and signing in with Google becomes the way
+into the game. A first Google sign-in makes an account named from the Google
+profile, the next free one if it's taken. The browser's ID token is checked on
+the relay against Google's published keys with Node's crypto: signature, this
 game's client id, Google as the issuer, not expired, email verified.
+
+Nobody new can make an account with a password then. An account made with one
+before still works, once more: "Made an account with a password before?" signs
+in to it, and "Continue with Google" puts Google on it, with everything it had.
+That has to follow the password within fifteen minutes, so a session left on a
+shared computer can't be handed to somebody else's Google account; an older one
+is asked for the password again. From then on either way in reaches the same
+account. Somebody who pressed Google first, and got a new player for it, is
+offered to move Google over to the old account instead, having just proved
+both; the new player is kept but has no way in after that.
+
+The relay holds parties to the same rule. A session from Google, or for an
+account Google signs in to, says so in its signed token, and hosting or joining
+a party without one is turned away. The menu asks the game's own relay whether
+Google is required, and if it can't be reached it keeps asking every five
+seconds rather than letting anyone past: except on `localhost`, where the game
+is being worked on and a relay may not be running at all. A relay that answers
+but has no database has nothing to sign in to, so it requires nothing. Sessions
+only ever go to the relay that issued them, never to one typed into the party
+server box.
 
 To get a client id, in the [Google Cloud console](https://console.cloud.google.com/):
 
@@ -539,8 +565,19 @@ while driving.
 | Sniper | 95 | very slow | 5 | 20 | $3,800 | a scope that zooms right in |
 
 The first four also lie about the map; the rest are only sold. Everything picked
-up or bought is carried at once: `1` to `9` picks one, `Q` goes to the next, and
-the row under the ammunition count shows what's in your pockets.
+up or bought is carried at once: `1` to `9` picks one, `0` puts it away, `Q`
+goes to the next and round through the fists, and the row under the ammunition
+count shows what's in your pockets.
+
+With nothing in hand you fight with your fists. A click throws a punch, a hand
+at a time, about two a second while the button's held, for 12 damage: nine to
+put somebody down. The fists come up to the chin after the first and stay up a
+moment between punches. A punch turns you to whoever is within a couple of
+metres and roughly in front, so a phone's thumb doesn't have to line it up, and
+lands if they're still in reach when the fist arrives. On the move you punch the
+way you're going. It works on anyone: other players, the people a job puts in
+the street, and passers-by, who run from it. Nobody in a car, though. A button
+still held when a gun comes out has to be let go before the gun fires.
 
 Ammunition is finite. Reloads draw on what you're carrying, and once that and the
 magazine are both empty a gun you picked up is dropped. A gun you bought is kept,
@@ -575,7 +612,7 @@ kill scores a point on the scoreboard at the top right.
 Crashing costs the car, not you. An impact above six metres a second along the
 contact normal wears the vehicle down: below half condition it smokes, harder
 the worse it is, and below a third it loses power until a garage fixes it.
-Whoever's inside keeps their health; only bullets take that.
+Whoever's inside keeps their health; only bullets and fists take that.
 
 ## Jobs and money
 

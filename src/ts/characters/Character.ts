@@ -121,6 +121,29 @@ export class Character extends THREE.Object3D implements IWorldEntity
 	/** Until when, in seconds of page time, the gun is held up, and along what. */
 	public aimUntil: number = 0;
 	public aimAlong: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
+	/** The last punch: when it was thrown, in seconds of page time, which hand, and which way. */
+	private punchAt: number = -Infinity;
+	private punchLeft: boolean = false;
+	private punchAlong: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
+	/** The fists stay up this long after a punch, ready for the next, and came up at guardFrom. */
+	private guardUntil: number = 0;
+	private guardFrom: number = 0;
+	/**
+	 * Every bone posed over the animation this frame, and what it was before.
+	 * They're put back before the next frame's animation, because the mixer
+	 * only writes a bone when its value changes: a bone the clip holds still,
+	 * or one it doesn't move at all like the hands, would otherwise keep the
+	 * pose after it was over, or turn a little further every frame.
+	 */
+	private posedBones: Map<THREE.Object3D, THREE.Quaternion> = new Map();
+	/** Seconds from throwing a punch to it landing, and to the arm being back. */
+	public static readonly PUNCH_REACH_TIME: number = 0.09;
+	private static readonly PUNCH_TIME: number = 0.3;
+	private static readonly GUARD_TIME: number = 1.4;
+	private static readonly GUARD_RISE: number = 0.08;
+	private static readonly GUARD_FALL: number = 0.4;
+	/** The furthest round from where the body faces that a punch reaches, in radians. */
+	private static readonly PUNCH_TWIST: number = 1.0;
 	private headTexture: THREE.Texture;
 	private headCanvas: HTMLCanvasElement;
 	private headBone: THREE.Object3D;
@@ -526,9 +549,9 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		let hand = bone(HumanModel.RIGHT_HAND);
 		if (upper === undefined || fore === undefined || hand === undefined) return;
 
-		Character.pointBone(upper, direction);
-		Character.pointBone(fore, direction);
-		Character.pointBone(hand, direction);
+		this.pointBone(upper, direction);
+		this.pointBone(fore, direction);
+		this.pointBone(hand, direction);
 
 		let twoHanded = this.weapon !== undefined && this.weapon.oneHanded !== true;
 		if (!twoHanded) return;
@@ -547,20 +570,189 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		let upperLength = leftFore.getWorldPosition(new THREE.Vector3()).distanceTo(shoulder);
 		let lift = Math.sqrt(Math.max(0, upperLength * upperLength - (reach / 2) * (reach / 2)));
 		let elbow = shoulder.clone().addScaledVector(toGrip, reach / 2).addScaledVector(bend, lift * 0.6);
-		Character.pointBone(leftUpper, elbow.clone().sub(shoulder).normalize());
-		Character.pointBone(leftFore, grip.clone().sub(elbow).normalize());
+		this.pointBone(leftUpper, elbow.clone().sub(shoulder).normalize());
+		this.pointBone(leftFore, grip.clone().sub(elbow).normalize());
+	}
+
+	/**
+	 * A punch, from the hand given, along a direction on the ground. Only the
+	 * look of it: what it lands on is the combat system's business, and so is
+	 * telling everyone else's screen to show it.
+	 */
+	public throwPunch(direction: THREE.Vector3, left: boolean): void
+	{
+		let now = performance.now() / 1000;
+		// Carried on from however far up the guard still is, rather than
+		// starting from nothing or jumping straight back to full
+		this.guardFrom = now - this.guardWeight(now) * Character.GUARD_RISE;
+		this.punchAt = now;
+		this.punchLeft = left;
+		this.punchAlong.set(direction.x, 0, direction.z);
+		if (this.punchAlong.lengthSq() < 0.0001) this.punchAlong.copy(this.orientation);
+		this.punchAlong.normalize();
+		this.guardUntil = now + Character.GUARD_TIME;
+	}
+
+	/** How far up the fists are: quickly up after the first punch, down over the last of the guard. */
+	private guardWeight(now: number): number
+	{
+		if (now >= this.guardUntil) return 0;
+		return Math.max(0, Math.min(1, (now - this.guardFrom) / Character.GUARD_RISE, (this.guardUntil - now) / Character.GUARD_FALL));
+	}
+
+	/**
+	 * Fists up by the chin, and the hand whose turn it was out and back:
+	 * quick out, a moment there, slower home. Over whatever the animation
+	 * had the arms doing, weighted, so the guard comes up and goes down
+	 * rather than snapping, and the shoulders turn into the punch.
+	 */
+	private posePunch(now: number): void
+	{
+		let guard = this.guardWeight(now);
+		if (guard <= 0) return;
+
+		let t = now - this.punchAt;
+		let out = Character.PUNCH_REACH_TIME;
+		let hold = out + 0.04;
+		let reach = 0;
+		if (t < out) reach = 1 - Math.pow(1 - t / out, 2);
+		else if (t < hold) reach = 1;
+		else if (t < Character.PUNCH_TIME)
+		{
+			let back = (t - hold) / (Character.PUNCH_TIME - hold);
+			reach = 1 - back * back * (3 - 2 * back);
+		}
+
+		// The guard is the body's own, whichever way it faces: a player on the
+		// move faces where they're going. The punch goes toward punchAlong, but
+		// no further round from that than the shoulders turn
+		let forward = this.getWorldDirection(new THREE.Vector3());
+		forward.y = 0;
+		if (forward.lengthSq() < 1e-6) forward.copy(this.punchAlong);
+		forward.normalize();
+		let facing = Math.atan2(forward.x, forward.z);
+		let off = Math.atan2(this.punchAlong.x, this.punchAlong.z) - facing;
+		off = Math.atan2(Math.sin(off), Math.cos(off));
+		off = Math.max(-Character.PUNCH_TWIST, Math.min(Character.PUNCH_TWIST, off));
+		let strike = new THREE.Vector3(Math.sin(facing + off), 0, Math.cos(facing + off));
+
+		let up = new THREE.Vector3(0, 1, 0);
+		let right = new THREE.Vector3().crossVectors(forward, up);
+
+		let spine = this.modelContainer.getObjectByName('mixamorigSpine1');
+		if (spine !== undefined && reach > 0) this.turnBone(spine, up, (this.punchLeft ? -0.3 : 0.3) * reach * guard);
+
+		this.poseFist('Right', forward, right, strike, !this.punchLeft ? reach : 0, guard);
+		this.poseFist('Left', forward, right.clone().negate(), strike, this.punchLeft ? reach : 0, guard);
+	}
+
+	/**
+	 * One arm between the guard and full stretch, and its fingers curled.
+	 * Out is to the outside of that arm, which is the character's right for
+	 * the right arm and its left for the left.
+	 */
+	private poseFist(side: string, forward: THREE.Vector3, outward: THREE.Vector3, aim: THREE.Vector3, reach: number, weight: number): void
+	{
+		let bone = (name: string) => this.modelContainer.getObjectByName('mixamorig' + side + name);
+		let upper = bone('Arm');
+		let fore = bone('ForeArm');
+		let hand = bone('Hand');
+		if (upper === undefined || fore === undefined || hand === undefined) return;
+
+		let up = new THREE.Vector3(0, 1, 0);
+
+		// Elbow down and a little out, forearm up to the chin
+		let guardUpper = new THREE.Vector3().addScaledVector(up, -0.8).addScaledVector(forward, 0.35).addScaledVector(outward, 0.3).normalize();
+		let guardFore = new THREE.Vector3().addScaledVector(up, 0.75).addScaledVector(forward, 0.45).addScaledVector(outward, -0.45).normalize();
+		// Out along the line of the punch, in toward the middle where a chin would be
+		let strike = new THREE.Vector3().copy(aim).addScaledVector(outward, -0.25).addScaledVector(up, 0.05).normalize();
+
+		let along = (from: THREE.Vector3) => from.clone().lerp(strike, reach).normalize();
+		this.blendBone(upper, along(guardUpper), weight);
+		this.blendBone(fore, along(guardFore), weight);
+		this.blendBone(hand, along(guardFore), weight);
+
+		// The palm is the side the fingers curl to: across from the little
+		// finger to the index, then along the hand. The left hand is the mirror
+		let at = (name: string) =>
+		{
+			let joint = bone(name);
+			return joint !== undefined ? joint.getWorldPosition(new THREE.Vector3()) : undefined;
+		};
+		let index = at('HandIndex1');
+		let pinky = at('HandPinky1');
+		let middle = at('HandMiddle1');
+		if (index === undefined || pinky === undefined || middle === undefined) return;
+		let wrist = hand.getWorldPosition(new THREE.Vector3());
+		let palm = new THREE.Vector3().subVectors(index, pinky).cross(middle.clone().sub(wrist));
+		if (side === 'Left') palm.negate();
+		if (palm.lengthSq() < 1e-10) return;
+		palm.normalize();
+
+		for (const finger of ['Index', 'Middle', 'Ring', 'Pinky'])
+		{
+			let first = bone('Hand' + finger + '1');
+			let second = bone('Hand' + finger + '2');
+			let third = bone('Hand' + finger + '3');
+			if (first === undefined || second === undefined || third === undefined) continue;
+
+			let direction = second.getWorldPosition(new THREE.Vector3()).sub(first.getWorldPosition(new THREE.Vector3()));
+			let axis = direction.cross(palm);
+			if (axis.lengthSq() < 1e-10) continue;
+			axis.normalize();
+
+			this.turnBone(first, axis, 1.35 * weight);
+			this.turnBone(second, axis, 1.55 * weight);
+			this.turnBone(third, axis, 1.1 * weight);
+		}
+	}
+
+	/** Noted before a bone is posed, the first time this frame, so it can be put back. */
+	private remember(bone: THREE.Object3D): void
+	{
+		if (!this.posedBones.has(bone)) this.posedBones.set(bone, bone.quaternion.clone());
+	}
+
+	/** Last frame's poses taken off, before the animation runs again. */
+	private undoPoses(): void
+	{
+		this.posedBones.forEach((quaternion, bone) => bone.quaternion.copy(quaternion));
+		this.posedBones.clear();
+	}
+
+	/** Turns a bone about an axis in the world, keeping its parent where it is. */
+	private turnBone(bone: THREE.Object3D, axis: THREE.Vector3, angle: number): void
+	{
+		this.remember(bone);
+		bone.updateWorldMatrix(true, false);
+		let world = bone.getWorldQuaternion(new THREE.Quaternion());
+		let wanted = new THREE.Quaternion().setFromAxisAngle(axis, angle).multiply(world);
+		let parent = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+		bone.quaternion.copy(parent.invert().multiply(wanted));
+		bone.updateMatrixWorld(true);
+	}
+
+	/** pointBone, only part of the way from where the animation had it. */
+	private blendBone(bone: THREE.Object3D, direction: THREE.Vector3, weight: number): void
+	{
+		let animated = bone.quaternion.clone();
+		this.pointBone(bone, direction);
+		if (weight >= 1) return;
+		bone.quaternion.copy(animated.slerp(bone.quaternion, weight));
+		bone.updateMatrixWorld(true);
 	}
 
 	/** One bone of the skeleton, by name, pointed along a world direction, over whatever the animation did. */
 	public pointBoneAlong(name: string, direction: THREE.Vector3): void
 	{
 		let bone = this.modelContainer.getObjectByName(name);
-		if (bone !== undefined) Character.pointBone(bone, direction);
+		if (bone !== undefined) this.pointBone(bone, direction);
 	}
 
 	/** Turns a bone, keeping its parent where it is, so its length points along a world direction. */
-	private static pointBone(bone: THREE.Object3D, direction: THREE.Vector3): void
+	private pointBone(bone: THREE.Object3D, direction: THREE.Vector3): void
 	{
+		this.remember(bone);
 		bone.updateWorldMatrix(true, false);
 		let world = bone.getWorldQuaternion(new THREE.Quaternion());
 		let along = new THREE.Vector3(0, 1, 0).applyQuaternion(world);
@@ -803,6 +995,7 @@ export class Character extends THREE.Object3D implements IWorldEntity
 		if (this.physicsEnabled) this.springMovement(timeStep);
 		if (this.physicsEnabled) this.springRotation(timeStep);
 		if (this.physicsEnabled) this.rotateModel();
+		this.undoPoses();
 		if (this.mixer !== undefined) this.mixer.update(timeStep);
 
 		// Gun up while aiming or just after a shot, on foot and alive
@@ -812,6 +1005,18 @@ export class Character extends THREE.Object3D implements IWorldEntity
 			this.updateMatrixWorld(true);
 			this.poseAim(this.aimAlong);
 		}
+
+		// Fists up for a while after a punch, the same way. A gun out, a car or
+		// a fall puts them down for good, rather than back up at once after
+		if (this.weaponModel === undefined && this.health > 0 && !this.isBusyWithVehicle())
+		{
+			if (performance.now() / 1000 < this.guardUntil)
+			{
+				this.updateMatrixWorld(true);
+				this.posePunch(performance.now() / 1000);
+			}
+		}
+		else this.guardUntil = 0;
 
 		// Astride something rather than sat in it: the vehicle says where the legs go
 		let ride = this.occupyingSeat !== null ? this.occupyingSeat.vehicle as any : undefined;

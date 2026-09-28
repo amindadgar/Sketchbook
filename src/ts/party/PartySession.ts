@@ -196,6 +196,15 @@ export class PartySession implements IUpdatable
 			if (this.world.npcs !== undefined) this.world.npcs.onGunshot(from);
 		};
 
+		// Only the arm: whoever the punch was for hears about it as a hit
+		this.client.onPunch = (message) =>
+		{
+			let direction = PartySession.readVector(message.d);
+			let puncher = this.players[message.id];
+			if (direction === undefined || puncher === undefined) return;
+			this.world.combat.showRemotePunch(puncher.character, direction, message.s === 1);
+		};
+
 		// The city's people and traffic, from whoever simulates them
 		this.client.onNpcs = (message) =>
 		{
@@ -343,7 +352,7 @@ export class PartySession implements IUpdatable
 			NetworkClient.saveUrl(url);
 			return this.awaitRoom(() =>
 				this.client.createRoom(identity.name, identity.color, identity.hat,
-					this.world.lastScenarioID, Account.token));
+					this.world.lastScenarioID, PartySession.tokenFor(url)));
 		});
 	}
 
@@ -353,8 +362,19 @@ export class PartySession implements IUpdatable
 		{
 			NetworkClient.saveUrl(url);
 			return this.awaitRoom(() =>
-			this.client.joinRoom(code, identity.name, identity.color, identity.hat, Account.token));
+			this.client.joinRoom(code, identity.name, identity.color, identity.hat, PartySession.tokenFor(url)));
 		});
+	}
+
+	/**
+	 * The session, for the relay that issued it and no other. A relay typed
+	 * into the box is somebody else's, and a session handed to it could be
+	 * used on this game's own as its owner.
+	 */
+	private static tokenFor(url: string): string
+	{
+		if (Account.token === undefined) return undefined;
+		return Account.sameServer(url, Account.server) ? Account.token : undefined;
 	}
 
 	/**
@@ -561,6 +581,19 @@ export class PartySession implements IUpdatable
 			d: PartySession.round3([direction.x, direction.y, direction.z]),
 			w: weaponId,
 			e: endpoints.slice(0, 8).map((point) => PartySession.round3([point.x, point.y, point.z]))
+		});
+	}
+
+	/** A punch thrown, for everyone else to see the arm go. Where it landed travels as a hit. */
+	public publishPunch(from: THREE.Vector3, direction: THREE.Vector3, left: boolean): void
+	{
+		if (!this.active) return;
+
+		this.client.send({
+			t: 'punch',
+			p: PartySession.round3([from.x, from.y, from.z]),
+			d: PartySession.round3([direction.x, direction.y, direction.z]),
+			s: left ? 1 : 0
 		});
 	}
 

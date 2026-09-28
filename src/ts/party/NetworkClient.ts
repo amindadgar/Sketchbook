@@ -35,6 +35,7 @@ export class NetworkClient
 	public onHurt: (message: any) => void;
 	public onPickup: (message: any) => void;
 	public onShot: (message: any) => void;
+	public onPunch: (message: any) => void;
 	public onHit: (message: any) => void;
 	public onScore: (id: number, score: number) => void;
 	public onMatch: (message: any) => void;
@@ -280,6 +281,10 @@ export class NetworkClient
 
 			case 'pickup':
 				if (this.onPickup !== undefined) this.onPickup(message);
+				break;
+
+			case 'punch':
+				if (this.onPunch !== undefined) this.onPunch(message);
 				break;
 
 			case 'shot':

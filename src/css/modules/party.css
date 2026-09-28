@@ -395,9 +395,37 @@
 	min-height: 0;
 }
 
-.party-account-or {
-	margin: 4px 0 8px 0;
+/* First thing in the dialog, boxed, since everything else waits on it */
+.party-account {
+	margin: 0 0 18px 0;
+	padding: 10px 12px 8px 12px;
+	border: 1px solid #e6e6e6;
+	border-radius: 6px;
+	background: #fafafa;
+}
+
+.party-account .party-server-line {
+	margin: 0;
+}
+
+.party-account .party-status {
+	margin-top: 4px;
+}
+
+/* A quiet way in for an account made before Google was required */
+.party-account-old {
+	display: block;
+	margin: 6px auto 0 auto;
 	font-size: 12px;
-	color: #8a8a8a;
-	text-align: center;
+}
+
+.party-account .party-server-panel .party-row {
+	margin-bottom: 0;
+}
+
+/* Only there when Google has a player of its own to move off */
+.party-account-move {
+	display: block;
+	width: 100%;
+	margin: 6px 0 2px 0;
 }

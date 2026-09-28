@@ -46,6 +46,23 @@ export class Account
 		return url;
 	}
 
+	/**
+	 * Whether two addresses are the same server, however they're written:
+	 * ws or http, a trailing slash, capitals, the default port spelled out.
+	 */
+	public static sameServer(a: string, b: string): boolean
+	{
+		if (a === undefined || b === undefined) return false;
+		try
+		{
+			return new URL(Account.httpBase(a)).origin === new URL(Account.httpBase(b)).origin;
+		}
+		catch (error)
+		{
+			return Account.httpBase(a) === Account.httpBase(b);
+		}
+	}
+
 	public static loadToken(): string
 	{
 		try
@@ -101,7 +118,9 @@ export class Account
 		{
 			// Somebody signed in or out while this was on its way: theirs stands
 			if (Account.generation !== generation) return Account.profile;
-			Account.token = token;
+			// A newer session for the same account, when the server has one to give
+			Account.token = typeof body.token === 'string' ? body.token : token;
+			if (Account.token !== token) Account.store(Account.token);
 			Account.profile = body.user;
 			Account.server = server;
 			for (const listener of Account.onSignIn) listener(body.user);
@@ -119,16 +138,17 @@ export class Account
 
 	/**
 	 * Signs in with what Google's button handed back. Signed in already, it
-	 * puts Google sign-in on that account instead, when link is asked for.
+	 * puts Google sign-in on that account instead, when link is asked for,
+	 * and with move, takes it off a player Google made for the same person.
 	 */
-	public static google(server: string, credential: string, link: boolean = false): Promise<AccountProfile>
+	public static google(server: string, credential: string, link: boolean = false, move: boolean = false): Promise<AccountProfile>
 	{
 		let headers: { [name: string]: string } = { 'Content-Type': 'application/json' };
 		if (link && Account.token !== undefined) headers['Authorization'] = 'Bearer ' + Account.token;
 		return fetch(Account.httpBase(server) + '/auth/google', {
 			method: 'POST',
 			headers: headers,
-			body: JSON.stringify({ credential: credential, link: link })
+			body: JSON.stringify({ credential: credential, link: link, move: move })
 		})
 		.then((response) => Account.unwrap(response))
 		.then((body) =>
@@ -180,23 +200,27 @@ export class Account
 		Account.generation++;
 		// The tallies come with /auth/me; a fresh sign-in starts from what's known
 		Account.profile = same ? Account.profile : { id: body.user.id, username: body.user.username, kills: 0, deaths: 0, played: 0 };
-		if (google) Account.profile.google = true;
+		if (google || body.user.google === true) Account.profile.google = true;
 		Account.server = server;
-
-		try
-		{
-			window.localStorage.setItem(Account.STORAGE_KEY, body.token);
-		}
-		catch (error)
-		{
-			// Signed in for this session only
-		}
+		Account.store(body.token);
 
 		for (const listener of Account.onSignIn) listener(Account.profile);
 		return Account.profile;
 	}
 
-	/** Turns the server's error shape into a rejection carrying its message. */
+	private static store(token: string): void
+	{
+		try
+		{
+			window.localStorage.setItem(Account.STORAGE_KEY, token);
+		}
+		catch (error)
+		{
+			// Signed in for this session only
+		}
+	}
+
+	/** Turns the server's error shape into a rejection carrying its message, and the status and body behind it. */
 	private static unwrap(response: Response): Promise<any>
 	{
 		return response.json()
@@ -205,7 +229,10 @@ export class Account
 			{
 				if (response.ok) return body;
 
-				throw new Error(body.error || ('The server answered ' + response.status + '.'));
+				let error: any = new Error(body.error || ('The server answered ' + response.status + '.'));
+				error.status = response.status;
+				error.body = body;
+				throw error;
 			});
 	}
 }

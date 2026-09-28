@@ -36,7 +36,9 @@ export class TouchControls
 	 * buttons that mean the same thing everywhere at the end.
 	 */
 	private static readonly LAYOUTS: { [context: string]: TouchButtonSpec[] } = {
+		// Empty handed, the trigger is a punch, in the place FIRE takes with a gun
 		'foot': [
+			{ id: 'touch-punch', label: 'PUNCH', mouse: 0 },
 			{ id: 'touch-jump', label: 'JUMP', key: 'Space' },
 			{ id: 'touch-enter', label: 'ENTER', key: 'KeyF' },
 		],
@@ -264,7 +266,7 @@ export class TouchControls
 			}
 		}
 
-		// A trigger with nothing behind it is just something else to mis-tap
+		// Aiming with nothing in hand is just something else to mis-tap
 		return character.weapon !== undefined ? 'foot-armed' : 'foot';
 	}
 
