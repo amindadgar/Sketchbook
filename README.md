@@ -673,7 +673,8 @@ kill scores a point on the scoreboard at the top right.
 
 Crashing costs the car, not you. An impact above six metres a second along the
 contact normal wears the vehicle down: below half condition it smokes, harder
-the worse it is, and below a third it loses power until a garage fixes it.
+the worse it is, in thin grey puffs that fade wherever they would fill the
+camera's view, so the road stays visible, and below a third it loses power until a garage fixes it.
 Whoever's inside keeps their health; only bullets and fists take that.
 
 ## Jobs and money

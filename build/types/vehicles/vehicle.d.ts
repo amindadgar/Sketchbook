@@ -180,7 +180,11 @@ export declare abstract class Vehicle extends THREE.Object3D implements IWorldEn
      * someone has just got out of is.
      */
     private onShoved;
-    /** A battered vehicle smokes, harder the worse it is, and only while running. */
+    /**
+     * A battered vehicle smokes, harder the worse it is, and only while running.
+     * Grey rather than black, and thinner on a phone: it's there to say the car
+     * needs a garage, not to hide the road from whoever's driving it.
+     */
     private updateSmoke;
     /**
      * How hard the tyres hold on sideways. Dropping it on the driven pair is

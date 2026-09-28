@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import { World } from '../world/World';
 import { IUpdatable } from '../interfaces/IUpdatable';
+import { DeviceProfile } from './DeviceProfile';
 
 interface Effect
 {
@@ -12,6 +13,8 @@ interface Effect
 	rise: number;
 	/** How much the puff grows over its life, 0 for things that hold their size. */
 	spread: number;
+	/** Smoke: thinned out as it fills more of the view, so it's seen rather than seen through. */
+	smoke?: boolean;
 }
 
 /**
@@ -26,6 +29,17 @@ export class Effects implements IUpdatable
 	public updateOrder: number = 15;
 
 	private static smokeTexture: THREE.Texture;
+	/**
+	 * How much of the view a puff may fill, as its width over its distance,
+	 * before it starts to thin, and where it's gone. Smoke drifts behind a car
+	 * and the chase camera drives straight through it: without this the screen
+	 * filled with it. A phone's smaller screen has less to spare.
+	 */
+	private static readonly SMOKE_COVER_FULL: number = DeviceProfile.isTouch() ? 0.14 : 0.2;
+	private static readonly SMOKE_COVER_GONE: number = DeviceProfile.isTouch() ? 0.38 : 0.5;
+	/** Puffs in the air at once, however many battered cars there are. */
+	private static readonly SMOKE_LIMIT: number = DeviceProfile.isTouch() ? 10 : 18;
+	private smokeCount: number = 0;
 
 	private world: World;
 	private live: Effect[] = [];
@@ -48,23 +62,27 @@ export class Effects implements IUpdatable
 		this.live.push({ object: object, life: life, total: life, rise: rise, spread: spread });
 	}
 
-	/** A puff of exhaust smoke, drifting up and thinning as it goes. */
+	/** A puff of smoke from a battered engine, drifting up and thinning as it goes. */
 	public addSmoke(position: THREE.Vector3, scale: number, darkness: number): void
 	{
+		if (this.smokeCount >= Effects.SMOKE_LIMIT) return;
+
 		let sprite = new THREE.Sprite(new THREE.SpriteMaterial({
 			map: Effects.getSmokeTexture(),
 			color: new THREE.Color(darkness, darkness, darkness),
 			transparent: true,
 			depthWrite: false,
-			opacity: 0.85
+			opacity: DeviceProfile.isTouch() ? 0.42 : 0.5
 		}));
 
 		sprite.position.copy(position);
 		sprite.scale.setScalar(scale);
 
-		// Rises and thins, but slowly enough to stay legible against the bright
-		// concrete this world is mostly made of
-		this.add(sprite, 1.8, 1.0, scale * 0.9);
+		// Rises and thins, enough to read against the bright concrete this
+		// world is mostly made of, not so much that it hides the road
+		this.add(sprite, 1.5, 1.0, scale * 0.6);
+		this.live[this.live.length - 1].smoke = true;
+		this.smokeCount++;
 	}
 
 	/** A short lick of flame, for whatever is burning fuel to go faster. */
@@ -87,6 +105,8 @@ export class Effects implements IUpdatable
 
 	public update(timeStep: number, unscaledTimeStep: number): void
 	{
+		let eye = this.world.camera.position;
+
 		for (let i = this.live.length - 1; i >= 0; i--)
 		{
 			let effect = this.live[i];
@@ -100,6 +120,7 @@ export class Effects implements IUpdatable
 				if (mesh.geometry !== undefined) mesh.geometry.dispose();
 				if (mesh.material !== undefined) mesh.material.dispose();
 
+				if (effect.smoke) this.smokeCount--;
 				this.live.splice(i, 1);
 				continue;
 			}
@@ -113,9 +134,18 @@ export class Effects implements IUpdatable
 				effect.object.scale.setScalar(effect.object.scale.x + effect.spread * unscaledTimeStep);
 			}
 
+			// Smoke close enough to fill the view thins out, so driving through
+			// what the car left behind doesn't blind whoever's at the wheel
+			let clear = 1;
+			if (effect.smoke)
+			{
+				let cover = effect.object.scale.x / Math.max(0.05, effect.object.position.distanceTo(eye));
+				clear = THREE.MathUtils.clamp((Effects.SMOKE_COVER_GONE - cover) / (Effects.SMOKE_COVER_GONE - Effects.SMOKE_COVER_FULL), 0, 1);
+			}
+
 			// Lights carry their brightness in a different property to everything else
 			if (object.isPointLight === true) object.intensity = object.userData.peak * remaining;
-			else if (object.material !== undefined) object.material.opacity = object.userData.peak * remaining;
+			else if (object.material !== undefined) object.material.opacity = object.userData.peak * remaining * clear;
 		}
 	}
 

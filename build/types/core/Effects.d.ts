@@ -11,11 +11,22 @@ import { IUpdatable } from '../interfaces/IUpdatable';
 export declare class Effects implements IUpdatable {
     updateOrder: number;
     private static smokeTexture;
+    /**
+     * How much of the view a puff may fill, as its width over its distance,
+     * before it starts to thin, and where it's gone. Smoke drifts behind a car
+     * and the chase camera drives straight through it: without this the screen
+     * filled with it. A phone's smaller screen has less to spare.
+     */
+    private static readonly SMOKE_COVER_FULL;
+    private static readonly SMOKE_COVER_GONE;
+    /** Puffs in the air at once, however many battered cars there are. */
+    private static readonly SMOKE_LIMIT;
+    private smokeCount;
     private world;
     private live;
     constructor(world: World);
     add(object: THREE.Object3D, life: number, rise?: number, spread?: number): void;
-    /** A puff of exhaust smoke, drifting up and thinning as it goes. */
+    /** A puff of smoke from a battered engine, drifting up and thinning as it goes. */
     addSmoke(position: THREE.Vector3, scale: number, darkness: number): void;
     /** A short lick of flame, for whatever is burning fuel to go faster. */
     addFlame(position: THREE.Vector3, scale: number): void;

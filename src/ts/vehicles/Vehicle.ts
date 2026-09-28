@@ -12,6 +12,7 @@ import { CollisionGroups } from '../enums/CollisionGroups';
 import { SwitchingSeats } from '../characters/character_states/vehicles/SwitchingSeats';
 import { EntityType } from '../enums/EntityType';
 import { IWorldEntity } from '../interfaces/IWorldEntity';
+import { DeviceProfile } from '../core/DeviceProfile';
 
 export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 {
@@ -905,7 +906,11 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 		}
 	}
 
-	/** A battered vehicle smokes, harder the worse it is, and only while running. */
+	/**
+	 * A battered vehicle smokes, harder the worse it is, and only while running.
+	 * Grey rather than black, and thinner on a phone: it's there to say the car
+	 * needs a garage, not to hide the road from whoever's driving it.
+	 */
 	private updateSmoke(timeStep: number): void
 	{
 		if (this.integrity >= Vehicle.SMOKE_BELOW || this.world === undefined) return;
@@ -914,7 +919,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 
 		this.smokeTimer -= timeStep;
 		if (this.smokeTimer > 0) return;
-		this.smokeTimer = 0.22 - 0.14 * hurt;
+		this.smokeTimer = (0.3 - 0.14 * hurt) * (DeviceProfile.isTouch() ? 1.6 : 1);
 
 		// Off the top of the body rather than its centre, so it rises out of the
 		// bonnet instead of appearing inside the cabin
@@ -923,7 +928,7 @@ export abstract class Vehicle extends THREE.Object3D implements IWorldEntity
 			this.position.y + 0.45,
 			this.position.z + (Math.random() - 0.5) * 0.5);
 
-		this.world.effects.addSmoke(from, 0.6 + hurt * 0.5, 0.45 - hurt * 0.3);
+		this.world.effects.addSmoke(from, 0.5 + hurt * 0.4, 0.62 - hurt * 0.22);
 	}
 
 	/**
