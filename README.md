@@ -4,7 +4,10 @@
 	<br>
 	<a href="https://game-amin.up.railway.app/"><b>▶ Play it now at game-amin.up.railway.app</b></a>
 	<br>
-	<sub>Drive, fly and shoot with friends. No install, no sign-up needed.</sub>
+	<sub>Drive, fly and shoot with friends. Nothing to install: sign in with Google and play.</sub>
+	<br>
+	<br>
+	<a href="#donate"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-ETH%20%C2%B7%20any%20EVM%20chain-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee: ETH on any EVM chain"></a>
 </p>
 
 # 📒 Sketchbook
@@ -16,6 +19,20 @@ character code, and whoever has it can join you. It works on a phone too, and ca
 be added to a home screen.
 
 This is a fork of [swift502/Sketchbook](https://github.com/swift502/Sketchbook), which its author archived in February 2023. The engine underneath is theirs; what this fork adds is sound, multiplayer, a deathmatch layer, and a city full of people to do it all in.
+
+## Donate
+
+Sketchbook is free and open source. If you're enjoying it, please buy me a
+coffee: it supports the development and keeps the game running for everyone.
+
+Donations go in crypto, ETH or tokens on any EVM chain, to
+
+```
+0x0aDBcdE5D51DE9497db2761cfe84666fCCe881cB
+```
+
+The same address is behind the heart at the top left of the game, in the
+phone's Support app and in the pause menu.
 
 ## What this fork adds
 
@@ -202,12 +219,10 @@ controls, the settings, which resume the game to show them, and the support card
 
 ### Donations
 
-The heart at the top left opens a card with the code on GitHub and a crypto
-address that takes donations: ETH and tokens on any EVM chain, to
-`0x0aDBcdE5D51DE9497db2761cfe84666fCCe881cB`. They support the development and
-keep the game running. The addresses are in `src/ts/core/Donations.ts`, a line
-per wallet with the coin, its network and the address, and one without an
-address yet shows as coming soon. The phone and the pause menu read the same
+The heart at the top left opens a card with the code on GitHub and the crypto
+address in [Donate](#donate). The addresses are in `src/ts/core/Donations.ts`,
+a line per wallet with the coin, its network and the address, and one without
+an address yet shows as coming soon. The phone and the pause menu read the same
 list.
 
 ## On a phone
