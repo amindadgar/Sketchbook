@@ -299,6 +299,10 @@ export class InputManager implements IUpdatable
 	public onMouseWheelMove(event: WheelEvent): void
 	{
 		if (this.world.pauseMenu !== undefined && this.world.pauseMenu.isOpen) return;
+		// Only a wheel over the game itself. The listener is on the document, so
+		// scrolling a menu's list, the phone or the settings panel would otherwise
+		// wind the clock down too, and it stays slow after the menu closes
+		if (event.target !== this.domElement) return;
 		if (this.inputReceiver !== undefined)
 		{
 			this.inputReceiver.handleMouseWheel(event, event.deltaY);
